@@ -286,7 +286,6 @@ impl IntoIterator<Item=i32> for Foo {
             "n next(",
             9,
         );
-        do_check(r"use a::b::{foo,<|>,bar<|>};", "baz", 10);
         do_check(
             r"
 pub enum A {

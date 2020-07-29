@@ -1,0 +1,28 @@
+SOURCE_FILE@0..39
+  USE_ITEM@0..38
+    USE_KW@0..3 "use"
+    WHITESPACE@3..4 " "
+    USE_TREE@4..37
+      PATH@4..13
+        PATH_SEGMENT@4..13
+          NAME_REF@4..13
+            IDENT@4..13 "ra_syntax"
+      COLON2@13..15 "::"
+      USE_TREE_LIST@15..37
+        L_CURLY@15..16 "{"
+        USE_TREE@16..24
+          PATH@16..24
+            PATH_SEGMENT@16..24
+              NAME_REF@16..24
+                IDENT@16..24 "TextSize"
+        COMMA@24..25 ","
+        WHITESPACE@25..26 " "
+        USE_TREE@26..35
+          PATH@26..35
+            PATH_SEGMENT@26..35
+              NAME_REF@26..35
+                IDENT@26..35 "TextRange"
+        COMMA@35..36 ","
+        R_CURLY@36..37 "}"
+    SEMICOLON@37..38 ";"
+  WHITESPACE@38..39 "\n"
