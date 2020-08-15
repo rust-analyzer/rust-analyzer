@@ -13,6 +13,7 @@ import { fetchRelease, download } from './net';
 import { activateTaskProvider } from './tasks';
 import { setContextValue } from './util';
 import { exec } from 'child_process';
+import { RunnableProvider } from './test_explorer';
 
 let ctx: Ctx | undefined;
 
@@ -137,6 +138,18 @@ async function tryActivate(context: vscode.ExtensionContext) {
         null,
         ctx.subscriptions,
     );
+
+    vscode.window.createTreeView('testExplorer', {
+        "treeDataProvider": new RunnableProvider(),
+        "showCollapseAll": true,
+        "canSelectMany": true,
+    });
+
+    vscode.window.createTreeView('runnableExplorer', {
+        "treeDataProvider": new RunnableProvider(),
+        "showCollapseAll": true,
+        "canSelectMany": true,
+    });
 }
 
 export async function deactivate() {
