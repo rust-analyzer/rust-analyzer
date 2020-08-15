@@ -67,6 +67,20 @@
     ],
     "main": "./out/src/main",
     "contributes": {
+        "views": {
+            "test": [
+                {
+                    "id": "testExplorer",
+                    "name": "Test Explorer"
+                }
+            ],
+            "debug": [
+                {
+                    "id": "runnableExplorer",
+                    "name": "Runnable Explorer"
+                }
+            ]
+        },
         "taskDefinitions": [
             {
                 "type": "cargo",
@@ -101,6 +115,11 @@
             {
                 "command": "rust-analyzer.syntaxTree",
                 "title": "Show Syntax Tree",
+                "category": "Rust Analyzer"
+            },
+            {
+                "command": "rust-analyzer.runnableView",
+                "title": "Show Runnable View",
                 "category": "Rust Analyzer"
             },
             {
