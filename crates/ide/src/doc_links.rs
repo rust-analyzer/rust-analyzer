@@ -19,12 +19,18 @@ use ide_db::{
 };
 use syntax::{ast, match_ast, AstNode, SyntaxKind::*, SyntaxToken, TokenAtOffset, T};
 
-use crate::{FilePosition, Semantics};
+use crate::{hover::LinkDestination, FilePosition, Semantics, Workspace};
 
 pub type DocumentationLink = String;
 
 /// Rewrite documentation links in markdown to point to an online host (e.g. docs.rs)
-pub fn rewrite_links(db: &RootDatabase, markdown: &str, definition: &Definition) -> String {
+pub fn rewrite_links(
+    db: &RootDatabase,
+    markdown: &str,
+    definition: &Definition,
+    link_destination: LinkDestination,
+    workspaces: &[Workspace],
+) -> String {
     let mut cb = |link: BrokenLink| {
         Some((
             /*url*/ link.reference.to_owned().into(),
@@ -43,11 +49,15 @@ pub fn rewrite_links(db: &RootDatabase, markdown: &str, definition: &Definition)
             // Two posibilities:
             // * path-based links: `../../module/struct.MyStruct.html`
             // * module-based links (AKA intra-doc links): `super::super::module::MyStruct`
-            if let Some(rewritten) = rewrite_intra_doc_link(db, *definition, target, title) {
+            if let Some(rewritten) =
+                rewrite_intra_doc_link(db, *definition, target, title, link_destination, workspaces)
+            {
                 return rewritten;
             }
             if let Definition::ModuleDef(def) = *definition {
-                if let Some(target) = rewrite_url_link(db, def, target) {
+                if let Some(target) =
+                    rewrite_url_link(db, def, target, link_destination, workspaces)
+                {
                     return (target, title.to_string());
                 }
             }
@@ -174,6 +184,8 @@ fn rewrite_intra_doc_link(
     def: Definition,
     target: &str,
     title: &str,
+    link_destination: LinkDestination,
+    workspaces: &[Workspace],
 ) -> Option<(String, String)> {
     let link = if target.is_empty() { title } else { target };
     let (link, ns) = parse_link(link);
@@ -208,7 +220,13 @@ fn rewrite_intra_doc_link(
 }
 
 /// Try to resolve path to local documentation via path-based links (i.e. `../gateway/struct.Shard.html`).
-fn rewrite_url_link(db: &RootDatabase, def: ModuleDef, target: &str) -> Option<String> {
+fn rewrite_url_link(
+    db: &RootDatabase,
+    def: ModuleDef,
+    target: &str,
+    link_destination: LinkDestination,
+    workspaces: &[Workspace],
+) -> Option<String> {
     if !(target.contains('#') || target.contains(".html")) {
         return None;
     }
@@ -216,10 +234,16 @@ fn rewrite_url_link(db: &RootDatabase, def: ModuleDef, target: &str) -> Option<S
     let module = def.module(db)?;
     let krate = module.krate();
     let canonical_path = def.canonical_path(db)?;
-    let base = format!("{}/{}", krate.display_name(db)?, canonical_path.replace("::", "/"));
+    let path = format!("{}/{}", krate.display_name(db)?, canonical_path.replace("::", "/"));
 
-    get_doc_url(db, &krate)
-        .and_then(|url| url.join(&base).ok())
+    let base = match link_destination {
+        LinkDestination::Remote => get_doc_url(db, &krate),
+        LinkDestination::Local => get_local_doc_path(db, &krate),
+    };
+
+    krate.root_file(db).
+
+    base.and_then(|url| url.join(&path).ok())
         .and_then(|url| {
             get_symbol_filename(db, &def).as_deref().map(|f| url.join(f).ok()).flatten()
         })

@@ -12,7 +12,7 @@ use std::{ffi::OsString, path::PathBuf};
 use flycheck::FlycheckConfig;
 use hir::PrefixKind;
 use ide::{
-    AssistConfig, CompletionConfig, DiagnosticsConfig, HoverConfig, InlayHintsConfig,
+    AssistConfig, CompletionConfig, DiagnosticsConfig, HoverConfig, LinkDestination, InlayHintsConfig,
     MergeBehaviour,
 };
 use lsp_types::{ClientCapabilities, MarkupKind};
@@ -335,6 +335,10 @@ impl Config {
             debug: data.hoverActions_enable && data.hoverActions_debug,
             goto_type_def: data.hoverActions_enable && data.hoverActions_gotoTypeDef,
             links_in_hover: data.hoverActions_linksInHover,
+            link_destination: match data.hoverActions_linkDestination {
+                LinkDestinationDef::Remote => LinkDestination::Remote,
+                LinkDestinationDef::Local => LinkDestination::Local
+            },
             markdown: true,
         };
 
@@ -438,6 +442,13 @@ enum ImportPrefixDef {
     ByCrate,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum LinkDestinationDef {
+    Remote,
+    Local
+}
+
 macro_rules! config_data {
     (struct $name:ident { $($field:ident: $ty:ty = $default:expr,)*}) => {
         #[allow(non_snake_case)]
@@ -501,6 +512,7 @@ config_data! {
         hoverActions_implementations: bool = true,
         hoverActions_run: bool             = true,
         hoverActions_linksInHover: bool    = true,
+        hoverActions_linkDestination: LinkDestinationDef = LinkDestinationDef::Remote,
 
         inlayHints_chainingHints: bool      = true,
         inlayHints_maxLength: Option<usize> = None,

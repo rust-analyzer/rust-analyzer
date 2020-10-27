@@ -18,7 +18,7 @@ use crate::{
     markdown_remove::remove_markdown,
     markup::Markup,
     runnables::runnable,
-    FileId, FilePosition, NavigationTarget, RangeInfo, Runnable,
+    FileId, FilePosition, NavigationTarget, RangeInfo, Runnable, Workspace,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -28,7 +28,14 @@ pub struct HoverConfig {
     pub debug: bool,
     pub goto_type_def: bool,
     pub links_in_hover: bool,
+    pub link_destination: LinkDestination,
     pub markdown: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LinkDestination {
+    Local,
+    Remote,
 }
 
 impl Default for HoverConfig {
@@ -39,6 +46,7 @@ impl Default for HoverConfig {
             debug: true,
             goto_type_def: true,
             links_in_hover: true,
+            link_destination: LinkDestination::Remote,
             markdown: true,
         }
     }
@@ -51,6 +59,7 @@ impl HoverConfig {
         debug: false,
         goto_type_def: false,
         links_in_hover: true,
+        link_destination: LinkDestination::Remote,
         markdown: true,
     };
 
@@ -95,7 +104,9 @@ pub(crate) fn hover(
     db: &RootDatabase,
     position: FilePosition,
     links_in_hover: bool,
+    link_destination: LinkDestination,
     markdown: bool,
+    workspaces: &[Workspace],
 ) -> Option<RangeInfo<HoverResult>> {
     let sema = Semantics::new(db);
     let file = sema.parse(position.file_id).syntax().clone();
@@ -117,7 +128,7 @@ pub(crate) fn hover(
             let markup = if !markdown {
                 remove_markdown(&markup.as_str())
             } else if links_in_hover {
-                rewrite_links(db, &markup.as_str(), &definition)
+                rewrite_links(db, &markup.as_str(), &definition, link_destination, workspaces)
             } else {
                 remove_links(&markup.as_str())
             };

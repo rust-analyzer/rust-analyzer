@@ -9,7 +9,7 @@ use std::{
 
 use ide::{
     FileId, FilePosition, FileRange, HoverAction, HoverGotoTypeData, NavigationTarget, Query,
-    RangeInfo, Runnable, RunnableKind, SearchScope, TextEdit,
+    RangeInfo, Runnable, RunnableKind, SearchScope, TextEdit, Workspace,
 };
 use itertools::Itertools;
 use lsp_server::ErrorCode;
@@ -23,7 +23,7 @@ use lsp_types::{
     SemanticTokensRangeParams, SemanticTokensRangeResult, SemanticTokensResult, SymbolInformation,
     SymbolTag, TextDocumentIdentifier, Url, WorkspaceEdit,
 };
-use project_model::TargetKind;
+use project_model::{ProjectWorkspace, TargetKind};
 use serde::{Deserialize, Serialize};
 use serde_json::to_value;
 use stdx::{format_to, split_once};
@@ -618,9 +618,13 @@ pub(crate) fn handle_hover(
 ) -> Result<Option<lsp_ext::Hover>> {
     let _p = profile::span("handle_hover");
     let position = from_proto::file_position(&snap, params.text_document_position_params)?;
+
+    snap.cargo_target_for_crate_root(krate)?;
+
     let info = match snap.analysis.hover(
         position,
         snap.config.hover.links_in_hover,
+        snap.config.hover.link_destination,
         snap.config.hover.markdown,
     )? {
         None => return Ok(None),

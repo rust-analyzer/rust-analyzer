@@ -46,7 +46,7 @@ mod typing;
 mod markdown_remove;
 mod doc_links;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use cfg::CfgOptions;
 use ide_db::base_db::{
@@ -68,7 +68,7 @@ pub use crate::{
     expand_macro::ExpandedMacro,
     file_structure::StructureNode,
     folding_ranges::{Fold, FoldKind},
-    hover::{HoverAction, HoverConfig, HoverGotoTypeData, HoverResult},
+    hover::{HoverAction, HoverConfig, HoverGotoTypeData, HoverResult, LinkDestination},
     inlay_hints::{InlayHint, InlayHintsConfig, InlayKind},
     markup::Markup,
     prime_caches::PrimeCachesProgress,
@@ -117,6 +117,12 @@ impl<T> RangeInfo<T> {
     pub fn new(range: TextRange, info: T) -> RangeInfo<T> {
         RangeInfo { range, info }
     }
+}
+
+#[derive(Debug)]
+pub struct Workspace {
+    pub root_dir: PathBuf,
+    pub target_dir: PathBuf,
 }
 
 /// `AnalysisHost` stores the current state of the world.
@@ -285,7 +291,7 @@ impl Analysis {
 
     /// Returns an edit which should be applied when opening a new line, fixing
     /// up minor stuff like continuing the comment.
-    /// The edit will be a snippet (with `$0`).
+    /// The edit will be a snippet (with ``).
     pub fn on_enter(&self, position: FilePosition) -> Cancelable<Option<TextEdit>> {
         self.with_db(|db| typing::on_enter(&db, position))
     }
@@ -381,9 +387,13 @@ impl Analysis {
         &self,
         position: FilePosition,
         links_in_hover: bool,
+        link_destination: LinkDestination,
         markdown: bool,
+        workspaces: &[Workspace],
     ) -> Cancelable<Option<RangeInfo<HoverResult>>> {
-        self.with_db(|db| hover::hover(db, position, links_in_hover, markdown))
+        self.with_db(|db| {
+            hover::hover(db, position, links_in_hover, link_destination, markdown, workspaces)
+        })
     }
 
     /// Return URL(s) for the documentation of the symbol under the cursor.
