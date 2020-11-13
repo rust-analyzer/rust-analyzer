@@ -4,7 +4,7 @@ pub(crate) mod import_assets;
 
 use std::ops;
 
-use hir::{Crate, Enum, HasSource, Module, ScopeDef, Semantics, Trait};
+use hir::{AsName, Crate, Enum, HasSource, Module, ModuleDef, ScopeDef, Semantics, Trait};
 use ide_db::RootDatabase;
 use itertools::Itertools;
 use syntax::{
@@ -23,6 +23,22 @@ use crate::{
 
 pub use insert_use::MergeBehaviour;
 pub(crate) use insert_use::{insert_use, ImportScope};
+
+pub fn existing_type_definition(db: &RootDatabase, name: &ast::Name, module: hir::Module) -> bool {
+    module
+        .scope(db, None)
+        .into_iter()
+        .filter(|(_, def)| match def {
+            // only check type-namespace
+            hir::ScopeDef::ModuleDef(def) => matches!(def,
+                ModuleDef::Module(_) | ModuleDef::Adt(_) |
+                ModuleDef::EnumVariant(_) | ModuleDef::Trait(_) |
+                ModuleDef::TypeAlias(_) | ModuleDef::BuiltinType(_)
+            ),
+            _ => false,
+        })
+        .any(|(def, _)| def == name.as_name())
+}
 
 pub fn mod_path_to_ast(path: &hir::ModPath) -> ast::Path {
     let mut segments = Vec::new();

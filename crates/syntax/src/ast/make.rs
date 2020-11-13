@@ -114,6 +114,26 @@ pub fn record_expr_field(name: ast::NameRef, expr: Option<ast::Expr>) -> ast::Re
     }
 }
 
+pub fn record_expr_field_list(
+    fields: impl IntoIterator<Item = ast::RecordExprField>,
+) -> ast::RecordExprFieldList {
+    let mut buf = "{".to_string();
+    let mut first = true;
+    for field in fields {
+        if first {
+            first = false;
+            buf.push_str("\n");
+        }
+        format_to!(buf, "    {},\n", field);
+    }
+    buf.push_str("}");
+    ast_from_text(&format!("fn f() {{ S {} }}", buf))
+}
+
+pub fn record_expr(path: ast::Path, field_list: ast::RecordExprFieldList) -> ast::RecordExpr {
+    ast_from_text(&format!("fn f() {{ {} {} }}", path, field_list))
+}
+
 pub fn record_field(
     visibility: Option<ast::Visibility>,
     name: ast::Name,
@@ -183,6 +203,9 @@ pub fn expr_call(f: ast::Expr, arg_list: ast::ArgList) -> ast::Expr {
 }
 pub fn expr_method_call(receiver: ast::Expr, method: &str, arg_list: ast::ArgList) -> ast::Expr {
     expr_from_text(&format!("{}.{}{}", receiver, method, arg_list))
+}
+pub fn expr_field(expr: ast::Expr, name_ref: ast::NameRef) -> ast::Expr {
+    expr_from_text(&format!("{}.{}", expr, name_ref))
 }
 pub fn expr_ref(expr: ast::Expr, exclusive: bool) -> ast::Expr {
     expr_from_text(&if exclusive { format!("&mut {}", expr) } else { format!("&{}", expr) })
@@ -375,8 +398,17 @@ pub fn tuple_field_list(fields: impl IntoIterator<Item = ast::TupleField>) -> as
 pub fn record_field_list(
     fields: impl IntoIterator<Item = ast::RecordField>,
 ) -> ast::RecordFieldList {
-    let fields = fields.into_iter().join(", ");
-    ast_from_text(&format!("struct f {{ {} }}", fields))
+    let mut buf = "{".to_string();
+    let mut first = true;
+    for field in fields {
+        if first {
+            first = false;
+            buf.push_str("\n");
+        }
+        format_to!(buf, "    {},\n", field);
+    }
+    buf.push_str("}");
+    ast_from_text(&format!("struct f {}", buf))
 }
 
 pub fn tuple_field(visibility: Option<ast::Visibility>, ty: ast::Type) -> ast::TupleField {
@@ -393,6 +425,36 @@ pub fn variant(name: ast::Name, field_list: Option<ast::FieldList>) -> ast::Vari
         Some(it) => format!("{}", it),
     };
     ast_from_text(&format!("enum f {{ {}{} }}", name, field_list))
+}
+
+pub fn variant_list(variants: impl IntoIterator<Item = ast::Variant>) -> ast::VariantList {
+    let mut buf = "{".to_string();
+    let mut first = true;
+    for variant in variants {
+        if first {
+            first = false;
+            buf.push_str("\n");
+        }
+        format_to!(buf, "    {},\n", variant);
+    }
+    buf.push_str("}");
+    ast_from_text(&format!("enum f {}", buf))
+}
+
+pub fn enum_(
+    visibility: Option<ast::Visibility>,
+    enum_name: ast::Name,
+    type_params: Option<ast::GenericParamList>,
+    variant_list: ast::VariantList,
+) -> ast::Enum {
+    let type_params =
+        if let Some(type_params) = type_params { format!("<{}>", type_params) } else { "".into() };
+    let visibility = match visibility {
+        None => String::new(),
+        Some(it) => format!("{} ", it),
+    };
+
+    ast_from_text(&format!("{}enum {}{} {}", visibility, enum_name, type_params, variant_list))
 }
 
 pub fn fn_(
@@ -423,7 +485,8 @@ pub fn struct_(
     type_params: Option<ast::GenericParamList>,
     field_list: ast::FieldList,
 ) -> ast::Struct {
-    let semicolon = if matches!(field_list, ast::FieldList::TupleFieldList(_)) { ";" } else { "" };
+    let is_tuple_field_list = matches!(field_list, ast::FieldList::TupleFieldList(_));
+    let (semicolon, separator) = if is_tuple_field_list { (";", "") } else { ("", " ") };
     let type_params =
         if let Some(type_params) = type_params { format!("<{}>", type_params) } else { "".into() };
     let visibility = match visibility {
@@ -432,8 +495,8 @@ pub fn struct_(
     };
 
     ast_from_text(&format!(
-        "{}struct {}{}{}{}",
-        visibility, strukt_name, type_params, field_list, semicolon
+        "{}struct {}{}{}{}{}",
+        visibility, strukt_name, type_params, separator, field_list, semicolon
     ))
 }
 

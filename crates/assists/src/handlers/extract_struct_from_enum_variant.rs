@@ -1,8 +1,8 @@
 use std::iter;
 
 use either::Either;
-use hir::{AsName, EnumVariant, Module, ModuleDef, Name};
-use ide_db::{defs::Definition, search::Reference, RootDatabase};
+use hir::{Module, ModuleDef, Name};
+use ide_db::{defs::Definition, search::Reference};
 use rustc_hash::{FxHashMap, FxHashSet};
 use syntax::{
     algo::{find_node_at_offset, SyntaxRewriter},
@@ -11,7 +11,7 @@ use syntax::{
 };
 
 use crate::{
-    utils::{insert_use, mod_path_to_ast, ImportScope},
+    utils::{existing_type_definition, insert_use, mod_path_to_ast, ImportScope},
     AssistContext, AssistId, AssistKind, Assists,
 };
 
@@ -37,7 +37,10 @@ pub(crate) fn extract_struct_from_enum_variant(
 
     let variant_name = variant.name()?;
     let variant_hir = ctx.sema.to_def(&variant)?;
-    if existing_definition(ctx.db(), &variant_name, &variant_hir) {
+
+    let db = ctx.db();
+    let module = variant_hir.parent_enum(db).module(db);
+    if existing_type_definition(db, &variant_name, module) {
         return None;
     }
 
@@ -49,13 +52,13 @@ pub(crate) fn extract_struct_from_enum_variant(
         "Extract struct from enum variant",
         target,
         |builder| {
-            let variant_hir_name = variant_hir.name(ctx.db());
+            let variant_hir_name = variant_hir.name(db);
             let enum_module_def = ModuleDef::from(enum_hir);
             let usages =
                 Definition::ModuleDef(ModuleDef::EnumVariant(variant_hir)).usages(&ctx.sema).all();
 
             let mut visited_modules_set = FxHashSet::default();
-            let current_module = enum_hir.module(ctx.db());
+            let current_module = enum_hir.module(db);
             visited_modules_set.insert(current_module);
             let mut rewriters = FxHashMap::default();
             for reference in usages {
@@ -106,24 +109,6 @@ fn extract_field_list_if_applicable(
         }
         _ => None,
     }
-}
-
-fn existing_definition(db: &RootDatabase, variant_name: &ast::Name, variant: &EnumVariant) -> bool {
-    variant
-        .parent_enum(db)
-        .module(db)
-        .scope(db, None)
-        .into_iter()
-        .filter(|(_, def)| match def {
-            // only check type-namespace
-            hir::ScopeDef::ModuleDef(def) => matches!(def,
-                ModuleDef::Module(_) | ModuleDef::Adt(_) |
-                ModuleDef::EnumVariant(_) | ModuleDef::Trait(_) |
-                ModuleDef::TypeAlias(_) | ModuleDef::BuiltinType(_)
-            ),
-            _ => false,
-        })
-        .any(|(name, _)| name == variant_name.as_name())
 }
 
 fn insert_import(
@@ -260,7 +245,11 @@ enum A { One(One) }"#,
         check_assist(
             extract_struct_from_enum_variant,
             "enum A { <|>One { foo: u32, bar: u32 } }",
-            r#"struct One{ pub foo: u32, pub bar: u32 }
+            r#"
+struct One {
+    pub foo: u32,
+    pub bar: u32,
+}
 
 enum A { One(One) }"#,
         );
@@ -271,7 +260,10 @@ enum A { One(One) }"#,
         check_assist(
             extract_struct_from_enum_variant,
             "enum A { <|>One { foo: u32 } }",
-            r#"struct One{ pub foo: u32 }
+            r#"
+struct One {
+    pub foo: u32,
+}
 
 enum A { One(One) }"#,
         );
@@ -366,7 +358,10 @@ fn f() {
 }
 "#,
             r#"
-struct V{ pub i: i32, pub j: i32 }
+struct V {
+    pub i: i32,
+    pub j: i32,
+}
 
 enum E {
     V(V)
@@ -433,7 +428,10 @@ fn f() {
 "#,
             r#"
 //- /main.rs
-struct V{ pub i: i32, pub j: i32 }
+struct V {
+    pub i: i32,
+    pub j: i32,
+}
 
 enum E {
     V(V)
@@ -463,7 +461,10 @@ fn foo() {
 }
 "#,
             r#"
-struct One{ pub a: u32, pub b: u32 }
+struct One {
+    pub a: u32,
+    pub b: u32,
+}
 
 enum A { One(One) }
 

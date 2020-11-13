@@ -131,6 +131,7 @@ mod handlers {
     mod expand_glob_import;
     mod extract_struct_from_enum_variant;
     mod extract_variable;
+    mod factor_out_from_enum_variants;
     mod fill_match_arms;
     mod fix_visibility;
     mod flip_binexpr;
@@ -179,6 +180,7 @@ mod handlers {
             expand_glob_import::expand_glob_import,
             extract_struct_from_enum_variant::extract_struct_from_enum_variant,
             extract_variable::extract_variable,
+            factor_out_from_enum_variants::factor_out_from_enum_variants,
             fill_match_arms::fill_match_arms,
             fix_visibility::fix_visibility,
             flip_binexpr::flip_binexpr,

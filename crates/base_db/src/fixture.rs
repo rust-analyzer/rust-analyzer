@@ -101,7 +101,8 @@ pub trait WithFixture: Default + SourceDatabaseExt + 'static {
         let fixture = ChangeFixture::parse(ra_fixture);
         let mut db = Self::default();
         fixture.change.apply(&mut db);
-        let (file_id, range_or_offset) = fixture.file_position.unwrap();
+        let (file_id, range_or_offset) =
+            fixture.file_position.expect("Fixture missing a cursor marker: `<|>`");
         (db, file_id, range_or_offset)
     }
 

@@ -269,6 +269,30 @@ fn main() {
 }
 
 #[test]
+fn doctest_factor_out_from_enum_variants() {
+    check_doc_test(
+        "factor_out_from_enum_variants",
+        r#####"
+enum A {<|>
+    One(u32, String),
+    Two(u32, bool),
+}
+"#####,
+        r#####"
+struct A {
+    enum_field_0: u32,
+    enum_a: EnumA,
+}
+
+enum EnumA {
+    One(String),
+    Two(bool),
+}
+"#####,
+    )
+}
+
+#[test]
 fn doctest_fill_match_arms() {
     check_doc_test(
         "fill_match_arms",
