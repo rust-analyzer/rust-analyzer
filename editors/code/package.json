@@ -209,12 +209,22 @@
                 "command": "rust-analyzer.joinLines",
                 "key": "ctrl+shift+j",
                 "when": "editorTextFocus && editorLangId == rust"
+            },
+            {
+                "key": "Enter",
+                "command": "rust-analyzer.onEnter",
+                "when": "editorTextFocus && !suggestWidgetVisible && editorLangId == rust"
             }
         ],
         "configuration": {
             "type": "object",
             "title": "Rust Analyzer",
             "properties": {
+                "rust-analyzer.enhancedEnter": {
+                    "type": "boolean",
+                    "default": false,
+                    "description": "Enhanced enter key (comment completion and auto-indent)"
+                },
                 "rust-analyzer.lruCapacity": {
                     "type": [
                         "null",

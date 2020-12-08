@@ -95,6 +95,7 @@ export class Config {
     get channel() { return this.get<UpdatesChannel>("updates.channel"); }
     get askBeforeDownload() { return this.get<boolean>("updates.askBeforeDownload"); }
     get traceExtension() { return this.get<boolean>("trace.extension"); }
+    get enhancedEnter() { return this.get<boolean>("enhancedEnter"); }
 
     get inlayHints() {
         return {
