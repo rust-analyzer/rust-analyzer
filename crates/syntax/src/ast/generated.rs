@@ -3,6 +3,9 @@
 pub(crate) mod nodes;
 #[rustfmt::skip]
 pub(crate) mod tokens;
+#[rustfmt::skip]
+#[allow(dead_code)]
+pub(crate) mod make;
 
 use crate::{
     AstNode,

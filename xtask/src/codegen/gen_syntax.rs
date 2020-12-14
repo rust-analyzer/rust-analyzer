@@ -4,6 +4,7 @@
 //! wrappers around `SyntaxNode` which implement `syntax::AstNode`.
 
 use std::{
+    borrow::Cow,
     collections::{BTreeSet, HashSet},
     fmt::Write,
 };
@@ -33,6 +34,10 @@ pub fn generate_syntax(mode: Mode) -> Result<()> {
     let ast_nodes_file = project_root().join("crates/syntax/src/ast/generated/nodes.rs");
     let contents = generate_nodes(KINDS_SRC, &ast)?;
     update(ast_nodes_file.as_path(), &contents, mode)?;
+
+    let make_file = project_root().join("crates/syntax/src/ast/generated/make.rs");
+    let contents = generate_make(&grammar)?;
+    update(make_file.as_path(), &contents, mode)?;
 
     Ok(())
 }
@@ -382,6 +387,8 @@ fn generate_syntax_kinds(grammar: KindsSrc<'_>) -> Result<String> {
             #([#all_keywords_idents] => { $crate::SyntaxKind::#all_keywords };)*
             [lifetime] => { $crate::SyntaxKind::LIFETIME };
             [ident] => { $crate::SyntaxKind::IDENT };
+            [string] => { $crate::SyntaxKind::STRING };
+            [int_number] => { $crate::SyntaxKind::INT_NUMBER };
             [shebang] => { $crate::SyntaxKind::SHEBANG };
         }
     };
@@ -745,5 +752,601 @@ impl AstNodeSrc {
         to_remove.into_iter().rev().for_each(|idx| {
             self.fields.remove(idx);
         });
+    }
+}
+
+// -- Make generation --
+
+fn generate_make(grammar: &Grammar) -> Result<String> {
+    let nodes = grammar.iter().collect::<Vec<_>>();
+
+    let mut funcs = vec![];
+
+    // use nodelabel names for param names if possible?
+    nodes
+        .into_iter()
+        .filter(|node| {
+            // FIXME: Module and Rename for example emit to functions which ideally could be collapsed into one impl
+
+            // things that have to be manual implementations as these are not supported/too complex
+            // to autogenerate
+            !matches!(
+                grammar[*node].name.as_ref(),
+                "Literal" // <-- TODO
+                    | "MacroCall" // opt punct
+                    | "UseTree" // nested opt
+                    | "Fn" // opt lit
+                    | "SelfParam" // opt lit, nested opt
+                    | "Const" // opt lit
+                    | "Static" // opt lit
+                    | "Trait" // nested opt
+                    | "TypeAlias" // nested opt
+                    | "LifetimeParam" // nested opt
+                    | "Impl" // opt everything
+                    | "Attr" // opt punct
+                    | "ExprStmt" // opt semi
+                    | "MatchArm" // opt comma
+                    | "RefType" // 'mut'?
+                    | "FnPtrType" // opt lit
+                    | "TypeBound" // opt punctuation
+                    | "IdentPat" // opt lit
+                    | "RefPat" // opt lit
+                    | "RecordPatFieldList" // opt punct
+                    | "ClosureExpr" // opt lit
+                    | "Visibility" // has opt literals after stripped alternating paths
+                    | "TokenTree" // the rule doesnt respect the inner tokens
+            )
+        })
+        .for_each(|node| {
+            let name = grammar[node].name.clone();
+            let rule = &grammar[node].rule;
+            if lower_enum(grammar, rule).is_some() {
+                return;
+            }
+            let ctors = rule_to_ctors(grammar, &name, rule);
+            funcs.push(quote! {
+                #( #ctors )*
+            });
+        });
+
+    let res = quote! {
+        #![allow(unused_mut)]
+        use crate::{ast, AstNode, SyntaxKind, SyntaxNode, T};
+        use itertools::Itertools;
+        use rowan::{GreenNode, GreenToken, NodeOrToken, SmolStr, SyntaxKind as RSyntaxKind};
+
+
+        #(#funcs)*
+    };
+
+    let pretty = reformat(&res.to_string()).unwrap_or(res.to_string());
+    Ok(pretty)
+}
+
+#[derive(Copy, Clone, PartialEq, Debug)]
+enum ParamKind {
+    Required,
+    Optional,
+    Many,
+}
+
+enum Node {
+    Str(String),
+    Typed(String, String),
+}
+
+impl Node {
+    #[allow(dead_code)]
+    fn name(&mut self) -> &str {
+        match self {
+            Node::Typed(name, _) | Node::Str(name) => name,
+        }
+    }
+
+    fn name_mut(&mut self) -> &mut String {
+        match self {
+            Node::Typed(name, _) | Node::Str(name) => name,
+        }
+    }
+
+    // input param type
+    fn name_and_ty(&self) -> (&str, &str) {
+        match self {
+            Node::Str(name) => (name, "&'a str"),
+            Node::Typed(name, ty) => (name, ty),
+        }
+    }
+}
+enum NodeOrToken {
+    Node(Node),
+    Token(String),
+}
+
+impl NodeOrToken {
+    fn name_mut(&mut self) -> Option<&mut String> {
+        match self {
+            NodeOrToken::Node(node) => Some(node.name_mut()),
+            NodeOrToken::Token(_) => None,
+        }
+    }
+}
+
+enum MakeFnAction {
+    Always(NodeOrToken),
+    Optional(Vec<String>, Node, Vec<String>),
+    Repeat(Node, Option<String>),
+}
+
+struct MakeFnRecorder {
+    actions: Vec<MakeFnAction>,
+}
+
+impl MakeFnRecorder {
+    fn new() -> Self {
+        MakeFnRecorder { actions: vec![] }
+    }
+
+    fn push_rep_node(&mut self, name: String, sep: Option<String>) {
+        let ty = format!("ast::{}", &name);
+        let name = to_lower_snake_case(&name);
+        self.actions.push(MakeFnAction::Repeat(Node::Typed(name, ty), sep));
+    }
+    fn push_opt_node(&mut self, name: String) {
+        let ty = format!("ast::{}", &name);
+        let name = to_lower_snake_case(&name);
+        self.actions.push(MakeFnAction::Optional(vec![], Node::Typed(name, ty), vec![]))
+    }
+    fn push_opt_node_with_tokens(&mut self, left: Vec<String>, name: String, right: Vec<String>) {
+        let ty = format!("ast::{}", &name);
+        let name = to_lower_snake_case(&name);
+        self.actions.push(MakeFnAction::Optional(left, Node::Typed(name, ty), right))
+    }
+
+    fn push_token(&mut self, token: String) {
+        self.actions.push(MakeFnAction::Always(NodeOrToken::Token(token)));
+    }
+
+    fn push_node(&mut self, name: String) {
+        let ty = format!("ast::{}", &name);
+        let name = to_lower_snake_case(&name);
+        self.actions.push(MakeFnAction::Always(NodeOrToken::Node(Node::Typed(name, ty))));
+    }
+
+    fn push_string_node(&mut self, name: String) {
+        self.actions.push(MakeFnAction::Always(NodeOrToken::Node(Node::Str(name))));
+    }
+
+    fn push_opt_string_node_with_tokens(
+        &mut self,
+        left: Vec<String>,
+        name: String,
+        right: Vec<String>,
+    ) {
+        self.actions.push(MakeFnAction::Optional(left, Node::Str(name), right));
+    }
+
+    fn params(&self) -> impl Iterator<Item = Param> + '_ {
+        self.actions.iter().flat_map(|action| match action {
+            MakeFnAction::Always(NodeOrToken::Node(node)) => {
+                let (name, ty) = node.name_and_ty();
+                Some(Param { name: name.to_owned(), ty: ty.to_owned(), kind: ParamKind::Required })
+            }
+            MakeFnAction::Optional(_, node, _) => {
+                let (name, ty) = node.name_and_ty();
+                Some(Param { name: name.to_owned(), ty: ty.to_owned(), kind: ParamKind::Optional })
+            }
+            MakeFnAction::Repeat(node, _) => {
+                let (name, ty) = node.name_and_ty();
+                Some(Param { name: name.to_owned(), ty: ty.to_owned(), kind: ParamKind::Many })
+            }
+            _ => None,
+        })
+    }
+
+    fn param_names(&mut self) -> impl Iterator<Item = &'_ mut String> + '_ {
+        self.actions.iter_mut().flat_map(|action| match action {
+            MakeFnAction::Always(nt) => nt.name_mut(),
+            MakeFnAction::Optional(_, node, _) | MakeFnAction::Repeat(node, _) => {
+                Some(node.name_mut())
+            }
+        })
+    }
+
+    fn gen_body(&self) -> proc_macro2::TokenStream {
+        self.actions
+            .iter()
+            .map(|action| match action {
+                MakeFnAction::Always(NodeOrToken::Node(Node::Typed(name, _))) => {
+                    let name = name_to_ident(name);
+                    quote! {
+                        children.push(NodeOrToken::Node(#name.syntax().green().clone()));
+                    }
+                }
+                MakeFnAction::Always(NodeOrToken::Node(Node::Str(name))) => {
+                    let kind = str_node_to_kind(name);
+                    let name = name_to_ident(name);
+                    quote! { children.push(NodeOrToken::Token(GreenToken::new(RSyntaxKind(T![#kind] as u16), SmolStr::from(#name)))); }
+                },
+                MakeFnAction::Always(NodeOrToken::Token(token)) => quote_push_token(token),
+                MakeFnAction::Optional(left, Node::Typed(name, _), right) => {
+                    let left = left.iter().map(|s| quote_push_token(s));
+                    let right = right.iter().map(|s| quote_push_token(s));
+                    let name = name_to_ident(name);
+                    quote! {
+                        if let Some(#name) = #name.into() {
+                            #(#left)*
+                            children.push(NodeOrToken::Node(#name.syntax().green().clone()));
+                            #(#right)*
+                        }
+                    }
+                }
+                MakeFnAction::Optional(left, Node::Str(name), right) => {
+                    let kind = str_node_to_kind(name);
+                    let left = left.iter().map(|s| quote_push_token(s));
+                    let right = right.iter().map(|s| quote_push_token(s));
+                    let name = name_to_ident(name);
+                    quote! {
+                        if let Some(#name) = #name.into() {
+                            #(#left)*
+                            children.push(NodeOrToken::Token(GreenToken::new(RSyntaxKind(T![#kind] as u16), SmolStr::from(#name))));
+                            #(#right)*
+                        }
+                    }
+                }
+                MakeFnAction::Repeat(Node::Typed(name, _), sep) => {
+                    let sep = sep.as_deref().map(quote_token).into_iter();
+                    let name = name_to_ident(name);
+                    quote! {
+                        children.extend(#name.into_iter().map(|item| NodeOrToken::Node(item.syntax().green().clone())) #(.intersperse(#sep))* );
+                    }
+                }
+                MakeFnAction::Repeat(Node::Str(_), ..) => {panic!()}
+            })
+            .flatten()
+            .collect()
+    }
+}
+
+fn str_node_to_kind(name: &str) -> proc_macro2::Ident {
+    match name {
+        "lifetime" | "string" | "shebang" | "int_number" | "ident" => format_ident!("{}", name),
+        name => panic!("unexpected string node {:?}", name),
+    }
+}
+
+fn quote_push_token(token: &str) -> proc_macro2::TokenStream {
+    let token = quote_token(token);
+    quote! { children.push(#token); }
+}
+
+fn quote_token(token: &str) -> proc_macro2::TokenStream {
+    let macro_token = match token {
+        "(" => "'('",
+        ")" => "')'",
+        "{" => "'{'",
+        "}" => "'}'",
+        "[" => "'['",
+        "]" => "']'",
+        token => token,
+    };
+    let macro_token: proc_macro2::TokenStream = macro_token.parse().unwrap();
+    quote! { NodeOrToken::Token(GreenToken::new(RSyntaxKind(T![#macro_token] as u16), SmolStr::from(#token))) }
+}
+
+#[derive(Clone, Debug)]
+struct Param {
+    name: String,
+    ty: String,
+    kind: ParamKind,
+}
+
+impl quote::ToTokens for Param {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = name_to_ident(&self.name);
+        let ty: proc_macro2::TokenStream = self.ty.parse().unwrap();
+        tokens.extend(match self.kind {
+            ParamKind::Required => quote!(#name : #ty),
+            ParamKind::Optional => quote!(#name : impl Into<Option<#ty>>),
+            ParamKind::Many => quote!(#name : impl IntoIterator<Item = #ty>),
+        });
+    }
+}
+struct MakeConstructor {
+    name: String,
+    rule_name: String,
+    params: Vec<Param>,
+    body: proc_macro2::TokenStream,
+}
+
+impl quote::ToTokens for MakeConstructor {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = name_to_ident(&self.name);
+        let ty = format_ident!("{}", &self.rule_name);
+        let syntax_kind = format_ident!("{}", to_upper_snake_case(&self.rule_name));
+        let params = self.params.iter();
+        let lifetime = self.params.iter().find_map(|param| {
+            if param.ty == "&'a str" {
+                Some(quote!(<'a>))
+            } else {
+                None
+            }
+        });
+        let body = &self.body;
+        tokens.extend(quote! {
+            pub fn #name #lifetime (#(#params),*) -> ast::#ty {
+                let mut children = vec![];
+                #body
+                let green_node = GreenNode::new(RSyntaxKind(SyntaxKind::#syntax_kind as u16), children);
+                ast::#ty::cast(SyntaxNode::new_root(green_node)).unwrap()
+            }
+        });
+    }
+}
+
+fn lower_rule_to_ctor(recorder: &mut MakeFnRecorder, rule: NonAltRule) {
+    match rule {
+        NonAltRule::Token(token) => {
+            if let Some(name) = token_as_param(&token) {
+                recorder.push_string_node(name);
+            } else {
+                recorder.push_token(token);
+            };
+        }
+        // node alias
+        NonAltRule::Node(name) => recorder.push_node(name),
+        NonAltRule::Opt(_) => unimplemented!("direct optional rules"),
+        NonAltRule::Rep(r) => lower_rep_rule(recorder, *r),
+        NonAltRule::Seq(r) => lower_seq_rule(recorder, r),
+    }
+}
+
+fn lower_seq_rule(recorder: &mut MakeFnRecorder, sequence: Vec<NonAltRule>) {
+    if try_lower_seperated_rep(recorder, &sequence) {
+        // TypeBoundList/ OrPat
+        // FIXME: The way this works atm allows these to be constructed completely empty
+        return;
+    }
+    for rule in sequence {
+        match rule {
+            NonAltRule::Token(token) => recorder.push_token(token),
+            NonAltRule::Node(name) => recorder.push_node(name),
+            NonAltRule::Opt(r) => lower_opt_rule(recorder, *r),
+            NonAltRule::Rep(r) => lower_rep_rule(recorder, *r),
+            NonAltRule::Seq(sequence) => lower_seq_rule(recorder, sequence),
+        }
+    }
+}
+
+fn lower_rep_rule(recorder: &mut MakeFnRecorder, rule: NonAltRule) {
+    match rule {
+        NonAltRule::Node(name) => recorder.push_rep_node(name, None),
+        NonAltRule::Token(it) => panic!("{:?}", it),
+        NonAltRule::Opt(it) => panic!("{:?}", it),
+        NonAltRule::Rep(it) => panic!("{:?}", it),
+        NonAltRule::Seq(it) => panic!("{:?}", it),
+    }
+}
+
+fn lower_opt_rule(recorder: &mut MakeFnRecorder, rule: NonAltRule) {
+    match rule {
+        NonAltRule::Token(token) => {
+            if let Some(name) = token_as_param(&token) {
+                // Abi/SelfParam
+                recorder.push_opt_string_node_with_tokens(vec![], name, vec![]);
+            } else {
+                if token == "::" {
+                    // FIXME prefix ::, triggered by GenericArgList and one case of PathSegment
+                } else if ["super", "self", "crate"].contains(&&*token) {
+                    // Visibillity
+                } else {
+                    // other optional tokens
+                    panic!();
+                }
+            }
+        }
+        NonAltRule::Node(name) => recorder.push_opt_node(name),
+        NonAltRule::Opt(it) => panic!("{:?}", it),
+        NonAltRule::Rep(it) => panic!("{:?}", it),
+        NonAltRule::Seq(it) => {
+            if !try_lower_seperated_rep(recorder, &it) {
+                // not of the form (Node ( 'sep' Node) 'sep'?)?
+                // so expect the form (sep1 Node sep2)? where sep1 and sep2 are arbitrarily many non optional tokens
+                if let Some((node_pos, node)) = it
+                    .iter()
+                    .enumerate()
+                    .find(|(_, rule)| matches!(rule, NonAltRule::Node(_) | NonAltRule::Opt(_)))
+                {
+                    let name = match node {
+                        NonAltRule::Node(name) => Cow::Borrowed(name),
+                        NonAltRule::Opt(inner) => match inner.as_ref() {
+                            NonAltRule::Node(name) => Cow::Borrowed(name),
+                            // NonAltRule::Token(token) => Cow::Owned(token_as_param(token).unwrap()),
+                            _ => panic!("expected Node: {:?}", node),
+                        },
+                        _ => panic!("expected (optional) Node: {:?}", node),
+                    };
+                    let (left, right) = it.split_at(node_pos);
+
+                    let get_token_strings = |tok| match tok {
+                        &NonAltRule::Token(ref token) => token.clone(),
+                        _ => panic!("expected token: {:?}", tok),
+                    };
+                    match name {
+                        Cow::Borrowed(name) => recorder.push_opt_node_with_tokens(
+                            left.iter().map(get_token_strings).collect(),
+                            name.to_owned(),
+                            right[1..].iter().map(get_token_strings).collect(),
+                        ),
+                        Cow::Owned(name) => recorder.push_opt_string_node_with_tokens(
+                            left.iter().map(get_token_strings).collect(),
+                            name,
+                            right[1..].iter().map(get_token_strings).collect(),
+                        ),
+                    }
+                }
+            }
+        }
+    }
+}
+
+// box patterns would be nice
+/// This tries to parse the pattern (Node ('sep' Node)* sep?) which appears repeatedly in the grammar
+fn try_lower_seperated_rep(recorder: &mut MakeFnRecorder, rule: &[NonAltRule]) -> bool {
+    let (first_node, rep, sep) = match rule {
+        [NonAltRule::Node(first_node), NonAltRule::Rep(rep), NonAltRule::Opt(sep)] => {
+            (first_node, rep, sep)
+        }
+        _ => return false,
+    };
+    let seperator = match sep.as_ref() {
+        NonAltRule::Token(token) => token,
+        sep => panic!("sep token expected: {:?}", sep),
+    };
+
+    if let NonAltRule::Seq(seq) = rep.as_ref() {
+        match seq.as_slice() {
+            [NonAltRule::Token(token), NonAltRule::Node(node)] => {
+                assert_eq!(seperator, token, "sep and repeat token are unequal");
+                assert_eq!(first_node, node, "start and repeat node are unequal");
+                recorder.push_rep_node(first_node.clone(), Some(seperator.clone()));
+                return true;
+            }
+            seq => panic!("token followed by node expected: {:?}", seq),
+        }
+    }
+    panic!("sequence expected: {:?}", rep.as_ref());
+}
+
+fn rename_dupe_params<'a>(param_names: impl Iterator<Item = &'a mut String>) {
+    let mut c = 0;
+    let mut last_param_name = String::new();
+    for param in param_names {
+        if &last_param_name == param {
+            c += 1;
+            *param = format!("{}{}", param, c);
+        } else {
+            c = 0;
+            last_param_name = param.clone();
+        }
+    }
+}
+
+fn rule_to_ctors(grammar: &Grammar, node_name: &str, rule: &Rule) -> Vec<MakeConstructor> {
+    // dbg!(node_name); // uncomment this if something panics to see what rule it is
+    let mut rules = strip_alt(grammar, vec![], rule, None);
+    if node_name == "PathSegment" {
+        rules.remove(3); // '::'? NameRef
+    }
+
+    let mut constructors: Vec<_> = rules
+        .into_iter()
+        .map(|rule| {
+            let mut recorder = MakeFnRecorder::new();
+            lower_rule_to_ctor(&mut recorder, rule);
+
+            rename_dupe_params(recorder.param_names());
+
+            MakeConstructor {
+                name: node_name.to_owned(),
+                rule_name: node_name.to_owned(),
+                params: recorder.params().collect(),
+                body: recorder.gen_body(),
+            }
+        })
+        .collect();
+
+    if constructors.len() > 1 {
+        constructors
+            .iter_mut()
+            .enumerate()
+            .for_each(|(idx, ctor)| ctor.name = format!("{}{}", &ctor.name, idx))
+    }
+    constructors
+}
+
+/// Basically like ungrammar::Rule but without alternations
+#[derive(Clone, Debug)]
+enum NonAltRule {
+    Token(String),
+    Node(String),
+    Opt(Box<NonAltRule>),
+    Rep(Box<NonAltRule>),
+    Seq(Vec<NonAltRule>),
+}
+
+// Removes alternating rules from a rule, therefor creating a new rule for each alternating path
+// simplifies generating make constructors
+fn strip_alt(
+    grammar: &Grammar,
+    mut collect: Vec<NonAltRule>,
+    rule: &Rule,
+    renamed: Option<&str>,
+) -> Vec<NonAltRule> {
+    match rule {
+        Rule::Labeled { label, rule } => return strip_alt(grammar, collect, rule, Some(label)),
+        &Rule::Node(node) => collect.push(NonAltRule::Node(grammar[node].name.clone())),
+        &Rule::Token(token) => collect.push(NonAltRule::Token(grammar[token].name.clone())),
+        Rule::Seq(rules) => {
+            let mut sequences = vec![collect];
+            for rule in rules {
+                sequences = sequences
+                    .into_iter()
+                    .flat_map(|sequence| {
+                        strip_alt(grammar, vec![], rule, renamed).into_iter().map(move |next| {
+                            let mut sequence = sequence.clone();
+                            sequence.push(next);
+                            sequence
+                        })
+                    })
+                    .collect();
+            }
+            collect = sequences.into_iter().map(NonAltRule::Seq).collect();
+        }
+        Rule::Alt(rules) => {
+            collect = rules
+                .iter()
+                .map(|rule| strip_alt(grammar, collect.clone(), rule, renamed))
+                .flat_map(IntoIterator::into_iter)
+                .collect();
+        }
+        Rule::Opt(rule) => {
+            // if let Rule::Token(token) = **rule { // check for ascii only
+            //     FIXME, split this as if it was alternating?
+            // } else {
+            collect = strip_alt(grammar, collect, rule, renamed)
+                .into_iter()
+                .map(|tnr| NonAltRule::Opt(Box::new(tnr)))
+                .collect()
+            // }
+        }
+        Rule::Rep(rule) => {
+            collect = strip_alt(grammar, collect, rule, renamed)
+                .into_iter()
+                .map(|tnr| NonAltRule::Rep(Box::new(tnr)))
+                .collect()
+        }
+    }
+    collect
+}
+
+fn token_as_param(token: &str) -> Option<String> {
+    match token {
+        "ident" | "int_number" | "lifetime" | "string" | "shebang" => Some(token.to_owned()),
+        _ => None,
+    }
+}
+
+fn name_to_ident(name: &str) -> proc_macro2::Ident {
+    match to_lower_snake_case(name).as_ref() {
+        "type" => format_ident!("ty"),
+        "const" => format_ident!("konst"),
+        "enum" => format_ident!("enum_"),
+        "impl" => format_ident!("impl_"),
+        "fn" => format_ident!("func"),
+        "static" => format_ident!("statik"),
+        "struct" => format_ident!("strukt"),
+        "trait" => format_ident!("trait_"),
+        "use" => format_ident!("use_"),
+        name => format_ident!("{}", name),
     }
 }
