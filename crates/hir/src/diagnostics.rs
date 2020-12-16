@@ -4,6 +4,6 @@ pub use hir_expand::diagnostics::{
     Diagnostic, DiagnosticCode, DiagnosticSink, DiagnosticSinkBuilder,
 };
 pub use hir_ty::diagnostics::{
-    IncorrectCase, MismatchedArgCount, MissingFields, MissingMatchArms, MissingOkInTailExpr,
-    NoSuchField, RemoveThisSemicolon,
+    AddReferenceToInitializer, IncorrectCase, MismatchedArgCount, MissingFields, MissingMatchArms,
+    MissingOkInTailExpr, NoSuchField, RemoveThisSemicolon,
 };

@@ -134,6 +134,9 @@ pub(crate) fn diagnostics(
         .on::<hir::diagnostics::RemoveThisSemicolon, _>(|d| {
             res.borrow_mut().push(diagnostic_with_fix(d, &sema));
         })
+        .on::<hir::diagnostics::AddReferenceToInitializer, _>(|d| {
+            res.borrow_mut().push(diagnostic_with_fix(d, &sema));
+        })
         .on::<hir::diagnostics::IncorrectCase, _>(|d| {
             res.borrow_mut().push(warning_with_fix(d, &sema));
         })
@@ -892,6 +895,126 @@ impl TestStruct {
     }
 }
 "#,
+        );
+    }
+
+    #[test]
+    fn test_add_reference_to_int() {
+        check_fixes(
+            r#"
+fn main() {
+    test(<|>123);
+}
+
+fn test(arg: &i32) {}
+            "#,
+            r#"
+fn main() {
+    test(&123);
+}
+
+fn test(arg: &i32) {}
+            "#,
+        );
+    }
+
+    #[test]
+    fn test_add_mutable_reference_to_int() {
+        check_fixes(
+            r#"
+fn main() {
+    test(<|>123);
+}
+
+fn test(arg: &mut i32) {}
+            "#,
+            r#"
+fn main() {
+    test(&mut 123);
+}
+
+fn test(arg: &mut i32) {}
+            "#,
+        );
+    }
+
+    #[test]
+    fn test_add_reference_to_array() {
+        check_fixes(
+            r#"
+fn main() {
+    test(<|>[1, 2, 3]);
+}
+
+fn test(arg: &[i32]) {}
+            "#,
+            r#"
+fn main() {
+    test(&[1, 2, 3]);
+}
+
+fn test(arg: &[i32]) {}
+            "#,
+        );
+    }
+
+    #[test]
+    fn test_add_reference_to_method_call() {
+        check_fixes(
+            r#"
+fn main() {
+    Test.call_by_ref(<|>123);
+}
+
+struct Test;
+
+impl Test {
+    fn call_by_ref(&self, arg: &i32) {}
+}
+            "#,
+            r#"
+fn main() {
+    Test.call_by_ref(&123);
+}
+
+struct Test;
+
+impl Test {
+    fn call_by_ref(&self, arg: &i32) {}
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn test_add_reference_to_let_stmt() {
+        check_fixes(
+            r#"
+fn main() {
+    let test: &i32 = <|>123;
+}
+            "#,
+            r#"
+fn main() {
+    let test: &i32 = &123;
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn test_add_mutable_reference_to_let_stmt() {
+        check_fixes(
+            r#"
+fn main() {
+    let test: &mut i32 = <|>123;
+}
+            "#,
+            r#"
+fn main() {
+    let test: &mut i32 = &mut 123;
+}
+            "#,
         );
     }
 }

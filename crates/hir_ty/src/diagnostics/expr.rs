@@ -11,8 +11,8 @@ use crate::{
     db::HirDatabase,
     diagnostics::{
         match_check::{is_useful, MatchCheckCtx, Matrix, PatStack, Usefulness},
-        MismatchedArgCount, MissingFields, MissingMatchArms, MissingOkInTailExpr, MissingPatFields,
-        RemoveThisSemicolon,
+        AddReferenceToInitializer, MismatchedArgCount, MissingFields, MissingMatchArms,
+        MissingOkInTailExpr, MissingPatFields, RemoveThisSemicolon,
     },
     utils::variant_data,
     ApplicationTy, InferenceResult, Ty, TypeCtor,
@@ -21,6 +21,7 @@ use crate::{
 pub(crate) use hir_def::{
     body::{Body, BodySourceMap},
     expr::{Expr, ExprId, MatchArm, Pat, PatId},
+    type_ref::Mutability,
     LocalFieldId, VariantId,
 };
 
@@ -40,7 +41,7 @@ impl<'a, 'b> ExprValidator<'a, 'b> {
     }
 
     pub(super) fn validate_body(&mut self, db: &dyn HirDatabase) {
-        let body = db.body(self.owner.into());
+        let body = db.body(self.owner);
 
         for (id, expr) in body.exprs.iter() {
             if let Some((variant_def, missed_fields, true)) =
@@ -84,6 +85,29 @@ impl<'a, 'b> ExprValidator<'a, 'b> {
                 self.validate_missing_tail_expr(body.body_expr, *id, db);
             }
         }
+
+        let infer = &self.infer;
+        let sink = &mut self.sink;
+        let owner = self.owner;
+
+        infer
+            .type_mismatches
+            .iter()
+            .filter_map(|(expr, mismatch)| {
+                let (expr_without_ref, mutability) =
+                    check_missing_refs(infer, expr, &mismatch.expected)?;
+
+                let (_, source_map) = db.body_with_source_map(owner);
+
+                Some((source_map.expr_syntax(expr_without_ref).ok()?, mutability))
+            })
+            .for_each(|(source_ptr, mutability)| {
+                sink.push(AddReferenceToInitializer {
+                    file: source_ptr.file_id,
+                    arg_expr: source_ptr.value,
+                    mutability,
+                });
+            });
     }
 
     fn create_record_literal_missing_fields_diagnostic(
@@ -352,6 +376,31 @@ impl<'a, 'b> ExprValidator<'a, 'b> {
     }
 }
 
+fn check_missing_refs(
+    infer: &InferenceResult,
+    arg: ExprId,
+    param: &Ty,
+) -> Option<(ExprId, Mutability)> {
+    let arg_ty = infer.type_of_expr.get(arg)?;
+
+    match (arg_ty.as_reference(), param.as_reference()) {
+        (
+            None,
+            Some((Ty::Apply(ApplicationTy { ctor: TypeCtor::Slice, parameters }), mutability)),
+        ) => {
+            if arg_ty.substs()?.as_single() != parameters.as_single() {
+                return None;
+            }
+
+            Some((arg, mutability))
+        }
+        (None, Some((referenced_ty, mutability))) if referenced_ty == arg_ty => {
+            Some((arg, mutability))
+        }
+        _ => None,
+    }
+}
+
 pub fn record_literal_missing_fields(
     db: &dyn HirDatabase,
     infer: &InferenceResult,
@@ -590,6 +639,90 @@ fn main() {
   //^^^^^^^^^ Expected 1 argument, found 2
 }
 "#,
+        )
+    }
+
+    #[test]
+    fn add_reference_to_int() {
+        check_diagnostics(
+            r#"
+fn main() {
+    test(123);
+       //^^^ Consider borrowing this initializer
+}
+
+fn test(arg: &i32) {}
+            "#,
+        )
+    }
+
+    #[test]
+    fn add_mutable_reference_to_int() {
+        check_diagnostics(
+            r#"
+fn main() {
+    test(123);
+       //^^^ Consider borrowing this initializer
+}
+
+fn test(arg: &mut i32) {}
+            "#,
+        )
+    }
+
+    #[test]
+    fn add_reference_to_array() {
+        check_diagnostics(
+            r#"
+fn main() {
+    test([1, 2, 3]);
+       //^^^^^^^^^ Consider borrowing this initializer
+}
+
+fn test(arg: &[i32]) {}
+            "#,
+        )
+    }
+
+    #[test]
+    fn add_reference_to_method_call() {
+        check_diagnostics(
+            r#"
+fn main() {
+    Test.call_by_ref(123);
+                   //^^^ Consider borrowing this initializer
+}
+
+struct Test;
+
+impl Test {
+    fn call_by_ref(&self, arg: &i32) {}
+}
+            "#,
+        )
+    }
+
+    #[test]
+    fn add_reference_to_let_stmt() {
+        check_diagnostics(
+            r#"
+fn main() {
+    let test: &i32 = 123;
+                   //^^^ Consider borrowing this initializer
+}
+            "#,
+        )
+    }
+
+    #[test]
+    fn add_mutable_reference_to_let_stmt() {
+        check_diagnostics(
+            r#"
+fn main() {
+    let test: &mut i32 = 123;
+                       //^^^ Consider borrowing this initializer
+}
+            "#,
         )
     }
 }

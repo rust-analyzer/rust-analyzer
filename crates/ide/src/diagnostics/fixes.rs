@@ -3,10 +3,10 @@
 use hir::{
     db::AstDatabase,
     diagnostics::{
-        Diagnostic, IncorrectCase, MissingFields, MissingOkInTailExpr, NoSuchField,
-        RemoveThisSemicolon, UnresolvedModule,
+        AddReferenceToInitializer, Diagnostic, IncorrectCase, MissingFields, MissingOkInTailExpr,
+        NoSuchField, RemoveThisSemicolon, UnresolvedModule,
     },
-    HasSource, HirDisplay, InFile, Semantics, VariantDef,
+    HasSource, HirDisplay, InFile, Mutability, Semantics, VariantDef,
 };
 use ide_db::base_db::{AnchoredPathBuf, FileId};
 use ide_db::{
@@ -123,6 +123,26 @@ impl DiagnosticWithFix for RemoveThisSemicolon {
             SourceFileEdit { file_id: self.file.original_file(sema.db), edit }.into();
 
         Some(Fix::new("Remove this semicolon", source_change, semicolon))
+    }
+}
+
+impl DiagnosticWithFix for AddReferenceToInitializer {
+    fn fix(&self, sema: &Semantics<RootDatabase>) -> Option<Fix> {
+        let root = sema.db.parse_or_expand(self.file)?;
+        let arg_expr = self.arg_expr.to_node(&root);
+
+        let arg_with_ref = match self.mutability {
+            Mutability::Shared => format!("&{}", arg_expr.syntax()),
+            Mutability::Mut => format!("&mut {}", arg_expr.syntax()),
+        };
+
+        let text_range = sema.original_range(arg_expr.syntax()).range;
+
+        let edit = TextEdit::replace(text_range, arg_with_ref);
+        let source_change =
+            SourceFileEdit { file_id: self.file.original_file(sema.db), edit }.into();
+
+        Some(Fix::new("Add reference here", source_change, text_range))
     }
 }
 

@@ -6,7 +6,7 @@ mod decl_check;
 
 use std::{any::Any, fmt};
 
-use hir_def::{DefWithBodyId, ModuleDefId};
+use hir_def::{type_ref::Mutability, DefWithBodyId, ModuleDefId};
 use hir_expand::diagnostics::{Diagnostic, DiagnosticCode, DiagnosticSink};
 use hir_expand::{name::Name, HirFileId, InFile};
 use stdx::format_to;
@@ -313,6 +313,35 @@ impl Diagnostic for MismatchedArgCount {
     fn as_any(&self) -> &(dyn Any + Send + 'static) {
         self
     }
+    fn is_experimental(&self) -> bool {
+        true
+    }
+}
+
+#[derive(Debug)]
+pub struct AddReferenceToInitializer {
+    pub file: HirFileId,
+    pub arg_expr: AstPtr<ast::Expr>,
+    pub mutability: Mutability,
+}
+
+impl Diagnostic for AddReferenceToInitializer {
+    fn code(&self) -> DiagnosticCode {
+        DiagnosticCode("add-reference-to-arg")
+    }
+
+    fn message(&self) -> String {
+        "Consider borrowing this initializer".to_string()
+    }
+
+    fn display_source(&self) -> InFile<SyntaxNodePtr> {
+        InFile { file_id: self.file, value: self.arg_expr.clone().into() }
+    }
+
+    fn as_any(&self) -> &(dyn Any + Send + 'static) {
+        self
+    }
+
     fn is_experimental(&self) -> bool {
         true
     }
