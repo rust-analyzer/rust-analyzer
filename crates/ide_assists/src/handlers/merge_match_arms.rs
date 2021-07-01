@@ -48,10 +48,14 @@ pub(crate) fn merge_match_arms(acc: &mut Assists, ctx: &AssistContext) -> Option
             if arm.guard().is_some() {
                 return false;
             }
-            match arm.expr() {
-                Some(expr) => expr.syntax().text() == current_expr.syntax().text(),
-                None => false,
+            if let Some(expr) = arm.expr() {
+                if let Some(expr_ty) = ctx.sema.type_of_expr(&expr) {
+                    if let Some(current_expr_ty) = ctx.sema.type_of_expr(&current_expr) {
+                        return expr.syntax().text() == current_expr.syntax().text() && expr_ty == current_expr_ty
+                    }
+                }
             }
+            false
         })
         .collect::<Vec<_>>();
 
@@ -239,6 +243,30 @@ mod tests {
                 let y = match x {
                     X::A(a) if a > 5 => { $01i32 },
                     X::B => { 1i32 },
+                    X::C => { 2i32 }
+                }
+            }
+            "#,
+        );
+    }
+
+    #[test]
+    fn merge_match_arms_associated_different_type() {
+        check_assist_not_applicable(
+            merge_match_arms,
+            r#"
+            #[derive(Debug)]
+            enum X {
+                A(i32),
+                B(char),
+                C
+            }
+
+            fn main() {
+                let x = X::A;
+                let y = match x {
+                    X::A(x) => { $0x },
+                    X::B(x) => { x },
                     X::C => { 2i32 }
                 }
             }
