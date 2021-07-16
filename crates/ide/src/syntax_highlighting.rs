@@ -3,6 +3,7 @@ pub(crate) mod tags;
 mod highlights;
 mod injector;
 
+mod asm;
 mod highlight;
 mod format;
 mod macro_;
@@ -24,8 +25,8 @@ use syntax::{
 
 use crate::{
     syntax_highlighting::{
-        format::highlight_format_string, highlights::Highlights, macro_::MacroHighlighter,
-        tags::Highlight,
+        asm::highlight_asm_string, format::highlight_format_string, highlights::Highlights,
+        macro_::MacroHighlighter, tags::Highlight,
     },
     FileId, HlMod, HlTag,
 };
@@ -351,6 +352,7 @@ fn traverse(
 
         if let Some(string) = element_to_highlight.as_token().cloned().and_then(ast::String::cast) {
             highlight_format_string(hl, &string, range);
+            highlight_asm_string(hl, &string, range);
             // Highlight escape sequences
             if let Some(char_ranges) = string.char_ranges() {
                 for (piece_range, _) in char_ranges.iter().filter(|(_, char)| char.is_ok()) {
