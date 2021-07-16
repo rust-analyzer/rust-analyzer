@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { func } from 'vscode-languageclient/lib/utils/is';
+import { strict } from 'assert';
+import { Func } from 'mocha';
 
 
 const iconsRootPath = path.join(path.dirname(__dirname), '..', 'resources', 'icons'); 
@@ -10,17 +12,20 @@ function getIconUri(iconName: string, theme: string): vscode.Uri {
 }
 
 interface Workspace {
+    id: string, 
     crates: Crate[],
     location: string,
 }
 
 interface Crate {
+    id: string, 
     name: string,
     modules: Module[], 
     location: string,
 }
 
 interface Module {
+    id: string, 
     name: string,
     modules?: Module[], 
     targets?: Function[],
@@ -33,17 +38,13 @@ enum TestKind {
 }
 
 interface Function {
+    id: string, 
     name: string,
     location: string,
     kind: TestKind,
 }
 
-class Workspace extends vscode.TreeItem {
-    get tooltip(): string {
-        // @ts-ignore
-        return super.label;
-    }
-    
+class Workspace extends vscode.TreeItem {  
     get description(): string {
         return this.location;
     }
@@ -60,15 +61,14 @@ class Workspace extends vscode.TreeItem {
 
 class Crate extends vscode.TreeItem {
     constructor(
+        id: string, 
         name: string,
         modules: Module[], 
+        location: string,
     ) {
         super(name, vscode.TreeItemCollapsibleState.Collapsed);
-    }
-
-    get tooltip(): string {
-        // @ts-ignore
-        return super.label;
+        this.location = location;
+        this.id = id;
     }
     
     get description(): string {
@@ -87,6 +87,7 @@ class Crate extends vscode.TreeItem {
 
 class Module extends vscode.TreeItem {
     constructor(
+        id: string, 
         name: string,
         location: string,
         modules?: Module[], 
@@ -94,13 +95,9 @@ class Module extends vscode.TreeItem {
     ) {
         super(name, vscode.TreeItemCollapsibleState.Collapsed);
         this.location = location;
+        this.id = id;
     }   
 
-    get tooltip(): string {
-        // @ts-ignore
-        return super.label;
-    }
-    
     get description(): string {
         return this.location;
     }
@@ -124,12 +121,14 @@ class Module extends vscode.TreeItem {
 
 class Function extends vscode.TreeItem {
     constructor(
+        id: string, 
         name: string,
         location: string,
         kind: TestKind,
     ) {
         super(name, vscode.TreeItemCollapsibleState.None);
         this.location = location;
+        this.id = id;
         
         switch(kind) {
             case TestKind.Bench: {
@@ -148,12 +147,7 @@ class Function extends vscode.TreeItem {
             }
         }
     }
-    
-    get tooltip(): string {
-        // @ts-ignore
-        return super.label;
-    }
-    
+       
     get description(): string {
         return this.location;
     }
@@ -163,13 +157,24 @@ class Function extends vscode.TreeItem {
     }   
 }
 
-type Executable = Workspace | Crate | Module | Function;
+type Node = Workspace | Crate | Module | Function;
 
-export class RunnableProvider implements vscode.TreeDataProvider<Executable> {
-    // private changesEmitter: vscode.EventEmitter<Executable | undefined> = new vscode.EventEmitter<Executable | undefined>();
-    // readonly onDidChangeTreeData: vscode.Event<Executable | undefined> = this.changesEmitter.event;
+function bfs(root: Node, process: (node: Node) => void) {
+    let queue: Array<Node> = [root];
+    while(queue.length != 0) {
+        let current = queue.pop();
+        //@ts-ignore
+        process(current);
+        //@ts-ignore
+        current.getChildren();
+    }
+}
 
-    getChildren(element?: Executable): vscode.ProviderResult<Executable[]> {
+export class RunnableDataProvider implements vscode.TreeDataProvider<Node> {
+    private _onDidChangeTreeData: vscode.EventEmitter<Node | undefined> = new vscode.EventEmitter<Node | undefined>()
+    readonly onDidChangeTreeData: vscode.Event<Node | undefined> = this._onDidChangeTreeData.event;
+
+    getChildren(element?: Node): vscode.ProviderResult<Node[]> {
         if(element == undefined) {
             return Promise.resolve([]); 
         }
@@ -177,20 +182,81 @@ export class RunnableProvider implements vscode.TreeDataProvider<Executable> {
         return element.getChildren();
     }
     
-    getTreeItem(element: Executable): Executable {
+    getTreeItem(element: Node): Node {
         return element;
     }   
 }
 
-function runExecutable() {
-    
+export class RunnableView {
+    private dataProvider: RunnableDataProvider;
+    private data: Node;
+
+    constructor(context: vscode.ExtensionContext) {
+        this.dataProvider = new RunnableDataProvider()
+    }
+
+    public applyUpdate(deltaUpdate: Patch[]) {
+        deltaUpdate.map((patch) => {
+            switch(patch.kind) {
+                case PatchKind.Create: 
+                    find(patch.targetId);
+                break;
+                case PatchKind.Delete:
+                    find();
+                break;
+                case PatchKind.Update:
+                    find();
+                break;
+            }
+        });    
+    }
 }
 
-function goToDefinition() {
-    vscode.workspace.openTextDocument().then((document)=>{
-        vscode.window.activeTextEditor?.revealRange();    
-    });
+/// The view synchronized with RA data by delta updates. The update is an array   
+/// of elementary actions called a `Patch`. After applying an update to the tree 
+/// it will become synchronized.
+
+type Patch = Delete | Update | Create;
+
+enum PatchKind {
+    Delete = "DELETE",
+    Update = "UPDATE",
+    Create = "CREATE"
+}
+
+interface Delete {
+    kind: PatchKind.Delete,
+    id: string,
 } 
+
+interface Update {
+    kind: PatchKind.Update,
+    payload: {
+        name?: string,
+        location?: string,
+        kind?: TestKind,
+    },
+}
+
+interface Create {
+    kind: PatchKind.Create,
+    targetId: string,
+    payload: Node,
+}
+
+// function runExecutable() {
+//     // TODO: implement 
+// }
+
+// function goToDefinition() {
+//     vscode.workspace.openTextDocument().then((document)=>{
+//         vscode.window.activeTextEditor?.revealRange();    
+//     });
+// } 
+// Для Workspace и Crate show in explorer
+
+// TODO: возможность создавать run lists
+// TODO: Run History
 
 
 
