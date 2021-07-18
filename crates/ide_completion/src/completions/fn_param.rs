@@ -13,6 +13,8 @@ use crate::{CompletionContext, CompletionItem, CompletionItemKind, CompletionKin
 /// `spam: &mut Spam` insert text/label and `spam` lookup string will be
 /// suggested.
 pub(crate) fn complete_fn_param(acc: &mut Completions, ctx: &CompletionContext) -> Option<()> {
+    complete_fn_self_param(acc, ctx);
+
     if !ctx.is_param {
         return None;
     }
@@ -53,14 +55,33 @@ pub(crate) fn complete_fn_param(acc: &mut Completions, ctx: &CompletionContext) 
         };
     }
 
-    let self_completion_items = ["self", "&self", "mut self", "&mut self"];
-    if ctx.impl_def.is_some() && me?.param_list()?.params().next().is_none() {
-        self_completion_items.iter().for_each(|self_item| {
-            add_new_item_to_acc(ctx, acc, self_item.to_string(), self_item.to_string())
-        });
+    params.into_iter().for_each(|(label, lookup)| add_new_item_to_acc(ctx, acc, label, lookup));
+
+    Some(())
+}
+
+fn complete_fn_self_param(acc: &mut Completions, ctx: &CompletionContext) -> Option<()> {
+    // We only care about completing self param within `impl ... { }` blocks.
+    if ctx.impl_def.is_none() {
+        return None;
     }
 
-    params.into_iter().for_each(|(label, lookup)| add_new_item_to_acc(ctx, acc, label, lookup));
+    // Check if we're completing the first param by looking upwards for our param list, and seeing if we're the first item.
+    let param_def = ctx.param_def.as_ref()?;
+    let param_list = param_def.syntax().ancestors().find_map(ast::ParamList::cast)?;
+    let first_param = param_list.syntax().children().find_map(ast::Param::cast)?;
+    let is_completing_first_param =
+        param_def.syntax().text_range() == first_param.syntax().text_range();
+
+    if !is_completing_first_param {
+        return None;
+    }
+
+    // todo: handle ampersand... somehow?
+    let self_completion_items = ["self", "&self", "mut self", "&mut self"];
+    self_completion_items.iter().for_each(|self_item| {
+        add_new_item_to_acc(ctx, acc, self_item.to_string(), self_item.to_string())
+    });
 
     Some(())
 }
@@ -192,6 +213,25 @@ fn foo2($0) {}
                 bn mut self
                 bn &mut self
                 bn file_id: FileId
+            "#]],
+        )
+    }
+
+    #[test]
+    fn test_param_completion_self_param_with_ampersand() {
+        check(
+            r#"
+                struct A {}
+                impl A {
+                    fn new(&$0) {
+                    }
+                }
+            "#,
+            expect![[r#"
+                bn self
+                bn &self
+                bn mut self
+                bn &mut self
             "#]],
         )
     }

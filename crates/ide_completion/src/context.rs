@@ -81,6 +81,7 @@ pub(crate) struct CompletionContext<'a> {
     /// The parent impl of the cursor position if it exists.
     pub(super) impl_def: Option<ast::Impl>,
     pub(super) name_ref_syntax: Option<ast::NameRef>,
+    pub(super) param_def: Option<ast::Param>,
 
     // potentially set if we are completing a lifetime
     pub(super) lifetime_syntax: Option<ast::Lifetime>,
@@ -151,6 +152,7 @@ impl<'a> CompletionContext<'a> {
             expected_type: None,
             function_def: None,
             impl_def: None,
+            param_def: None,
             name_ref_syntax: None,
             lifetime_syntax: None,
             lifetime_param_syntax: None,
@@ -487,6 +489,8 @@ impl<'a> CompletionContext<'a> {
             let for_is_prev2 = for_is_prev2(syntax_element.clone());
             (fn_is_prev && !inside_impl_trait_block) || for_is_prev2
         };
+        // todo(jake): is this the right place to put this?
+        self.param_def = find_node_at_offset(&file_with_fake_ident, offset);
 
         self.incomplete_let =
             syntax_element.ancestors().take(6).find_map(ast::LetStmt::cast).map_or(false, |it| {
