@@ -35,6 +35,7 @@ mod handlers {
     pub(crate) mod missing_unsafe;
     pub(crate) mod no_such_field;
     pub(crate) mod remove_this_semicolon;
+    pub(crate) mod remove_unnecessary_else;
     pub(crate) mod replace_filter_map_next_with_find_map;
     pub(crate) mod unimplemented_builtin_macro;
     pub(crate) mod unresolved_extern_crate;
@@ -159,6 +160,7 @@ pub fn diagnostics(
     for node in parse.tree().syntax().descendants() {
         handlers::useless_braces::useless_braces(&mut res, file_id, &node);
         handlers::field_shorthand::field_shorthand(&mut res, file_id, &node);
+        handlers::remove_unnecessary_else::unnecessary_else(&mut res, file_id, &node);
     }
 
     let module = sema.to_module_def(file_id);
