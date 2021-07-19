@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["hir_ty"] = [{"text":"impl Fold&lt;<a class=\"struct\" href=\"hir_ty/struct.Interner.html\" title=\"struct hir_ty::Interner\">Interner</a>&gt; for <a class=\"struct\" href=\"hir_ty/struct.CallableSig.html\" title=\"struct hir_ty::CallableSig\">CallableSig</a>","synthetic":false,"types":["hir_ty::CallableSig"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

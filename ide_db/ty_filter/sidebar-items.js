@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["TryEnum","Enum types that implement `std::ops::Try` trait."]]});

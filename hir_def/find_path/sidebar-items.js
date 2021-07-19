@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["PrefixKind",""]],"fn":[["find_path","Find a path that can be used to refer to a certain item. This can depend on from where you’re referring to the item, hence the `from` parameter."],["find_path_prefixed",""]]});

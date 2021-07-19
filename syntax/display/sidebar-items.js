@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["const_label",""],["fn_as_proc_macro_label",""],["function_declaration",""],["macro_label",""],["type_label",""]]});

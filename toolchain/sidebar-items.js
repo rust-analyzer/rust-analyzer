@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["cargo",""],["rustc",""],["rustfmt",""],["rustup",""]]});

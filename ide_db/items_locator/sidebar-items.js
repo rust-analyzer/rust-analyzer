@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["DEFAULT_QUERY_SEARCH_LIMIT","A value to use, when uncertain which limit to pick."]],"enum":[["AssocItemSearch","Three possible ways to search for the name in associated and/or other items."]],"fn":[["items_with_name","Searches for importable items with the given name in the crate and its dependencies."]]});

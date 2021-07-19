@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Main entry point for completion. We run completion as a two-phase process."><meta name="keywords" content="rust, rustlang, rust-lang, completions"><title>completions in ide_completion - Rust</title><link rel="stylesheet" type="text/css" href="../normalize.css"><link rel="stylesheet" type="text/css" href="../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../ayu.css" disabled ><script id="default-settings"></script><script src="../storage.js"></script><script src="../crates.js"></script><noscript><link rel="stylesheet" href="../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<link rel="alternate icon" type="image/png" href="../favicon-16x16.png">
+<link rel="alternate icon" type="image/png" href="../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../down-arrow.svg");}</style></head><body class="rustdoc fn"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a href='../ide_completion/index.html'><div class='logo-container rust-logo'><img src='../rust-logo.png' alt='logo'></div></a><div class="sidebar-elems"><p class="location"><a href="index.html">ide_completion</a></p><div id="sidebar-vars" data-name="completions" data-ty="fn" data-relpath=""></div><script defer src="sidebar-items.js"></script></div></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../brush.svg" width="18" height="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../settings.html"><img src="../wheel.svg" width="18" height="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><h1 class="fqn"><span class="in-band">Function <a href="index.html">ide_completion</a>::<wbr><a class="fn" href="">completions</a><button id="copy-path" onclick="copy_path(this)">⎘</button></span><span class="out-of-band"><span id="render-detail"><a id="toggle-all-docs" href="javascript:void(0)" title="collapse all docs">[<span class="inner">&#x2212;</span>]</a></span><a class="srclink" href="../src/ide_completion/lib.rs.html#136-168" title="goto source code">[src]</a></span></h1><pre class="rust fn">pub fn completions(<br>&nbsp;&nbsp;&nbsp;&nbsp;db: &amp;<a class="struct" href="../ide_db/struct.RootDatabase.html" title="struct ide_db::RootDatabase">RootDatabase</a>, <br>&nbsp;&nbsp;&nbsp;&nbsp;config: &amp;<a class="struct" href="struct.CompletionConfig.html" title="struct ide_completion::CompletionConfig">CompletionConfig</a>, <br>&nbsp;&nbsp;&nbsp;&nbsp;position: <a class="struct" href="../base_db/struct.FilePosition.html" title="struct base_db::FilePosition">FilePosition</a><br>) -&gt; <a class="enum" href="https://doc.rust-lang.org/nightly/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;Completions&gt;</pre><div class="docblock"><p>Main entry point for completion. We run completion as a two-phase process.</p>
+<p>First, we look at the position and collect a so-called `CompletionContext.
+This is a somewhat messy process, because, during completion, syntax tree is
+incomplete and can look really weird.</p>
+<p>Once the context is collected, we run a series of completion routines which
+look at the context and produce completion items. One subtlety about this
+phase is that completion engine should not filter by the substring which is
+already present, it should give all possible variants for the identifier at
+the caret. In other words, for</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered">
+<span class="kw">fn</span> <span class="ident">f</span>() {
+    <span class="kw">let</span> <span class="ident">foo</span> <span class="op">=</span> <span class="number">92</span>;
+    <span class="kw">let</span> <span class="kw">_</span> <span class="op">=</span> <span class="ident">bar</span>$<span class="number">0</span>
+}</pre></div>
+<p><code>foo</code> <em>should</em> be present among the completion variants. Filtering by
+identifier prefix/fuzzy match should be done higher in the stack, together
+with ordering of completions (currently this is done by the client).</p>
+<h1 id="speculative-completion-problem" class="section-header"><a href="#speculative-completion-problem">Speculative Completion Problem</a></h1>
+<p>There’s a curious unsolved problem in the current implementation. Often, you
+want to compute completions on a <em>slightly different</em> text document.</p>
+<p>In the simplest case, when the code looks like <code>let x = </code>, you want to
+insert a fake identifier to get a better syntax tree: <code>let x = complete_me</code>.</p>
+<p>We do this in <code>CompletionContext</code>, and it works OK-enough for <em>syntax</em>
+analysis. However, we might want to, eg, ask for the type of <code>complete_me</code>
+variable, and that’s where our current infrastructure breaks down. salsa
+doesn’t allow such “phantom” inputs.</p>
+<p>Another case where this would be instrumental is macro expansion. We want to
+insert a fake ident and re-expand code. There’s <code>expand_speculative</code> as a
+work-around for this.</p>
+<p>A different use-case is completion of injection (examples and links in doc
+comments). When computing completion for a path in a doc-comment, you want
+to inject a fake path expression into the item being documented and complete
+that.</p>
+<p>IntelliJ has CodeFragment/Context infrastructure for that. You can create a
+temporary PSI node, and say that the context (“parent”) of this node is some
+existing node. Asking for, eg, type of this <code>CodeFragment</code> node works
+correctly, as the underlying infrastructure makes use of contexts to do
+analysis.</p>
+</div></section><section id="search" class="content hidden"></section><div id="rustdoc-vars" data-root-path="../" data-current-crate="ide_completion" data-search-index-js="../search-index.js" data-search-js="../search.js"></div>
+    <script src="../main.js"></script></body></html>

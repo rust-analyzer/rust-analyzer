@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["AbsPath","Wrapper around an absolute [`Path`]."],["AbsPathBuf","Wrapper around an absolute [`PathBuf`]."],["RelPath","Wrapper around a relative [`Path`]."],["RelPathBuf","Wrapper around a relative [`PathBuf`]."]]});

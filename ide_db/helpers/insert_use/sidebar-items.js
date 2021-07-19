@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["ImportGranularity","How imports should be grouped into use statements."],["ImportScope",""],["PrefixKind",""]],"fn":[["insert_use","Insert an import path into the given file/node. A `merge` value of none indicates that no import merging is allowed to occur."]],"struct":[["InsertUseConfig",""]]});

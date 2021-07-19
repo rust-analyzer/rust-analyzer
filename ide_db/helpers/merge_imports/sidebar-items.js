@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["MergeBehavior","What type of merges are allowed."]],"fn":[["common_prefix","Traverses both paths until they differ, returning the common prefix of both."],["eq_attrs",""],["eq_visibility",""],["try_merge_imports",""],["try_merge_trees",""]]});

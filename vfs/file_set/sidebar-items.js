@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["FileSet","A set of [`VfsPath`]s identified by [`FileId`]s."],["FileSetConfig","This contains path prefixes to partition a [`Vfs`] into [`FileSet`]s."],["FileSetConfigBuilder","Builder for [`FileSetConfig`]."]]});

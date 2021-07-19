@@ -1,0 +1,3 @@
+(function() {var implementors = {};
+implementors["vfs_notify"] = [{"text":"impl <a class=\"trait\" href=\"vfs/loader/trait.Handle.html\" title=\"trait vfs::loader::Handle\">Handle</a> for <a class=\"struct\" href=\"vfs_notify/struct.NotifyHandle.html\" title=\"struct vfs_notify::NotifyHandle\">NotifyHandle</a>","synthetic":false,"types":["vfs_notify::NotifyHandle"]}];
+if (window.register_implementors) {window.register_implementors(implementors);} else {window.pending_implementors = implementors;}})()

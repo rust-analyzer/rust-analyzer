@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["ConstScalar","A concrete constant value"],["Mutability",""],["Rawness",""],["TypeBound",""],["TypeRef","Compare ty::Ty"]],"struct":[["LifetimeRef",""],["TraitRef",""]]});

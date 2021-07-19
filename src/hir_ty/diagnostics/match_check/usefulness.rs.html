@@ -1,0 +1,2381 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/hir_ty/src/diagnostics/match_check/usefulness.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>usefulness.rs - source</title><link rel="stylesheet" type="text/css" href="../../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../../storage.js"></script><script src="../../../../crates.js"></script><noscript><link rel="stylesheet" href="../../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../../favicon.svg">
+<link rel="alternate icon" type="image/png" href="../../../../favicon-16x16.png">
+<link rel="alternate icon" type="image/png" href="../../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a href='../../../../hir_ty/index.html'><div class='logo-container rust-logo'><img src='../../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../../brush.svg" width="18" height="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../../../settings.html"><img src="../../../../wheel.svg" width="18" height="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">   1</span>
+<span id="2">   2</span>
+<span id="3">   3</span>
+<span id="4">   4</span>
+<span id="5">   5</span>
+<span id="6">   6</span>
+<span id="7">   7</span>
+<span id="8">   8</span>
+<span id="9">   9</span>
+<span id="10">  10</span>
+<span id="11">  11</span>
+<span id="12">  12</span>
+<span id="13">  13</span>
+<span id="14">  14</span>
+<span id="15">  15</span>
+<span id="16">  16</span>
+<span id="17">  17</span>
+<span id="18">  18</span>
+<span id="19">  19</span>
+<span id="20">  20</span>
+<span id="21">  21</span>
+<span id="22">  22</span>
+<span id="23">  23</span>
+<span id="24">  24</span>
+<span id="25">  25</span>
+<span id="26">  26</span>
+<span id="27">  27</span>
+<span id="28">  28</span>
+<span id="29">  29</span>
+<span id="30">  30</span>
+<span id="31">  31</span>
+<span id="32">  32</span>
+<span id="33">  33</span>
+<span id="34">  34</span>
+<span id="35">  35</span>
+<span id="36">  36</span>
+<span id="37">  37</span>
+<span id="38">  38</span>
+<span id="39">  39</span>
+<span id="40">  40</span>
+<span id="41">  41</span>
+<span id="42">  42</span>
+<span id="43">  43</span>
+<span id="44">  44</span>
+<span id="45">  45</span>
+<span id="46">  46</span>
+<span id="47">  47</span>
+<span id="48">  48</span>
+<span id="49">  49</span>
+<span id="50">  50</span>
+<span id="51">  51</span>
+<span id="52">  52</span>
+<span id="53">  53</span>
+<span id="54">  54</span>
+<span id="55">  55</span>
+<span id="56">  56</span>
+<span id="57">  57</span>
+<span id="58">  58</span>
+<span id="59">  59</span>
+<span id="60">  60</span>
+<span id="61">  61</span>
+<span id="62">  62</span>
+<span id="63">  63</span>
+<span id="64">  64</span>
+<span id="65">  65</span>
+<span id="66">  66</span>
+<span id="67">  67</span>
+<span id="68">  68</span>
+<span id="69">  69</span>
+<span id="70">  70</span>
+<span id="71">  71</span>
+<span id="72">  72</span>
+<span id="73">  73</span>
+<span id="74">  74</span>
+<span id="75">  75</span>
+<span id="76">  76</span>
+<span id="77">  77</span>
+<span id="78">  78</span>
+<span id="79">  79</span>
+<span id="80">  80</span>
+<span id="81">  81</span>
+<span id="82">  82</span>
+<span id="83">  83</span>
+<span id="84">  84</span>
+<span id="85">  85</span>
+<span id="86">  86</span>
+<span id="87">  87</span>
+<span id="88">  88</span>
+<span id="89">  89</span>
+<span id="90">  90</span>
+<span id="91">  91</span>
+<span id="92">  92</span>
+<span id="93">  93</span>
+<span id="94">  94</span>
+<span id="95">  95</span>
+<span id="96">  96</span>
+<span id="97">  97</span>
+<span id="98">  98</span>
+<span id="99">  99</span>
+<span id="100"> 100</span>
+<span id="101"> 101</span>
+<span id="102"> 102</span>
+<span id="103"> 103</span>
+<span id="104"> 104</span>
+<span id="105"> 105</span>
+<span id="106"> 106</span>
+<span id="107"> 107</span>
+<span id="108"> 108</span>
+<span id="109"> 109</span>
+<span id="110"> 110</span>
+<span id="111"> 111</span>
+<span id="112"> 112</span>
+<span id="113"> 113</span>
+<span id="114"> 114</span>
+<span id="115"> 115</span>
+<span id="116"> 116</span>
+<span id="117"> 117</span>
+<span id="118"> 118</span>
+<span id="119"> 119</span>
+<span id="120"> 120</span>
+<span id="121"> 121</span>
+<span id="122"> 122</span>
+<span id="123"> 123</span>
+<span id="124"> 124</span>
+<span id="125"> 125</span>
+<span id="126"> 126</span>
+<span id="127"> 127</span>
+<span id="128"> 128</span>
+<span id="129"> 129</span>
+<span id="130"> 130</span>
+<span id="131"> 131</span>
+<span id="132"> 132</span>
+<span id="133"> 133</span>
+<span id="134"> 134</span>
+<span id="135"> 135</span>
+<span id="136"> 136</span>
+<span id="137"> 137</span>
+<span id="138"> 138</span>
+<span id="139"> 139</span>
+<span id="140"> 140</span>
+<span id="141"> 141</span>
+<span id="142"> 142</span>
+<span id="143"> 143</span>
+<span id="144"> 144</span>
+<span id="145"> 145</span>
+<span id="146"> 146</span>
+<span id="147"> 147</span>
+<span id="148"> 148</span>
+<span id="149"> 149</span>
+<span id="150"> 150</span>
+<span id="151"> 151</span>
+<span id="152"> 152</span>
+<span id="153"> 153</span>
+<span id="154"> 154</span>
+<span id="155"> 155</span>
+<span id="156"> 156</span>
+<span id="157"> 157</span>
+<span id="158"> 158</span>
+<span id="159"> 159</span>
+<span id="160"> 160</span>
+<span id="161"> 161</span>
+<span id="162"> 162</span>
+<span id="163"> 163</span>
+<span id="164"> 164</span>
+<span id="165"> 165</span>
+<span id="166"> 166</span>
+<span id="167"> 167</span>
+<span id="168"> 168</span>
+<span id="169"> 169</span>
+<span id="170"> 170</span>
+<span id="171"> 171</span>
+<span id="172"> 172</span>
+<span id="173"> 173</span>
+<span id="174"> 174</span>
+<span id="175"> 175</span>
+<span id="176"> 176</span>
+<span id="177"> 177</span>
+<span id="178"> 178</span>
+<span id="179"> 179</span>
+<span id="180"> 180</span>
+<span id="181"> 181</span>
+<span id="182"> 182</span>
+<span id="183"> 183</span>
+<span id="184"> 184</span>
+<span id="185"> 185</span>
+<span id="186"> 186</span>
+<span id="187"> 187</span>
+<span id="188"> 188</span>
+<span id="189"> 189</span>
+<span id="190"> 190</span>
+<span id="191"> 191</span>
+<span id="192"> 192</span>
+<span id="193"> 193</span>
+<span id="194"> 194</span>
+<span id="195"> 195</span>
+<span id="196"> 196</span>
+<span id="197"> 197</span>
+<span id="198"> 198</span>
+<span id="199"> 199</span>
+<span id="200"> 200</span>
+<span id="201"> 201</span>
+<span id="202"> 202</span>
+<span id="203"> 203</span>
+<span id="204"> 204</span>
+<span id="205"> 205</span>
+<span id="206"> 206</span>
+<span id="207"> 207</span>
+<span id="208"> 208</span>
+<span id="209"> 209</span>
+<span id="210"> 210</span>
+<span id="211"> 211</span>
+<span id="212"> 212</span>
+<span id="213"> 213</span>
+<span id="214"> 214</span>
+<span id="215"> 215</span>
+<span id="216"> 216</span>
+<span id="217"> 217</span>
+<span id="218"> 218</span>
+<span id="219"> 219</span>
+<span id="220"> 220</span>
+<span id="221"> 221</span>
+<span id="222"> 222</span>
+<span id="223"> 223</span>
+<span id="224"> 224</span>
+<span id="225"> 225</span>
+<span id="226"> 226</span>
+<span id="227"> 227</span>
+<span id="228"> 228</span>
+<span id="229"> 229</span>
+<span id="230"> 230</span>
+<span id="231"> 231</span>
+<span id="232"> 232</span>
+<span id="233"> 233</span>
+<span id="234"> 234</span>
+<span id="235"> 235</span>
+<span id="236"> 236</span>
+<span id="237"> 237</span>
+<span id="238"> 238</span>
+<span id="239"> 239</span>
+<span id="240"> 240</span>
+<span id="241"> 241</span>
+<span id="242"> 242</span>
+<span id="243"> 243</span>
+<span id="244"> 244</span>
+<span id="245"> 245</span>
+<span id="246"> 246</span>
+<span id="247"> 247</span>
+<span id="248"> 248</span>
+<span id="249"> 249</span>
+<span id="250"> 250</span>
+<span id="251"> 251</span>
+<span id="252"> 252</span>
+<span id="253"> 253</span>
+<span id="254"> 254</span>
+<span id="255"> 255</span>
+<span id="256"> 256</span>
+<span id="257"> 257</span>
+<span id="258"> 258</span>
+<span id="259"> 259</span>
+<span id="260"> 260</span>
+<span id="261"> 261</span>
+<span id="262"> 262</span>
+<span id="263"> 263</span>
+<span id="264"> 264</span>
+<span id="265"> 265</span>
+<span id="266"> 266</span>
+<span id="267"> 267</span>
+<span id="268"> 268</span>
+<span id="269"> 269</span>
+<span id="270"> 270</span>
+<span id="271"> 271</span>
+<span id="272"> 272</span>
+<span id="273"> 273</span>
+<span id="274"> 274</span>
+<span id="275"> 275</span>
+<span id="276"> 276</span>
+<span id="277"> 277</span>
+<span id="278"> 278</span>
+<span id="279"> 279</span>
+<span id="280"> 280</span>
+<span id="281"> 281</span>
+<span id="282"> 282</span>
+<span id="283"> 283</span>
+<span id="284"> 284</span>
+<span id="285"> 285</span>
+<span id="286"> 286</span>
+<span id="287"> 287</span>
+<span id="288"> 288</span>
+<span id="289"> 289</span>
+<span id="290"> 290</span>
+<span id="291"> 291</span>
+<span id="292"> 292</span>
+<span id="293"> 293</span>
+<span id="294"> 294</span>
+<span id="295"> 295</span>
+<span id="296"> 296</span>
+<span id="297"> 297</span>
+<span id="298"> 298</span>
+<span id="299"> 299</span>
+<span id="300"> 300</span>
+<span id="301"> 301</span>
+<span id="302"> 302</span>
+<span id="303"> 303</span>
+<span id="304"> 304</span>
+<span id="305"> 305</span>
+<span id="306"> 306</span>
+<span id="307"> 307</span>
+<span id="308"> 308</span>
+<span id="309"> 309</span>
+<span id="310"> 310</span>
+<span id="311"> 311</span>
+<span id="312"> 312</span>
+<span id="313"> 313</span>
+<span id="314"> 314</span>
+<span id="315"> 315</span>
+<span id="316"> 316</span>
+<span id="317"> 317</span>
+<span id="318"> 318</span>
+<span id="319"> 319</span>
+<span id="320"> 320</span>
+<span id="321"> 321</span>
+<span id="322"> 322</span>
+<span id="323"> 323</span>
+<span id="324"> 324</span>
+<span id="325"> 325</span>
+<span id="326"> 326</span>
+<span id="327"> 327</span>
+<span id="328"> 328</span>
+<span id="329"> 329</span>
+<span id="330"> 330</span>
+<span id="331"> 331</span>
+<span id="332"> 332</span>
+<span id="333"> 333</span>
+<span id="334"> 334</span>
+<span id="335"> 335</span>
+<span id="336"> 336</span>
+<span id="337"> 337</span>
+<span id="338"> 338</span>
+<span id="339"> 339</span>
+<span id="340"> 340</span>
+<span id="341"> 341</span>
+<span id="342"> 342</span>
+<span id="343"> 343</span>
+<span id="344"> 344</span>
+<span id="345"> 345</span>
+<span id="346"> 346</span>
+<span id="347"> 347</span>
+<span id="348"> 348</span>
+<span id="349"> 349</span>
+<span id="350"> 350</span>
+<span id="351"> 351</span>
+<span id="352"> 352</span>
+<span id="353"> 353</span>
+<span id="354"> 354</span>
+<span id="355"> 355</span>
+<span id="356"> 356</span>
+<span id="357"> 357</span>
+<span id="358"> 358</span>
+<span id="359"> 359</span>
+<span id="360"> 360</span>
+<span id="361"> 361</span>
+<span id="362"> 362</span>
+<span id="363"> 363</span>
+<span id="364"> 364</span>
+<span id="365"> 365</span>
+<span id="366"> 366</span>
+<span id="367"> 367</span>
+<span id="368"> 368</span>
+<span id="369"> 369</span>
+<span id="370"> 370</span>
+<span id="371"> 371</span>
+<span id="372"> 372</span>
+<span id="373"> 373</span>
+<span id="374"> 374</span>
+<span id="375"> 375</span>
+<span id="376"> 376</span>
+<span id="377"> 377</span>
+<span id="378"> 378</span>
+<span id="379"> 379</span>
+<span id="380"> 380</span>
+<span id="381"> 381</span>
+<span id="382"> 382</span>
+<span id="383"> 383</span>
+<span id="384"> 384</span>
+<span id="385"> 385</span>
+<span id="386"> 386</span>
+<span id="387"> 387</span>
+<span id="388"> 388</span>
+<span id="389"> 389</span>
+<span id="390"> 390</span>
+<span id="391"> 391</span>
+<span id="392"> 392</span>
+<span id="393"> 393</span>
+<span id="394"> 394</span>
+<span id="395"> 395</span>
+<span id="396"> 396</span>
+<span id="397"> 397</span>
+<span id="398"> 398</span>
+<span id="399"> 399</span>
+<span id="400"> 400</span>
+<span id="401"> 401</span>
+<span id="402"> 402</span>
+<span id="403"> 403</span>
+<span id="404"> 404</span>
+<span id="405"> 405</span>
+<span id="406"> 406</span>
+<span id="407"> 407</span>
+<span id="408"> 408</span>
+<span id="409"> 409</span>
+<span id="410"> 410</span>
+<span id="411"> 411</span>
+<span id="412"> 412</span>
+<span id="413"> 413</span>
+<span id="414"> 414</span>
+<span id="415"> 415</span>
+<span id="416"> 416</span>
+<span id="417"> 417</span>
+<span id="418"> 418</span>
+<span id="419"> 419</span>
+<span id="420"> 420</span>
+<span id="421"> 421</span>
+<span id="422"> 422</span>
+<span id="423"> 423</span>
+<span id="424"> 424</span>
+<span id="425"> 425</span>
+<span id="426"> 426</span>
+<span id="427"> 427</span>
+<span id="428"> 428</span>
+<span id="429"> 429</span>
+<span id="430"> 430</span>
+<span id="431"> 431</span>
+<span id="432"> 432</span>
+<span id="433"> 433</span>
+<span id="434"> 434</span>
+<span id="435"> 435</span>
+<span id="436"> 436</span>
+<span id="437"> 437</span>
+<span id="438"> 438</span>
+<span id="439"> 439</span>
+<span id="440"> 440</span>
+<span id="441"> 441</span>
+<span id="442"> 442</span>
+<span id="443"> 443</span>
+<span id="444"> 444</span>
+<span id="445"> 445</span>
+<span id="446"> 446</span>
+<span id="447"> 447</span>
+<span id="448"> 448</span>
+<span id="449"> 449</span>
+<span id="450"> 450</span>
+<span id="451"> 451</span>
+<span id="452"> 452</span>
+<span id="453"> 453</span>
+<span id="454"> 454</span>
+<span id="455"> 455</span>
+<span id="456"> 456</span>
+<span id="457"> 457</span>
+<span id="458"> 458</span>
+<span id="459"> 459</span>
+<span id="460"> 460</span>
+<span id="461"> 461</span>
+<span id="462"> 462</span>
+<span id="463"> 463</span>
+<span id="464"> 464</span>
+<span id="465"> 465</span>
+<span id="466"> 466</span>
+<span id="467"> 467</span>
+<span id="468"> 468</span>
+<span id="469"> 469</span>
+<span id="470"> 470</span>
+<span id="471"> 471</span>
+<span id="472"> 472</span>
+<span id="473"> 473</span>
+<span id="474"> 474</span>
+<span id="475"> 475</span>
+<span id="476"> 476</span>
+<span id="477"> 477</span>
+<span id="478"> 478</span>
+<span id="479"> 479</span>
+<span id="480"> 480</span>
+<span id="481"> 481</span>
+<span id="482"> 482</span>
+<span id="483"> 483</span>
+<span id="484"> 484</span>
+<span id="485"> 485</span>
+<span id="486"> 486</span>
+<span id="487"> 487</span>
+<span id="488"> 488</span>
+<span id="489"> 489</span>
+<span id="490"> 490</span>
+<span id="491"> 491</span>
+<span id="492"> 492</span>
+<span id="493"> 493</span>
+<span id="494"> 494</span>
+<span id="495"> 495</span>
+<span id="496"> 496</span>
+<span id="497"> 497</span>
+<span id="498"> 498</span>
+<span id="499"> 499</span>
+<span id="500"> 500</span>
+<span id="501"> 501</span>
+<span id="502"> 502</span>
+<span id="503"> 503</span>
+<span id="504"> 504</span>
+<span id="505"> 505</span>
+<span id="506"> 506</span>
+<span id="507"> 507</span>
+<span id="508"> 508</span>
+<span id="509"> 509</span>
+<span id="510"> 510</span>
+<span id="511"> 511</span>
+<span id="512"> 512</span>
+<span id="513"> 513</span>
+<span id="514"> 514</span>
+<span id="515"> 515</span>
+<span id="516"> 516</span>
+<span id="517"> 517</span>
+<span id="518"> 518</span>
+<span id="519"> 519</span>
+<span id="520"> 520</span>
+<span id="521"> 521</span>
+<span id="522"> 522</span>
+<span id="523"> 523</span>
+<span id="524"> 524</span>
+<span id="525"> 525</span>
+<span id="526"> 526</span>
+<span id="527"> 527</span>
+<span id="528"> 528</span>
+<span id="529"> 529</span>
+<span id="530"> 530</span>
+<span id="531"> 531</span>
+<span id="532"> 532</span>
+<span id="533"> 533</span>
+<span id="534"> 534</span>
+<span id="535"> 535</span>
+<span id="536"> 536</span>
+<span id="537"> 537</span>
+<span id="538"> 538</span>
+<span id="539"> 539</span>
+<span id="540"> 540</span>
+<span id="541"> 541</span>
+<span id="542"> 542</span>
+<span id="543"> 543</span>
+<span id="544"> 544</span>
+<span id="545"> 545</span>
+<span id="546"> 546</span>
+<span id="547"> 547</span>
+<span id="548"> 548</span>
+<span id="549"> 549</span>
+<span id="550"> 550</span>
+<span id="551"> 551</span>
+<span id="552"> 552</span>
+<span id="553"> 553</span>
+<span id="554"> 554</span>
+<span id="555"> 555</span>
+<span id="556"> 556</span>
+<span id="557"> 557</span>
+<span id="558"> 558</span>
+<span id="559"> 559</span>
+<span id="560"> 560</span>
+<span id="561"> 561</span>
+<span id="562"> 562</span>
+<span id="563"> 563</span>
+<span id="564"> 564</span>
+<span id="565"> 565</span>
+<span id="566"> 566</span>
+<span id="567"> 567</span>
+<span id="568"> 568</span>
+<span id="569"> 569</span>
+<span id="570"> 570</span>
+<span id="571"> 571</span>
+<span id="572"> 572</span>
+<span id="573"> 573</span>
+<span id="574"> 574</span>
+<span id="575"> 575</span>
+<span id="576"> 576</span>
+<span id="577"> 577</span>
+<span id="578"> 578</span>
+<span id="579"> 579</span>
+<span id="580"> 580</span>
+<span id="581"> 581</span>
+<span id="582"> 582</span>
+<span id="583"> 583</span>
+<span id="584"> 584</span>
+<span id="585"> 585</span>
+<span id="586"> 586</span>
+<span id="587"> 587</span>
+<span id="588"> 588</span>
+<span id="589"> 589</span>
+<span id="590"> 590</span>
+<span id="591"> 591</span>
+<span id="592"> 592</span>
+<span id="593"> 593</span>
+<span id="594"> 594</span>
+<span id="595"> 595</span>
+<span id="596"> 596</span>
+<span id="597"> 597</span>
+<span id="598"> 598</span>
+<span id="599"> 599</span>
+<span id="600"> 600</span>
+<span id="601"> 601</span>
+<span id="602"> 602</span>
+<span id="603"> 603</span>
+<span id="604"> 604</span>
+<span id="605"> 605</span>
+<span id="606"> 606</span>
+<span id="607"> 607</span>
+<span id="608"> 608</span>
+<span id="609"> 609</span>
+<span id="610"> 610</span>
+<span id="611"> 611</span>
+<span id="612"> 612</span>
+<span id="613"> 613</span>
+<span id="614"> 614</span>
+<span id="615"> 615</span>
+<span id="616"> 616</span>
+<span id="617"> 617</span>
+<span id="618"> 618</span>
+<span id="619"> 619</span>
+<span id="620"> 620</span>
+<span id="621"> 621</span>
+<span id="622"> 622</span>
+<span id="623"> 623</span>
+<span id="624"> 624</span>
+<span id="625"> 625</span>
+<span id="626"> 626</span>
+<span id="627"> 627</span>
+<span id="628"> 628</span>
+<span id="629"> 629</span>
+<span id="630"> 630</span>
+<span id="631"> 631</span>
+<span id="632"> 632</span>
+<span id="633"> 633</span>
+<span id="634"> 634</span>
+<span id="635"> 635</span>
+<span id="636"> 636</span>
+<span id="637"> 637</span>
+<span id="638"> 638</span>
+<span id="639"> 639</span>
+<span id="640"> 640</span>
+<span id="641"> 641</span>
+<span id="642"> 642</span>
+<span id="643"> 643</span>
+<span id="644"> 644</span>
+<span id="645"> 645</span>
+<span id="646"> 646</span>
+<span id="647"> 647</span>
+<span id="648"> 648</span>
+<span id="649"> 649</span>
+<span id="650"> 650</span>
+<span id="651"> 651</span>
+<span id="652"> 652</span>
+<span id="653"> 653</span>
+<span id="654"> 654</span>
+<span id="655"> 655</span>
+<span id="656"> 656</span>
+<span id="657"> 657</span>
+<span id="658"> 658</span>
+<span id="659"> 659</span>
+<span id="660"> 660</span>
+<span id="661"> 661</span>
+<span id="662"> 662</span>
+<span id="663"> 663</span>
+<span id="664"> 664</span>
+<span id="665"> 665</span>
+<span id="666"> 666</span>
+<span id="667"> 667</span>
+<span id="668"> 668</span>
+<span id="669"> 669</span>
+<span id="670"> 670</span>
+<span id="671"> 671</span>
+<span id="672"> 672</span>
+<span id="673"> 673</span>
+<span id="674"> 674</span>
+<span id="675"> 675</span>
+<span id="676"> 676</span>
+<span id="677"> 677</span>
+<span id="678"> 678</span>
+<span id="679"> 679</span>
+<span id="680"> 680</span>
+<span id="681"> 681</span>
+<span id="682"> 682</span>
+<span id="683"> 683</span>
+<span id="684"> 684</span>
+<span id="685"> 685</span>
+<span id="686"> 686</span>
+<span id="687"> 687</span>
+<span id="688"> 688</span>
+<span id="689"> 689</span>
+<span id="690"> 690</span>
+<span id="691"> 691</span>
+<span id="692"> 692</span>
+<span id="693"> 693</span>
+<span id="694"> 694</span>
+<span id="695"> 695</span>
+<span id="696"> 696</span>
+<span id="697"> 697</span>
+<span id="698"> 698</span>
+<span id="699"> 699</span>
+<span id="700"> 700</span>
+<span id="701"> 701</span>
+<span id="702"> 702</span>
+<span id="703"> 703</span>
+<span id="704"> 704</span>
+<span id="705"> 705</span>
+<span id="706"> 706</span>
+<span id="707"> 707</span>
+<span id="708"> 708</span>
+<span id="709"> 709</span>
+<span id="710"> 710</span>
+<span id="711"> 711</span>
+<span id="712"> 712</span>
+<span id="713"> 713</span>
+<span id="714"> 714</span>
+<span id="715"> 715</span>
+<span id="716"> 716</span>
+<span id="717"> 717</span>
+<span id="718"> 718</span>
+<span id="719"> 719</span>
+<span id="720"> 720</span>
+<span id="721"> 721</span>
+<span id="722"> 722</span>
+<span id="723"> 723</span>
+<span id="724"> 724</span>
+<span id="725"> 725</span>
+<span id="726"> 726</span>
+<span id="727"> 727</span>
+<span id="728"> 728</span>
+<span id="729"> 729</span>
+<span id="730"> 730</span>
+<span id="731"> 731</span>
+<span id="732"> 732</span>
+<span id="733"> 733</span>
+<span id="734"> 734</span>
+<span id="735"> 735</span>
+<span id="736"> 736</span>
+<span id="737"> 737</span>
+<span id="738"> 738</span>
+<span id="739"> 739</span>
+<span id="740"> 740</span>
+<span id="741"> 741</span>
+<span id="742"> 742</span>
+<span id="743"> 743</span>
+<span id="744"> 744</span>
+<span id="745"> 745</span>
+<span id="746"> 746</span>
+<span id="747"> 747</span>
+<span id="748"> 748</span>
+<span id="749"> 749</span>
+<span id="750"> 750</span>
+<span id="751"> 751</span>
+<span id="752"> 752</span>
+<span id="753"> 753</span>
+<span id="754"> 754</span>
+<span id="755"> 755</span>
+<span id="756"> 756</span>
+<span id="757"> 757</span>
+<span id="758"> 758</span>
+<span id="759"> 759</span>
+<span id="760"> 760</span>
+<span id="761"> 761</span>
+<span id="762"> 762</span>
+<span id="763"> 763</span>
+<span id="764"> 764</span>
+<span id="765"> 765</span>
+<span id="766"> 766</span>
+<span id="767"> 767</span>
+<span id="768"> 768</span>
+<span id="769"> 769</span>
+<span id="770"> 770</span>
+<span id="771"> 771</span>
+<span id="772"> 772</span>
+<span id="773"> 773</span>
+<span id="774"> 774</span>
+<span id="775"> 775</span>
+<span id="776"> 776</span>
+<span id="777"> 777</span>
+<span id="778"> 778</span>
+<span id="779"> 779</span>
+<span id="780"> 780</span>
+<span id="781"> 781</span>
+<span id="782"> 782</span>
+<span id="783"> 783</span>
+<span id="784"> 784</span>
+<span id="785"> 785</span>
+<span id="786"> 786</span>
+<span id="787"> 787</span>
+<span id="788"> 788</span>
+<span id="789"> 789</span>
+<span id="790"> 790</span>
+<span id="791"> 791</span>
+<span id="792"> 792</span>
+<span id="793"> 793</span>
+<span id="794"> 794</span>
+<span id="795"> 795</span>
+<span id="796"> 796</span>
+<span id="797"> 797</span>
+<span id="798"> 798</span>
+<span id="799"> 799</span>
+<span id="800"> 800</span>
+<span id="801"> 801</span>
+<span id="802"> 802</span>
+<span id="803"> 803</span>
+<span id="804"> 804</span>
+<span id="805"> 805</span>
+<span id="806"> 806</span>
+<span id="807"> 807</span>
+<span id="808"> 808</span>
+<span id="809"> 809</span>
+<span id="810"> 810</span>
+<span id="811"> 811</span>
+<span id="812"> 812</span>
+<span id="813"> 813</span>
+<span id="814"> 814</span>
+<span id="815"> 815</span>
+<span id="816"> 816</span>
+<span id="817"> 817</span>
+<span id="818"> 818</span>
+<span id="819"> 819</span>
+<span id="820"> 820</span>
+<span id="821"> 821</span>
+<span id="822"> 822</span>
+<span id="823"> 823</span>
+<span id="824"> 824</span>
+<span id="825"> 825</span>
+<span id="826"> 826</span>
+<span id="827"> 827</span>
+<span id="828"> 828</span>
+<span id="829"> 829</span>
+<span id="830"> 830</span>
+<span id="831"> 831</span>
+<span id="832"> 832</span>
+<span id="833"> 833</span>
+<span id="834"> 834</span>
+<span id="835"> 835</span>
+<span id="836"> 836</span>
+<span id="837"> 837</span>
+<span id="838"> 838</span>
+<span id="839"> 839</span>
+<span id="840"> 840</span>
+<span id="841"> 841</span>
+<span id="842"> 842</span>
+<span id="843"> 843</span>
+<span id="844"> 844</span>
+<span id="845"> 845</span>
+<span id="846"> 846</span>
+<span id="847"> 847</span>
+<span id="848"> 848</span>
+<span id="849"> 849</span>
+<span id="850"> 850</span>
+<span id="851"> 851</span>
+<span id="852"> 852</span>
+<span id="853"> 853</span>
+<span id="854"> 854</span>
+<span id="855"> 855</span>
+<span id="856"> 856</span>
+<span id="857"> 857</span>
+<span id="858"> 858</span>
+<span id="859"> 859</span>
+<span id="860"> 860</span>
+<span id="861"> 861</span>
+<span id="862"> 862</span>
+<span id="863"> 863</span>
+<span id="864"> 864</span>
+<span id="865"> 865</span>
+<span id="866"> 866</span>
+<span id="867"> 867</span>
+<span id="868"> 868</span>
+<span id="869"> 869</span>
+<span id="870"> 870</span>
+<span id="871"> 871</span>
+<span id="872"> 872</span>
+<span id="873"> 873</span>
+<span id="874"> 874</span>
+<span id="875"> 875</span>
+<span id="876"> 876</span>
+<span id="877"> 877</span>
+<span id="878"> 878</span>
+<span id="879"> 879</span>
+<span id="880"> 880</span>
+<span id="881"> 881</span>
+<span id="882"> 882</span>
+<span id="883"> 883</span>
+<span id="884"> 884</span>
+<span id="885"> 885</span>
+<span id="886"> 886</span>
+<span id="887"> 887</span>
+<span id="888"> 888</span>
+<span id="889"> 889</span>
+<span id="890"> 890</span>
+<span id="891"> 891</span>
+<span id="892"> 892</span>
+<span id="893"> 893</span>
+<span id="894"> 894</span>
+<span id="895"> 895</span>
+<span id="896"> 896</span>
+<span id="897"> 897</span>
+<span id="898"> 898</span>
+<span id="899"> 899</span>
+<span id="900"> 900</span>
+<span id="901"> 901</span>
+<span id="902"> 902</span>
+<span id="903"> 903</span>
+<span id="904"> 904</span>
+<span id="905"> 905</span>
+<span id="906"> 906</span>
+<span id="907"> 907</span>
+<span id="908"> 908</span>
+<span id="909"> 909</span>
+<span id="910"> 910</span>
+<span id="911"> 911</span>
+<span id="912"> 912</span>
+<span id="913"> 913</span>
+<span id="914"> 914</span>
+<span id="915"> 915</span>
+<span id="916"> 916</span>
+<span id="917"> 917</span>
+<span id="918"> 918</span>
+<span id="919"> 919</span>
+<span id="920"> 920</span>
+<span id="921"> 921</span>
+<span id="922"> 922</span>
+<span id="923"> 923</span>
+<span id="924"> 924</span>
+<span id="925"> 925</span>
+<span id="926"> 926</span>
+<span id="927"> 927</span>
+<span id="928"> 928</span>
+<span id="929"> 929</span>
+<span id="930"> 930</span>
+<span id="931"> 931</span>
+<span id="932"> 932</span>
+<span id="933"> 933</span>
+<span id="934"> 934</span>
+<span id="935"> 935</span>
+<span id="936"> 936</span>
+<span id="937"> 937</span>
+<span id="938"> 938</span>
+<span id="939"> 939</span>
+<span id="940"> 940</span>
+<span id="941"> 941</span>
+<span id="942"> 942</span>
+<span id="943"> 943</span>
+<span id="944"> 944</span>
+<span id="945"> 945</span>
+<span id="946"> 946</span>
+<span id="947"> 947</span>
+<span id="948"> 948</span>
+<span id="949"> 949</span>
+<span id="950"> 950</span>
+<span id="951"> 951</span>
+<span id="952"> 952</span>
+<span id="953"> 953</span>
+<span id="954"> 954</span>
+<span id="955"> 955</span>
+<span id="956"> 956</span>
+<span id="957"> 957</span>
+<span id="958"> 958</span>
+<span id="959"> 959</span>
+<span id="960"> 960</span>
+<span id="961"> 961</span>
+<span id="962"> 962</span>
+<span id="963"> 963</span>
+<span id="964"> 964</span>
+<span id="965"> 965</span>
+<span id="966"> 966</span>
+<span id="967"> 967</span>
+<span id="968"> 968</span>
+<span id="969"> 969</span>
+<span id="970"> 970</span>
+<span id="971"> 971</span>
+<span id="972"> 972</span>
+<span id="973"> 973</span>
+<span id="974"> 974</span>
+<span id="975"> 975</span>
+<span id="976"> 976</span>
+<span id="977"> 977</span>
+<span id="978"> 978</span>
+<span id="979"> 979</span>
+<span id="980"> 980</span>
+<span id="981"> 981</span>
+<span id="982"> 982</span>
+<span id="983"> 983</span>
+<span id="984"> 984</span>
+<span id="985"> 985</span>
+<span id="986"> 986</span>
+<span id="987"> 987</span>
+<span id="988"> 988</span>
+<span id="989"> 989</span>
+<span id="990"> 990</span>
+<span id="991"> 991</span>
+<span id="992"> 992</span>
+<span id="993"> 993</span>
+<span id="994"> 994</span>
+<span id="995"> 995</span>
+<span id="996"> 996</span>
+<span id="997"> 997</span>
+<span id="998"> 998</span>
+<span id="999"> 999</span>
+<span id="1000">1000</span>
+<span id="1001">1001</span>
+<span id="1002">1002</span>
+<span id="1003">1003</span>
+<span id="1004">1004</span>
+<span id="1005">1005</span>
+<span id="1006">1006</span>
+<span id="1007">1007</span>
+<span id="1008">1008</span>
+<span id="1009">1009</span>
+<span id="1010">1010</span>
+<span id="1011">1011</span>
+<span id="1012">1012</span>
+<span id="1013">1013</span>
+<span id="1014">1014</span>
+<span id="1015">1015</span>
+<span id="1016">1016</span>
+<span id="1017">1017</span>
+<span id="1018">1018</span>
+<span id="1019">1019</span>
+<span id="1020">1020</span>
+<span id="1021">1021</span>
+<span id="1022">1022</span>
+<span id="1023">1023</span>
+<span id="1024">1024</span>
+<span id="1025">1025</span>
+<span id="1026">1026</span>
+<span id="1027">1027</span>
+<span id="1028">1028</span>
+<span id="1029">1029</span>
+<span id="1030">1030</span>
+<span id="1031">1031</span>
+<span id="1032">1032</span>
+<span id="1033">1033</span>
+<span id="1034">1034</span>
+<span id="1035">1035</span>
+<span id="1036">1036</span>
+<span id="1037">1037</span>
+<span id="1038">1038</span>
+<span id="1039">1039</span>
+<span id="1040">1040</span>
+<span id="1041">1041</span>
+<span id="1042">1042</span>
+<span id="1043">1043</span>
+<span id="1044">1044</span>
+<span id="1045">1045</span>
+<span id="1046">1046</span>
+<span id="1047">1047</span>
+<span id="1048">1048</span>
+<span id="1049">1049</span>
+<span id="1050">1050</span>
+<span id="1051">1051</span>
+<span id="1052">1052</span>
+<span id="1053">1053</span>
+<span id="1054">1054</span>
+<span id="1055">1055</span>
+<span id="1056">1056</span>
+<span id="1057">1057</span>
+<span id="1058">1058</span>
+<span id="1059">1059</span>
+<span id="1060">1060</span>
+<span id="1061">1061</span>
+<span id="1062">1062</span>
+<span id="1063">1063</span>
+<span id="1064">1064</span>
+<span id="1065">1065</span>
+<span id="1066">1066</span>
+<span id="1067">1067</span>
+<span id="1068">1068</span>
+<span id="1069">1069</span>
+<span id="1070">1070</span>
+<span id="1071">1071</span>
+<span id="1072">1072</span>
+<span id="1073">1073</span>
+<span id="1074">1074</span>
+<span id="1075">1075</span>
+<span id="1076">1076</span>
+<span id="1077">1077</span>
+<span id="1078">1078</span>
+<span id="1079">1079</span>
+<span id="1080">1080</span>
+<span id="1081">1081</span>
+<span id="1082">1082</span>
+<span id="1083">1083</span>
+<span id="1084">1084</span>
+<span id="1085">1085</span>
+<span id="1086">1086</span>
+<span id="1087">1087</span>
+<span id="1088">1088</span>
+<span id="1089">1089</span>
+<span id="1090">1090</span>
+<span id="1091">1091</span>
+<span id="1092">1092</span>
+<span id="1093">1093</span>
+<span id="1094">1094</span>
+<span id="1095">1095</span>
+<span id="1096">1096</span>
+<span id="1097">1097</span>
+<span id="1098">1098</span>
+<span id="1099">1099</span>
+<span id="1100">1100</span>
+<span id="1101">1101</span>
+<span id="1102">1102</span>
+<span id="1103">1103</span>
+<span id="1104">1104</span>
+<span id="1105">1105</span>
+<span id="1106">1106</span>
+<span id="1107">1107</span>
+<span id="1108">1108</span>
+<span id="1109">1109</span>
+<span id="1110">1110</span>
+<span id="1111">1111</span>
+<span id="1112">1112</span>
+<span id="1113">1113</span>
+<span id="1114">1114</span>
+<span id="1115">1115</span>
+<span id="1116">1116</span>
+<span id="1117">1117</span>
+<span id="1118">1118</span>
+<span id="1119">1119</span>
+<span id="1120">1120</span>
+<span id="1121">1121</span>
+<span id="1122">1122</span>
+<span id="1123">1123</span>
+<span id="1124">1124</span>
+<span id="1125">1125</span>
+<span id="1126">1126</span>
+<span id="1127">1127</span>
+<span id="1128">1128</span>
+<span id="1129">1129</span>
+<span id="1130">1130</span>
+<span id="1131">1131</span>
+<span id="1132">1132</span>
+<span id="1133">1133</span>
+<span id="1134">1134</span>
+<span id="1135">1135</span>
+<span id="1136">1136</span>
+<span id="1137">1137</span>
+<span id="1138">1138</span>
+<span id="1139">1139</span>
+<span id="1140">1140</span>
+<span id="1141">1141</span>
+<span id="1142">1142</span>
+<span id="1143">1143</span>
+<span id="1144">1144</span>
+<span id="1145">1145</span>
+<span id="1146">1146</span>
+<span id="1147">1147</span>
+<span id="1148">1148</span>
+<span id="1149">1149</span>
+<span id="1150">1150</span>
+<span id="1151">1151</span>
+<span id="1152">1152</span>
+<span id="1153">1153</span>
+<span id="1154">1154</span>
+<span id="1155">1155</span>
+<span id="1156">1156</span>
+<span id="1157">1157</span>
+<span id="1158">1158</span>
+<span id="1159">1159</span>
+<span id="1160">1160</span>
+<span id="1161">1161</span>
+<span id="1162">1162</span>
+<span id="1163">1163</span>
+<span id="1164">1164</span>
+<span id="1165">1165</span>
+<span id="1166">1166</span>
+<span id="1167">1167</span>
+<span id="1168">1168</span>
+<span id="1169">1169</span>
+<span id="1170">1170</span>
+<span id="1171">1171</span>
+<span id="1172">1172</span>
+<span id="1173">1173</span>
+<span id="1174">1174</span>
+<span id="1175">1175</span>
+<span id="1176">1176</span>
+<span id="1177">1177</span>
+<span id="1178">1178</span>
+<span id="1179">1179</span>
+<span id="1180">1180</span>
+<span id="1181">1181</span>
+<span id="1182">1182</span>
+<span id="1183">1183</span>
+<span id="1184">1184</span>
+<span id="1185">1185</span>
+<span id="1186">1186</span>
+<span id="1187">1187</span>
+</pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">//! Based on rust-lang/rust 1.52.0-nightly (25c15cdbe 2021-04-22)</span>
+<span class="doccomment">//! &lt;https://github.com/rust-lang/rust/blob/25c15cdbe/compiler/rustc_mir_build/src/thir/pattern/usefulness.rs&gt;</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! -----</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This file includes the logic for exhaustiveness and reachability checking for pattern-matching.</span>
+<span class="doccomment">//! Specifically, given a list of patterns for a type, we can tell whether:</span>
+<span class="doccomment">//! (a) each pattern is reachable (reachability)</span>
+<span class="doccomment">//! (b) the patterns cover every possible value for the type (exhaustiveness)</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The algorithm implemented here is a modified version of the one described in [this</span>
+<span class="doccomment">//! paper](http://moscova.inria.fr/~maranget/papers/warn/index.html). We have however generalized</span>
+<span class="doccomment">//! it to accommodate the variety of patterns that Rust supports. We thus explain our version here,</span>
+<span class="doccomment">//! without being as rigorous.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Summary</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The core of the algorithm is the notion of &quot;usefulness&quot;. A pattern `q` is said to be *useful*</span>
+<span class="doccomment">//! relative to another pattern `p` of the same type if there is a value that is matched by `q` and</span>
+<span class="doccomment">//! not matched by `p`. This generalizes to many `p`s: `q` is useful w.r.t. a list of patterns</span>
+<span class="doccomment">//! `p_1 .. p_n` if there is a value that is matched by `q` and by none of the `p_i`. We write</span>
+<span class="doccomment">//! `usefulness(p_1 .. p_n, q)` for a function that returns a list of such values. The aim of this</span>
+<span class="doccomment">//! file is to compute it efficiently.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This is enough to compute reachability: a pattern in a `match` expression is reachable iff it</span>
+<span class="doccomment">//! is useful w.r.t. the patterns above it:</span>
+<span class="doccomment">//! ```rust</span>
+<span class="doccomment">//! match x {</span>
+<span class="doccomment">//!     Some(_) =&gt; ...,</span>
+<span class="doccomment">//!     None =&gt; ..., // reachable: `None` is matched by this but not the branch above</span>
+<span class="doccomment">//!     Some(0) =&gt; ..., // unreachable: all the values this matches are already matched by</span>
+<span class="doccomment">//!                     // `Some(_)` above</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This is also enough to compute exhaustiveness: a match is exhaustive iff the wildcard `_`</span>
+<span class="doccomment">//! pattern is _not_ useful w.r.t. the patterns in the match. The values returned by `usefulness`</span>
+<span class="doccomment">//! are used to tell the user which values are missing.</span>
+<span class="doccomment">//! ```rust</span>
+<span class="doccomment">//! match x {</span>
+<span class="doccomment">//!     Some(0) =&gt; ...,</span>
+<span class="doccomment">//!     None =&gt; ...,</span>
+<span class="doccomment">//!     // not exhaustive: `_` is useful because it matches `Some(1)`</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The entrypoint of this file is the [`compute_match_usefulness`] function, which computes</span>
+<span class="doccomment">//! reachability for each match branch and exhaustiveness for the whole match.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Constructors and fields</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Note: we will often abbreviate &quot;constructor&quot; as &quot;ctor&quot;.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The idea that powers everything that is done in this file is the following: a (matcheable)</span>
+<span class="doccomment">//! value is made from a constructor applied to a number of subvalues. Examples of constructors are</span>
+<span class="doccomment">//! `Some`, `None`, `(,)` (the 2-tuple constructor), `Foo {..}` (the constructor for a struct</span>
+<span class="doccomment">//! `Foo`), and `2` (the constructor for the number `2`). This is natural when we think of</span>
+<span class="doccomment">//! pattern-matching, and this is the basis for what follows.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Some of the ctors listed above might feel weird: `None` and `2` don&#39;t take any arguments.</span>
+<span class="doccomment">//! That&#39;s ok: those are ctors that take a list of 0 arguments; they are the simplest case of</span>
+<span class="doccomment">//! ctors. We treat `2` as a ctor because `u64` and other number types behave exactly like a huge</span>
+<span class="doccomment">//! `enum`, with one variant for each number. This allows us to see any matcheable value as made up</span>
+<span class="doccomment">//! from a tree of ctors, each having a set number of children. For example: `Foo { bar: None,</span>
+<span class="doccomment">//! baz: Ok(0) }` is made from 4 different ctors, namely `Foo{..}`, `None`, `Ok` and `0`.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This idea can be extended to patterns: they are also made from constructors applied to fields.</span>
+<span class="doccomment">//! A pattern for a given type is allowed to use all the ctors for values of that type (which we</span>
+<span class="doccomment">//! call &quot;value constructors&quot;), but there are also pattern-only ctors. The most important one is</span>
+<span class="doccomment">//! the wildcard (`_`), and the others are integer ranges (`0..=10`), variable-length slices (`[x,</span>
+<span class="doccomment">//! ..]`), and or-patterns (`Ok(0) | Err(_)`). Examples of valid patterns are `42`, `Some(_)`, `Foo</span>
+<span class="doccomment">//! { bar: Some(0) | None, baz: _ }`. Note that a binder in a pattern (e.g. `Some(x)`) matches the</span>
+<span class="doccomment">//! same values as a wildcard (e.g. `Some(_)`), so we treat both as wildcards.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! From this deconstruction we can compute whether a given value matches a given pattern; we</span>
+<span class="doccomment">//! simply look at ctors one at a time. Given a pattern `p` and a value `v`, we want to compute</span>
+<span class="doccomment">//! `matches!(v, p)`. It&#39;s mostly straightforward: we compare the head ctors and when they match</span>
+<span class="doccomment">//! we compare their fields recursively. A few representative examples:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - `matches!(v, _) := true`</span>
+<span class="doccomment">//! - `matches!((v0,  v1), (p0,  p1)) := matches!(v0, p0) &amp;&amp; matches!(v1, p1)`</span>
+<span class="doccomment">//! - `matches!(Foo { bar: v0, baz: v1 }, Foo { bar: p0, baz: p1 }) := matches!(v0, p0) &amp;&amp; matches!(v1, p1)`</span>
+<span class="doccomment">//! - `matches!(Ok(v0), Ok(p0)) := matches!(v0, p0)`</span>
+<span class="doccomment">//! - `matches!(Ok(v0), Err(p0)) := false` (incompatible variants)</span>
+<span class="doccomment">//! - `matches!(v, 1..=100) := matches!(v, 1) || ... || matches!(v, 100)`</span>
+<span class="doccomment">//! - `matches!([v0], [p0, .., p1]) := false` (incompatible lengths)</span>
+<span class="doccomment">//! - `matches!([v0, v1, v2], [p0, .., p1]) := matches!(v0, p0) &amp;&amp; matches!(v2, p1)`</span>
+<span class="doccomment">//! - `matches!(v, p0 | p1) := matches!(v, p0) || matches!(v, p1)`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Constructors, fields and relevant operations are defined in the [`super::deconstruct_pat`] module.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Note: this constructors/fields distinction may not straightforwardly apply to every Rust type.</span>
+<span class="doccomment">//! For example a value of type `Rc&lt;u64&gt;` can&#39;t be deconstructed that way, and `&amp;str` has an</span>
+<span class="doccomment">//! infinitude of constructors. There are also subtleties with visibility of fields and</span>
+<span class="doccomment">//! uninhabitedness and various other things. The constructors idea can be extended to handle most</span>
+<span class="doccomment">//! of these subtleties though; caveats are documented where relevant throughout the code.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Whether constructors cover each other is computed by [`Constructor::is_covered_by`].</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Specialization</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Recall that we wish to compute `usefulness(p_1 .. p_n, q)`: given a list of patterns `p_1 ..</span>
+<span class="doccomment">//! p_n` and a pattern `q`, all of the same type, we want to find a list of values (called</span>
+<span class="doccomment">//! &quot;witnesses&quot;) that are matched by `q` and by none of the `p_i`. We obviously don&#39;t just</span>
+<span class="doccomment">//! enumerate all possible values. From the discussion above we see that we can proceed</span>
+<span class="doccomment">//! ctor-by-ctor: for each value ctor of the given type, we ask &quot;is there a value that starts with</span>
+<span class="doccomment">//! this constructor and matches `q` and none of the `p_i`?&quot;. As we saw above, there&#39;s a lot we can</span>
+<span class="doccomment">//! say from knowing only the first constructor of our candidate value.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Let&#39;s take the following example:</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//! match x {</span>
+<span class="doccomment">//!     Enum::Variant1(_) =&gt; {} // `p1`</span>
+<span class="doccomment">//!     Enum::Variant2(None, 0) =&gt; {} // `p2`</span>
+<span class="doccomment">//!     Enum::Variant2(Some(_), 0) =&gt; {} // `q`</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! We can easily see that if our candidate value `v` starts with `Variant1` it will not match `q`.</span>
+<span class="doccomment">//! If `v = Variant2(v0, v1)` however, whether or not it matches `p2` and `q` will depend on `v0`</span>
+<span class="doccomment">//! and `v1`. In fact, such a `v` will be a witness of usefulness of `q` exactly when the tuple</span>
+<span class="doccomment">//! `(v0, v1)` is a witness of usefulness of `q&#39;` in the following reduced match:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//! match x {</span>
+<span class="doccomment">//!     (None, 0) =&gt; {} // `p2&#39;`</span>
+<span class="doccomment">//!     (Some(_), 0) =&gt; {} // `q&#39;`</span>
+<span class="doccomment">//! }</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This motivates a new step in computing usefulness, that we call _specialization_.</span>
+<span class="doccomment">//! Specialization consist of filtering a list of patterns for those that match a constructor, and</span>
+<span class="doccomment">//! then looking into the constructor&#39;s fields. This enables usefulness to be computed recursively.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Instead of acting on a single pattern in each row, we will consider a list of patterns for each</span>
+<span class="doccomment">//! row, and we call such a list a _pattern-stack_. The idea is that we will specialize the</span>
+<span class="doccomment">//! leftmost pattern, which amounts to popping the constructor and pushing its fields, which feels</span>
+<span class="doccomment">//! like a stack. We note a pattern-stack simply with `[p_1 ... p_n]`.</span>
+<span class="doccomment">//! Here&#39;s a sequence of specializations of a list of pattern-stacks, to illustrate what&#39;s</span>
+<span class="doccomment">//! happening:</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//! [Enum::Variant1(_)]</span>
+<span class="doccomment">//! [Enum::Variant2(None, 0)]</span>
+<span class="doccomment">//! [Enum::Variant2(Some(_), 0)]</span>
+<span class="doccomment">//! //==&gt;&gt; specialize with `Variant2`</span>
+<span class="doccomment">//! [None, 0]</span>
+<span class="doccomment">//! [Some(_), 0]</span>
+<span class="doccomment">//! //==&gt;&gt; specialize with `Some`</span>
+<span class="doccomment">//! [_, 0]</span>
+<span class="doccomment">//! //==&gt;&gt; specialize with `true` (say the type was `bool`)</span>
+<span class="doccomment">//! [0]</span>
+<span class="doccomment">//! //==&gt;&gt; specialize with `0`</span>
+<span class="doccomment">//! []</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The function `specialize(c, p)` takes a value constructor `c` and a pattern `p`, and returns 0</span>
+<span class="doccomment">//! or more pattern-stacks. If `c` does not match the head constructor of `p`, it returns nothing;</span>
+<span class="doccomment">//! otherwise if returns the fields of the constructor. This only returns more than one</span>
+<span class="doccomment">//! pattern-stack if `p` has a pattern-only constructor.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - Specializing for the wrong constructor returns nothing</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(None, Some(p0)) := []`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - Specializing for the correct constructor returns a single row with the fields</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(Variant1, Variant1(p0, p1, p2)) := [[p0, p1, p2]]`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(Foo{..}, Foo { bar: p0, baz: p1 }) := [[p0, p1]]`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - For or-patterns, we specialize each branch and concatenate the results</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(c, p0 | p1) := specialize(c, p0) ++ specialize(c, p1)`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - We treat the other pattern constructors as if they were a large or-pattern of all the</span>
+<span class="doccomment">//!   possibilities:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(c, _) := specialize(c, Variant1(_) | Variant2(_, _) | ...)`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(c, 1..=100) := specialize(c, 1 | ... | 100)`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!   `specialize(c, [p0, .., p1]) := specialize(c, [p0, p1] | [p0, _, p1] | [p0, _, _, p1] | ...)`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - If `c` is a pattern-only constructor, `specialize` is defined on a case-by-case basis. See</span>
+<span class="doccomment">//!   the discussion about constructor splitting in [`super::deconstruct_pat`].</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! We then extend this function to work with pattern-stacks as input, by acting on the first</span>
+<span class="doccomment">//! column and keeping the other columns untouched.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Specialization for the whole matrix is done in [`Matrix::specialize_constructor`]. Note that</span>
+<span class="doccomment">//! or-patterns in the first column are expanded before being stored in the matrix. Specialization</span>
+<span class="doccomment">//! for a single patstack is done from a combination of [`Constructor::is_covered_by`] and</span>
+<span class="doccomment">//! [`PatStack::pop_head_constructor`]. The internals of how it&#39;s done mostly live in the</span>
+<span class="doccomment">//! [`Fields`] struct.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Computing usefulness</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! We now have all we need to compute usefulness. The inputs to usefulness are a list of</span>
+<span class="doccomment">//! pattern-stacks `p_1 ... p_n` (one per row), and a new pattern_stack `q`. The paper and this</span>
+<span class="doccomment">//! file calls the list of patstacks a _matrix_. They must all have the same number of columns and</span>
+<span class="doccomment">//! the patterns in a given column must all have the same type. `usefulness` returns a (possibly</span>
+<span class="doccomment">//! empty) list of witnesses of usefulness. These witnesses will also be pattern-stacks.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - base case: `n_columns == 0`.</span>
+<span class="doccomment">//!     Since a pattern-stack functions like a tuple of patterns, an empty one functions like the</span>
+<span class="doccomment">//!     unit type. Thus `q` is useful iff there are no rows above it, i.e. if `n == 0`.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! - inductive case: `n_columns &gt; 0`.</span>
+<span class="doccomment">//!     We need a way to list the constructors we want to try. We will be more clever in the next</span>
+<span class="doccomment">//!     section but for now assume we list all value constructors for the type of the first column.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!     - for each such ctor `c`:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!         - for each `q&#39;` returned by `specialize(c, q)`:</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!             - we compute `usefulness(specialize(c, p_1) ... specialize(c, p_n), q&#39;)`</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!         - for each witness found, we revert specialization by pushing the constructor `c` on top.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!     - We return the concatenation of all the witnesses found, if any.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! Example:</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//! [Some(true)] // p_1</span>
+<span class="doccomment">//! [None] // p_2</span>
+<span class="doccomment">//! [Some(_)] // q</span>
+<span class="doccomment">//! //==&gt;&gt; try `None`: `specialize(None, q)` returns nothing</span>
+<span class="doccomment">//! //==&gt;&gt; try `Some`: `specialize(Some, q)` returns a single row</span>
+<span class="doccomment">//! [true] // p_1&#39;</span>
+<span class="doccomment">//! [_] // q&#39;</span>
+<span class="doccomment">//! //==&gt;&gt; try `true`: `specialize(true, q&#39;)` returns a single row</span>
+<span class="doccomment">//! [] // p_1&#39;&#39;</span>
+<span class="doccomment">//! [] // q&#39;&#39;</span>
+<span class="doccomment">//! //==&gt;&gt; base case; `n != 0` so `q&#39;&#39;` is not useful.</span>
+<span class="doccomment">//! //==&gt;&gt; go back up a step</span>
+<span class="doccomment">//! [true] // p_1&#39;</span>
+<span class="doccomment">//! [_] // q&#39;</span>
+<span class="doccomment">//! //==&gt;&gt; try `false`: `specialize(false, q&#39;)` returns a single row</span>
+<span class="doccomment">//! [] // q&#39;&#39;</span>
+<span class="doccomment">//! //==&gt;&gt; base case; `n == 0` so `q&#39;&#39;` is useful. We return the single witness `[]`</span>
+<span class="doccomment">//! witnesses:</span>
+<span class="doccomment">//! []</span>
+<span class="doccomment">//! //==&gt;&gt; undo the specialization with `false`</span>
+<span class="doccomment">//! witnesses:</span>
+<span class="doccomment">//! [false]</span>
+<span class="doccomment">//! //==&gt;&gt; undo the specialization with `Some`</span>
+<span class="doccomment">//! witnesses:</span>
+<span class="doccomment">//! [Some(false)]</span>
+<span class="doccomment">//! //==&gt;&gt; we have tried all the constructors. The output is the single witness `[Some(false)]`.</span>
+<span class="doccomment">//! ```</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This computation is done in [`is_useful`]. In practice we don&#39;t care about the list of</span>
+<span class="doccomment">//! witnesses when computing reachability; we only need to know whether any exist. We do keep the</span>
+<span class="doccomment">//! witnesses when computing exhaustiveness to report them to the user.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! # Making usefulness tractable: constructor splitting</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! We&#39;re missing one last detail: which constructors do we list? Naively listing all value</span>
+<span class="doccomment">//! constructors cannot work for types like `u64` or `&amp;str`, so we need to be more clever. The</span>
+<span class="doccomment">//! first obvious insight is that we only want to list constructors that are covered by the head</span>
+<span class="doccomment">//! constructor of `q`. If it&#39;s a value constructor, we only try that one. If it&#39;s a pattern-only</span>
+<span class="doccomment">//! constructor, we use the final clever idea for this algorithm: _constructor splitting_, where we</span>
+<span class="doccomment">//! group together constructors that behave the same.</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! The details are not necessary to understand this file, so we explain them in</span>
+<span class="doccomment">//! [`super::deconstruct_pat`]. Splitting is done by the [`Constructor::split`] function.</span>
+
+<span class="kw">use</span> <span class="ident">std</span>::{<span class="ident">cell::RefCell</span>, <span class="ident">iter::FromIterator</span>};
+
+<span class="kw">use</span> <span class="ident">hir_def</span>::{<span class="ident">expr::ExprId</span>, <span class="ident">HasModule</span>, <span class="ident">ModuleId</span>};
+<span class="kw">use</span> <span class="ident">la_arena::Arena</span>;
+<span class="kw">use</span> <span class="ident">once_cell::unsync::OnceCell</span>;
+<span class="kw">use</span> <span class="ident">rustc_hash::FxHashMap</span>;
+<span class="kw">use</span> <span class="ident">smallvec</span>::{<span class="ident">smallvec</span>, <span class="ident">SmallVec</span>};
+
+<span class="kw">use</span> <span class="kw">crate</span>::{<span class="ident">db::HirDatabase</span>, <span class="ident">InferenceResult</span>, <span class="ident">Interner</span>, <span class="ident">Ty</span>};
+
+<span class="kw">use</span> <span class="kw">super</span>::{
+    <span class="ident">deconstruct_pat</span>::{<span class="ident">Constructor</span>, <span class="ident">Fields</span>, <span class="ident">SplitWildcard</span>},
+    <span class="ident">Pat</span>, <span class="ident">PatId</span>, <span class="ident">PatKind</span>, <span class="ident">PatternFoldable</span>, <span class="ident">PatternFolder</span>,
+};
+
+<span class="kw">use</span> <span class="self">self</span>::{<span class="ident">helper::PatIdExt</span>, <span class="ident">Usefulness</span>::<span class="kw-2">*</span>, <span class="ident">WitnessPreference</span>::<span class="kw-2">*</span>};
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">module</span>: <span class="ident">ModuleId</span>,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">match_expr</span>: <span class="ident">ExprId</span>,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">infer</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">InferenceResult</span>,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">db</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">HirDatabase</span>,
+    <span class="doccomment">/// Lowered patterns from arms plus generated by the check.</span>
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">pattern_arena</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">RefCell</span><span class="op">&lt;</span><span class="ident">PatternArena</span><span class="op">&gt;</span>,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">panic_context</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="kw">dyn</span> <span class="ident">Fn</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="ident">String</span>,
+}
+
+<span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">is_uninhabited</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">_ty</span>: <span class="kw-2">&amp;</span><span class="ident">Ty</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="comment">// FIXME(iDawer) implement exhaustive_patterns feature. More info in:</span>
+        <span class="comment">// Tracking issue for RFC 1872: exhaustive_patterns feature https://github.com/rust-lang/rust/issues/51085</span>
+        <span class="bool-val">false</span>
+    }
+
+    <span class="doccomment">/// Returns whether the given type is an enum from another crate declared `#[non_exhaustive]`.</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">is_foreign_non_exhaustive_enum</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">enum_id</span>: <span class="ident">hir_def::EnumId</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="kw">let</span> <span class="ident">has_non_exhaustive_attr</span> <span class="op">=</span>
+            <span class="self">self</span>.<span class="ident">db</span>.<span class="ident">attrs</span>(<span class="ident">enum_id</span>.<span class="ident">into</span>()).<span class="ident">by_key</span>(<span class="string">&quot;non_exhaustive&quot;</span>).<span class="ident">exists</span>();
+        <span class="kw">let</span> <span class="ident">is_local</span> <span class="op">=</span>
+            <span class="ident">hir_def::AdtId::from</span>(<span class="ident">enum_id</span>).<span class="ident">module</span>(<span class="self">self</span>.<span class="ident">db</span>.<span class="ident">upcast</span>()).<span class="ident">krate</span>() <span class="op">=</span><span class="op">=</span> <span class="self">self</span>.<span class="ident">module</span>.<span class="ident">krate</span>();
+        <span class="ident">has_non_exhaustive_attr</span> <span class="op">&amp;&amp;</span> <span class="op">!</span><span class="ident">is_local</span>
+    }
+
+    <span class="comment">// Rust feature described as &quot;Allows exhaustive pattern matching on types that contain uninhabited types.&quot;</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">feature_exhaustive_patterns</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="comment">// FIXME see MatchCheckCtx::is_uninhabited</span>
+        <span class="bool-val">false</span>
+    }
+
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">alloc_pat</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">pat</span>: <span class="ident">Pat</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">PatId</span> {
+        <span class="self">self</span>.<span class="ident">pattern_arena</span>.<span class="ident">borrow_mut</span>().<span class="ident">alloc</span>(<span class="ident">pat</span>)
+    }
+
+    <span class="doccomment">/// Get type of a pattern. Handles expanded patterns.</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">type_of</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">pat</span>: <span class="ident">PatId</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Ty</span> {
+        <span class="self">self</span>.<span class="ident">pattern_arena</span>.<span class="ident">borrow</span>()[<span class="ident">pat</span>].<span class="ident">ty</span>.<span class="ident">clone</span>()
+    }
+
+    <span class="attribute">#[<span class="ident">track_caller</span>]</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">bug</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">info</span>: <span class="kw-2">&amp;</span><span class="ident">str</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="op">!</span> {
+        <span class="macro">panic!</span>(<span class="string">&quot;bug: {}\n{}&quot;</span>, <span class="ident">info</span>, (<span class="self">self</span>.<span class="ident">panic_context</span>)());
+    }
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Copy</span>, <span class="ident">Clone</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct</span> <span class="ident">PatCtxt</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>,
+    <span class="doccomment">/// Type of the current column under investigation.</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Ty</span>,
+    <span class="doccomment">/// Whether the current pattern is the whole pattern as found in a match arm, or if it&#39;s a</span>
+    <span class="doccomment">/// subpattern.</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="ident">is_top_level</span>: <span class="ident">bool</span>,
+}
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">expand_pattern</span>(<span class="ident">pat</span>: <span class="ident">Pat</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Pat</span> {
+    <span class="ident">LiteralExpander</span>.<span class="ident">fold_pattern</span>(<span class="kw-2">&amp;</span><span class="ident">pat</span>)
+}
+
+<span class="kw">struct</span> <span class="ident">LiteralExpander</span>;
+
+<span class="kw">impl</span> <span class="ident">PatternFolder</span> <span class="kw">for</span> <span class="ident">LiteralExpander</span> {
+    <span class="kw">fn</span> <span class="ident">fold_pattern</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">pat</span>: <span class="kw-2">&amp;</span><span class="ident">Pat</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Pat</span> {
+        <span class="kw">match</span> (<span class="ident">pat</span>.<span class="ident">ty</span>.<span class="ident">kind</span>(<span class="kw-2">&amp;</span><span class="ident">Interner</span>), <span class="ident">pat</span>.<span class="ident">kind</span>.<span class="ident">as_ref</span>()) {
+            (<span class="kw">_</span>, <span class="ident">PatKind::Binding</span> { <span class="ident">subpattern</span>: <span class="prelude-val">Some</span>(<span class="ident">s</span>), .. }) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">s</span>.<span class="ident">fold_with</span>(<span class="self">self</span>),
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">pat</span>.<span class="ident">super_fold_with</span>(<span class="self">self</span>),
+        }
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">Pat</span> {
+    <span class="kw">fn</span> <span class="ident">_is_wildcard</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="macro">matches!</span>(<span class="kw-2">*</span><span class="self">self</span>.<span class="ident">kind</span>, <span class="ident">PatKind::Binding</span> { <span class="ident">subpattern</span>: <span class="prelude-val">None</span>, .. } <span class="op">|</span> <span class="ident">PatKind::Wild</span>)
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">PatIdExt</span> <span class="kw">for</span> <span class="ident">PatId</span> {
+    <span class="kw">fn</span> <span class="ident">is_or_pat</span>(<span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="macro">matches!</span>(<span class="kw-2">*</span><span class="ident">cx</span>.<span class="ident">pattern_arena</span>.<span class="ident">borrow</span>()[<span class="self">self</span>].<span class="ident">kind</span>, <span class="ident">PatKind::Or</span> { .. })
+    }
+
+    <span class="doccomment">/// Recursively expand this pattern into its subpatterns. Only useful for or-patterns.</span>
+    <span class="kw">fn</span> <span class="ident">expand_or_pat</span>(<span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span> {
+        <span class="kw">fn</span> <span class="ident">expand</span>(<span class="ident">pat</span>: <span class="ident">PatId</span>, <span class="ident">vec</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PatId</span><span class="op">&gt;</span>, <span class="ident">pat_arena</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">PatternArena</span>) {
+            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">PatKind::Or</span> { <span class="ident">pats</span> } <span class="op">=</span> <span class="ident">pat_arena</span>[<span class="ident">pat</span>].<span class="ident">kind</span>.<span class="ident">as_ref</span>() {
+                <span class="comment">// FIXME(iDawer): Factor out pattern deep cloning. See discussion:</span>
+                <span class="comment">// https://github.com/rust-analyzer/rust-analyzer/pull/8717#discussion_r633086640</span>
+                <span class="kw">let</span> <span class="ident">pats</span> <span class="op">=</span> <span class="ident">pats</span>.<span class="ident">clone</span>();
+                <span class="kw">for</span> <span class="ident">pat</span> <span class="kw">in</span> <span class="ident">pats</span> {
+                    <span class="kw">let</span> <span class="ident">pat</span> <span class="op">=</span> <span class="ident">pat_arena</span>.<span class="ident">alloc</span>(<span class="ident">pat</span>.<span class="ident">clone</span>());
+                    <span class="ident">expand</span>(<span class="ident">pat</span>, <span class="ident">vec</span>, <span class="ident">pat_arena</span>);
+                }
+            } <span class="kw">else</span> {
+                <span class="ident">vec</span>.<span class="ident">push</span>(<span class="ident">pat</span>)
+            }
+        }
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pat_arena</span> <span class="op">=</span> <span class="ident">cx</span>.<span class="ident">pattern_arena</span>.<span class="ident">borrow_mut</span>();
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">pats</span> <span class="op">=</span> <span class="ident">Vec::new</span>();
+        <span class="ident">expand</span>(<span class="self">self</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">pats</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">pat_arena</span>);
+        <span class="ident">pats</span>
+    }
+}
+
+<span class="doccomment">/// A row of a matrix. Rows of len 1 are very common, which is why `SmallVec[_; 2]`</span>
+<span class="doccomment">/// works well.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct</span> <span class="ident">PatStack</span> {
+    <span class="ident">pats</span>: <span class="ident">SmallVec</span><span class="op">&lt;</span>[<span class="ident">PatId</span>; <span class="number">2</span>]<span class="op">&gt;</span>,
+    <span class="doccomment">/// Cache for the constructor of the head</span>
+    <span class="ident">head_ctor</span>: <span class="ident">OnceCell</span><span class="op">&lt;</span><span class="ident">Constructor</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">PatStack</span> {
+    <span class="kw">fn</span> <span class="ident">from_pattern</span>(<span class="ident">pat</span>: <span class="ident">PatId</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="self">Self</span><span class="ident">::from_vec</span>(<span class="macro">smallvec!</span>[<span class="ident">pat</span>])
+    }
+
+    <span class="kw">fn</span> <span class="ident">from_vec</span>(<span class="ident">vec</span>: <span class="ident">SmallVec</span><span class="op">&lt;</span>[<span class="ident">PatId</span>; <span class="number">2</span>]<span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="ident">PatStack</span> { <span class="ident">pats</span>: <span class="ident">vec</span>, <span class="ident">head_ctor</span>: <span class="ident">OnceCell::new</span>() }
+    }
+
+    <span class="kw">fn</span> <span class="ident">is_empty</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="self">self</span>.<span class="ident">pats</span>.<span class="ident">is_empty</span>()
+    }
+
+    <span class="kw">fn</span> <span class="ident">len</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">usize</span> {
+        <span class="self">self</span>.<span class="ident">pats</span>.<span class="ident">len</span>()
+    }
+
+    <span class="kw">fn</span> <span class="ident">head</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">PatId</span> {
+        <span class="self">self</span>.<span class="ident">pats</span>[<span class="number">0</span>]
+    }
+
+    <span class="attribute">#[<span class="ident">inline</span>]</span>
+    <span class="kw">fn</span> <span class="ident">head_ctor</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="ident">Constructor</span> {
+        <span class="self">self</span>.<span class="ident">head_ctor</span>.<span class="ident">get_or_init</span>(<span class="op">|</span><span class="op">|</span> <span class="ident">Constructor::from_pat</span>(<span class="ident">cx</span>, <span class="self">self</span>.<span class="ident">head</span>()))
+    }
+
+    <span class="comment">// Recursively expand the first pattern into its subpatterns. Only useful if the pattern is an</span>
+    <span class="comment">// or-pattern. Panics if `self` is empty.</span>
+    <span class="kw">fn</span> <span class="ident">expand_or_pat</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">PatStack</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;_</span> {
+        <span class="self">self</span>.<span class="ident">head</span>().<span class="ident">expand_or_pat</span>(<span class="ident">cx</span>).<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">pat</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_patstack</span> <span class="op">=</span> <span class="ident">PatStack::from_pattern</span>(<span class="ident">pat</span>);
+            <span class="ident">new_patstack</span>.<span class="ident">pats</span>.<span class="ident">extend_from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">pats</span>[<span class="number">1</span>..]);
+            <span class="ident">new_patstack</span>
+        })
+    }
+
+    <span class="doccomment">/// This computes `S(self.head_ctor(), self)`. See top of the file for explanations.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// Structure patterns with a partial wild pattern (Foo { a: 42, .. }) have their missing</span>
+    <span class="doccomment">/// fields filled with wild patterns.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// This is roughly the inverse of `Constructor::apply`.</span>
+    <span class="kw">fn</span> <span class="ident">pop_head_constructor</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">ctor_wild_subpatterns</span>: <span class="kw-2">&amp;</span><span class="ident">Fields</span>,
+        <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">PatStack</span> {
+        <span class="comment">// We pop the head pattern and push the new fields extracted from the arguments of</span>
+        <span class="comment">// `self.head()`.</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_fields</span> <span class="op">=</span>
+            <span class="ident">ctor_wild_subpatterns</span>.<span class="ident">replace_with_pattern_arguments</span>(<span class="self">self</span>.<span class="ident">head</span>(), <span class="ident">cx</span>).<span class="ident">into_patterns</span>();
+        <span class="ident">new_fields</span>.<span class="ident">extend_from_slice</span>(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="ident">pats</span>[<span class="number">1</span>..]);
+        <span class="ident">PatStack::from_vec</span>(<span class="ident">new_fields</span>)
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">Default</span> <span class="kw">for</span> <span class="ident">PatStack</span> {
+    <span class="kw">fn</span> <span class="ident">default</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="self">Self</span><span class="ident">::from_vec</span>(<span class="macro">smallvec!</span>[])
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">PartialEq</span> <span class="kw">for</span> <span class="ident">PatStack</span> {
+    <span class="kw">fn</span> <span class="ident">eq</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">other</span>: <span class="kw-2">&amp;</span><span class="self">Self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="self">self</span>.<span class="ident">pats</span> <span class="op">=</span><span class="op">=</span> <span class="ident">other</span>.<span class="ident">pats</span>
+    }
+}
+
+<span class="kw">impl</span> <span class="ident">FromIterator</span><span class="op">&lt;</span><span class="ident">PatId</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">PatStack</span> {
+    <span class="kw">fn</span> <span class="ident">from_iter</span><span class="op">&lt;</span><span class="ident">T</span><span class="op">&gt;</span>(<span class="ident">iter</span>: <span class="ident">T</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span>
+    <span class="kw">where</span>
+        <span class="ident">T</span>: <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">PatId</span><span class="op">&gt;</span>,
+    {
+        <span class="self">Self</span><span class="ident">::from_vec</span>(<span class="ident">iter</span>.<span class="ident">into_iter</span>().<span class="ident">collect</span>())
+    }
+}
+
+<span class="doccomment">/// A 2D matrix.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">struct</span> <span class="ident">Matrix</span> {
+    <span class="ident">patterns</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PatStack</span><span class="op">&gt;</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">Matrix</span> {
+    <span class="kw">fn</span> <span class="ident">empty</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="ident">Matrix</span> { <span class="ident">patterns</span>: <span class="macro">vec!</span>[] }
+    }
+
+    <span class="doccomment">/// Number of columns of this matrix. `None` is the matrix is empty.</span>
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn</span> <span class="ident">_column_count</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">usize</span><span class="op">&gt;</span> {
+        <span class="self">self</span>.<span class="ident">patterns</span>.<span class="ident">get</span>(<span class="number">0</span>).<span class="ident">map</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">len</span>())
+    }
+
+    <span class="doccomment">/// Pushes a new row to the matrix. If the row starts with an or-pattern, this recursively</span>
+    <span class="doccomment">/// expands it.</span>
+    <span class="kw">fn</span> <span class="ident">push</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">row</span>: <span class="ident">PatStack</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) {
+        <span class="kw">if</span> <span class="op">!</span><span class="ident">row</span>.<span class="ident">is_empty</span>() <span class="op">&amp;&amp;</span> <span class="ident">row</span>.<span class="ident">head</span>().<span class="ident">is_or_pat</span>(<span class="ident">cx</span>) {
+            <span class="kw">for</span> <span class="ident">row</span> <span class="kw">in</span> <span class="ident">row</span>.<span class="ident">expand_or_pat</span>(<span class="ident">cx</span>) {
+                <span class="self">self</span>.<span class="ident">patterns</span>.<span class="ident">push</span>(<span class="ident">row</span>);
+            }
+        } <span class="kw">else</span> {
+            <span class="self">self</span>.<span class="ident">patterns</span>.<span class="ident">push</span>(<span class="ident">row</span>);
+        }
+    }
+
+    <span class="doccomment">/// Iterate over the first component of each row</span>
+    <span class="kw">fn</span> <span class="ident">heads</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">PatId</span><span class="op">&gt;</span> <span class="op">+</span> <span class="lifetime">&#39;_</span> {
+        <span class="self">self</span>.<span class="ident">patterns</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">head</span>())
+    }
+
+    <span class="doccomment">/// Iterate over the first constructor of each row.</span>
+    <span class="kw">fn</span> <span class="ident">head_ctors</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span>(
+        <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="self">self</span>,
+        <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;a</span> <span class="ident">Constructor</span><span class="op">&gt;</span> <span class="op">+</span> <span class="ident">Clone</span> {
+        <span class="self">self</span>.<span class="ident">patterns</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">head_ctor</span>(<span class="ident">cx</span>))
+    }
+
+    <span class="doccomment">/// This computes `S(constructor, self)`. See top of the file for explanations.</span>
+    <span class="kw">fn</span> <span class="ident">specialize_constructor</span>(
+        <span class="kw-2">&amp;</span><span class="self">self</span>,
+        <span class="ident">pcx</span>: <span class="ident">PatCtxt</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+        <span class="ident">ctor</span>: <span class="kw-2">&amp;</span><span class="ident">Constructor</span>,
+        <span class="ident">ctor_wild_subpatterns</span>: <span class="kw-2">&amp;</span><span class="ident">Fields</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Matrix</span> {
+        <span class="kw">let</span> <span class="ident">rows</span> <span class="op">=</span> <span class="self">self</span>
+            .<span class="ident">patterns</span>
+            .<span class="ident">iter</span>()
+            .<span class="ident">filter</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">ctor</span>.<span class="ident">is_covered_by</span>(<span class="ident">pcx</span>, <span class="ident">r</span>.<span class="ident">head_ctor</span>(<span class="ident">pcx</span>.<span class="ident">cx</span>)))
+            .<span class="ident">map</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">pop_head_constructor</span>(<span class="ident">ctor_wild_subpatterns</span>, <span class="ident">pcx</span>.<span class="ident">cx</span>));
+        <span class="ident">Matrix::from_iter</span>(<span class="ident">rows</span>, <span class="ident">pcx</span>.<span class="ident">cx</span>)
+    }
+
+    <span class="kw">fn</span> <span class="ident">from_iter</span>(<span class="ident">rows</span>: <span class="kw">impl</span> <span class="ident">IntoIterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="ident">PatStack</span><span class="op">&gt;</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Matrix</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">matrix</span> <span class="op">=</span> <span class="ident">Matrix::empty</span>();
+        <span class="kw">for</span> <span class="ident">x</span> <span class="kw">in</span> <span class="ident">rows</span> {
+            <span class="comment">// Using `push` ensures we correctly expand or-patterns.</span>
+            <span class="ident">matrix</span>.<span class="ident">push</span>(<span class="ident">x</span>, <span class="ident">cx</span>);
+        }
+        <span class="ident">matrix</span>
+    }
+}
+
+<span class="doccomment">/// Given a pattern or a pattern-stack, this struct captures a set of its subpatterns. We use that</span>
+<span class="doccomment">/// to track reachable sub-patterns arising from or-patterns. In the absence of or-patterns this</span>
+<span class="doccomment">/// will always be either `Empty` (the whole pattern is unreachable) or `Full` (the whole pattern</span>
+<span class="doccomment">/// is reachable). When there are or-patterns, some subpatterns may be reachable while others</span>
+<span class="doccomment">/// aren&#39;t. In this case the whole pattern still counts as reachable, but we will lint the</span>
+<span class="doccomment">/// unreachable subpatterns.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// This supports a limited set of operations, so not all possible sets of subpatterns can be</span>
+<span class="doccomment">/// represented. That&#39;s ok, we only want the ones that make sense for our usage.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// What we&#39;re doing is illustrated by this:</span>
+<span class="doccomment">/// ```</span>
+<span class="doccomment">/// match (true, 0) {</span>
+<span class="doccomment">///     (true, 0) =&gt; {}</span>
+<span class="doccomment">///     (_, 1) =&gt; {}</span>
+<span class="doccomment">///     (true | false, 0 | 1) =&gt; {}</span>
+<span class="doccomment">/// }</span>
+<span class="doccomment">/// ```</span>
+<span class="doccomment">/// When we try the alternatives of the `true | false` or-pattern, the last `0` is reachable in the</span>
+<span class="doccomment">/// `false` alternative but not the `true`. So overall it is reachable. By contrast, the last `1`</span>
+<span class="doccomment">/// is not reachable in either alternative, so we want to signal this to the user.</span>
+<span class="doccomment">/// Therefore we take the union of sets of reachable patterns coming from different alternatives in</span>
+<span class="doccomment">/// order to figure out which subpatterns are overall reachable.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Invariant: we try to construct the smallest representation we can. In particular if</span>
+<span class="doccomment">/// `self.is_empty()` we ensure that `self` is `Empty`, and same with `Full`. This is not important</span>
+<span class="doccomment">/// for correctness currently.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Debug</span>, <span class="ident">Clone</span>)]</span>
+<span class="kw">enum</span> <span class="ident">SubPatSet</span> {
+    <span class="doccomment">/// The empty set. This means the pattern is unreachable.</span>
+    <span class="ident">Empty</span>,
+    <span class="doccomment">/// The set containing the full pattern.</span>
+    <span class="ident">Full</span>,
+    <span class="doccomment">/// If the pattern is a pattern with a constructor or a pattern-stack, we store a set for each</span>
+    <span class="doccomment">/// of its subpatterns. Missing entries in the map are implicitly full, because that&#39;s the</span>
+    <span class="doccomment">/// common case.</span>
+    <span class="ident">Seq</span> { <span class="ident">subpats</span>: <span class="ident">FxHashMap</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">SubPatSet</span><span class="op">&gt;</span> },
+    <span class="doccomment">/// If the pattern is an or-pattern, we store a set for each of its alternatives. Missing</span>
+    <span class="doccomment">/// entries in the map are implicitly empty. Note: we always flatten nested or-patterns.</span>
+    <span class="ident">Alt</span> {
+        <span class="ident">subpats</span>: <span class="ident">FxHashMap</span><span class="op">&lt;</span><span class="ident">usize</span>, <span class="ident">SubPatSet</span><span class="op">&gt;</span>,
+        <span class="doccomment">/// Counts the total number of alternatives in the pattern</span>
+        <span class="ident">alt_count</span>: <span class="ident">usize</span>,
+        <span class="doccomment">/// We keep the pattern around to retrieve spans.</span>
+        <span class="ident">pat</span>: <span class="ident">PatId</span>,
+    },
+}
+
+<span class="kw">impl</span> <span class="ident">SubPatSet</span> {
+    <span class="kw">fn</span> <span class="ident">full</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="ident">SubPatSet::Full</span>
+    }
+
+    <span class="kw">fn</span> <span class="ident">empty</span>() <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="ident">SubPatSet::Empty</span>
+    }
+
+    <span class="kw">fn</span> <span class="ident">is_empty</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">SubPatSet::Empty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">true</span>,
+            <span class="ident">SubPatSet::Full</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">false</span>,
+            <span class="comment">// If any subpattern in a sequence is unreachable, the whole pattern is unreachable.</span>
+            <span class="ident">SubPatSet::Seq</span> { <span class="ident">subpats</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">subpats</span>.<span class="ident">values</span>().<span class="ident">any</span>(<span class="op">|</span><span class="ident">set</span><span class="op">|</span> <span class="ident">set</span>.<span class="ident">is_empty</span>()),
+            <span class="comment">// An or-pattern is reachable if any of its alternatives is.</span>
+            <span class="ident">SubPatSet::Alt</span> { <span class="ident">subpats</span>, .. } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">subpats</span>.<span class="ident">values</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">set</span><span class="op">|</span> <span class="ident">set</span>.<span class="ident">is_empty</span>()),
+        }
+    }
+
+    <span class="kw">fn</span> <span class="ident">is_full</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span> {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">SubPatSet::Empty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">false</span>,
+            <span class="ident">SubPatSet::Full</span> <span class="op">=</span><span class="op">&gt;</span> <span class="bool-val">true</span>,
+            <span class="comment">// The whole pattern is reachable only when all its alternatives are.</span>
+            <span class="ident">SubPatSet::Seq</span> { <span class="ident">subpats</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">subpats</span>.<span class="ident">values</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">sub_set</span><span class="op">|</span> <span class="ident">sub_set</span>.<span class="ident">is_full</span>()),
+            <span class="comment">// The whole or-pattern is reachable only when all its alternatives are.</span>
+            <span class="ident">SubPatSet::Alt</span> { <span class="ident">subpats</span>, <span class="ident">alt_count</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">subpats</span>.<span class="ident">len</span>() <span class="op">=</span><span class="op">=</span> <span class="kw-2">*</span><span class="ident">alt_count</span> <span class="op">&amp;&amp;</span> <span class="ident">subpats</span>.<span class="ident">values</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">set</span><span class="op">|</span> <span class="ident">set</span>.<span class="ident">is_full</span>())
+            }
+        }
+    }
+
+    <span class="doccomment">/// Union `self` with `other`, mutating `self`.</span>
+    <span class="kw">fn</span> <span class="ident">union</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">other</span>: <span class="self">Self</span>) {
+        <span class="kw">use</span> <span class="ident">SubPatSet</span>::<span class="kw-2">*</span>;
+        <span class="comment">// Union with full stays full; union with empty changes nothing.</span>
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_full</span>() <span class="op">|</span><span class="op">|</span> <span class="ident">other</span>.<span class="ident">is_empty</span>() {
+            <span class="kw">return</span>;
+        } <span class="kw">else</span> <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_empty</span>() {
+            <span class="kw-2">*</span><span class="self">self</span> <span class="op">=</span> <span class="ident">other</span>;
+            <span class="kw">return</span>;
+        } <span class="kw">else</span> <span class="kw">if</span> <span class="ident">other</span>.<span class="ident">is_full</span>() {
+            <span class="kw-2">*</span><span class="self">self</span> <span class="op">=</span> <span class="ident">Full</span>;
+            <span class="kw">return</span>;
+        }
+
+        <span class="kw">match</span> (<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="self">self</span>, <span class="ident">other</span>) {
+            (<span class="ident">Seq</span> { <span class="ident">subpats</span>: <span class="ident">s_set</span> }, <span class="ident">Seq</span> { <span class="ident">subpats</span>: <span class="kw-2">mut</span> <span class="ident">o_set</span> }) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">s_set</span>.<span class="ident">retain</span>(<span class="op">|</span><span class="ident">i</span>, <span class="ident">s_sub_set</span><span class="op">|</span> {
+                    <span class="comment">// Missing entries count as full.</span>
+                    <span class="kw">let</span> <span class="ident">o_sub_set</span> <span class="op">=</span> <span class="ident">o_set</span>.<span class="ident">remove</span>(<span class="ident">i</span>).<span class="ident">unwrap_or</span>(<span class="ident">Full</span>);
+                    <span class="ident">s_sub_set</span>.<span class="ident">union</span>(<span class="ident">o_sub_set</span>);
+                    <span class="comment">// We drop full entries.</span>
+                    <span class="op">!</span><span class="ident">s_sub_set</span>.<span class="ident">is_full</span>()
+                });
+                <span class="comment">// Everything left in `o_set` is missing from `s_set`, i.e. counts as full. Since</span>
+                <span class="comment">// unioning with full returns full, we can drop those entries.</span>
+            }
+            (<span class="ident">Alt</span> { <span class="ident">subpats</span>: <span class="ident">s_set</span>, .. }, <span class="ident">Alt</span> { <span class="ident">subpats</span>: <span class="kw-2">mut</span> <span class="ident">o_set</span>, .. }) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">s_set</span>.<span class="ident">retain</span>(<span class="op">|</span><span class="ident">i</span>, <span class="ident">s_sub_set</span><span class="op">|</span> {
+                    <span class="comment">// Missing entries count as empty.</span>
+                    <span class="kw">let</span> <span class="ident">o_sub_set</span> <span class="op">=</span> <span class="ident">o_set</span>.<span class="ident">remove</span>(<span class="ident">i</span>).<span class="ident">unwrap_or</span>(<span class="ident">Empty</span>);
+                    <span class="ident">s_sub_set</span>.<span class="ident">union</span>(<span class="ident">o_sub_set</span>);
+                    <span class="comment">// We drop empty entries.</span>
+                    <span class="op">!</span><span class="ident">s_sub_set</span>.<span class="ident">is_empty</span>()
+                });
+                <span class="comment">// Everything left in `o_set` is missing from `s_set`, i.e. counts as empty. Since</span>
+                <span class="comment">// unioning with empty changes nothing, we can take those entries as is.</span>
+                <span class="ident">s_set</span>.<span class="ident">extend</span>(<span class="ident">o_set</span>);
+            }
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>),
+        }
+
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_full</span>() {
+            <span class="kw-2">*</span><span class="self">self</span> <span class="op">=</span> <span class="ident">Full</span>;
+        }
+    }
+
+    <span class="doccomment">/// Returns a list of the unreachable subpatterns. If `self` is empty (i.e. the</span>
+    <span class="doccomment">/// whole pattern is unreachable) we return `None`.</span>
+    <span class="kw">fn</span> <span class="ident">list_unreachable_subpatterns</span>(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PatId</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+        <span class="doccomment">/// Panics if `set.is_empty()`.</span>
+        <span class="kw">fn</span> <span class="ident">fill_subpats</span>(
+            <span class="ident">set</span>: <span class="kw-2">&amp;</span><span class="ident">SubPatSet</span>,
+            <span class="ident">unreachable_pats</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PatId</span><span class="op">&gt;</span>,
+            <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+        ) {
+            <span class="kw">match</span> <span class="ident">set</span> {
+                <span class="ident">SubPatSet::Empty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>),
+                <span class="ident">SubPatSet::Full</span> <span class="op">=</span><span class="op">&gt;</span> {}
+                <span class="ident">SubPatSet::Seq</span> { <span class="ident">subpats</span> } <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">for</span> (<span class="kw">_</span>, <span class="ident">sub_set</span>) <span class="kw">in</span> <span class="ident">subpats</span> {
+                        <span class="ident">fill_subpats</span>(<span class="ident">sub_set</span>, <span class="ident">unreachable_pats</span>, <span class="ident">cx</span>);
+                    }
+                }
+                <span class="ident">SubPatSet::Alt</span> { <span class="ident">subpats</span>, <span class="ident">pat</span>, <span class="ident">alt_count</span>, .. } <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="kw">let</span> <span class="ident">expanded</span> <span class="op">=</span> <span class="ident">pat</span>.<span class="ident">expand_or_pat</span>(<span class="ident">cx</span>);
+                    <span class="kw">for</span> <span class="ident">i</span> <span class="kw">in</span> <span class="number">0</span>..<span class="kw-2">*</span><span class="ident">alt_count</span> {
+                        <span class="kw">let</span> <span class="ident">sub_set</span> <span class="op">=</span> <span class="ident">subpats</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">i</span>).<span class="ident">unwrap_or</span>(<span class="kw-2">&amp;</span><span class="ident">SubPatSet::Empty</span>);
+                        <span class="kw">if</span> <span class="ident">sub_set</span>.<span class="ident">is_empty</span>() {
+                            <span class="comment">// Found a unreachable subpattern.</span>
+                            <span class="ident">unreachable_pats</span>.<span class="ident">push</span>(<span class="ident">expanded</span>[<span class="ident">i</span>]);
+                        } <span class="kw">else</span> {
+                            <span class="ident">fill_subpats</span>(<span class="ident">sub_set</span>, <span class="ident">unreachable_pats</span>, <span class="ident">cx</span>);
+                        }
+                    }
+                }
+            }
+        }
+
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_empty</span>() {
+            <span class="kw">return</span> <span class="prelude-val">None</span>;
+        }
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_full</span>() {
+            <span class="comment">// No subpatterns are unreachable.</span>
+            <span class="kw">return</span> <span class="prelude-val">Some</span>(<span class="ident">Vec::new</span>());
+        }
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">unreachable_pats</span> <span class="op">=</span> <span class="ident">Vec::new</span>();
+        <span class="ident">fill_subpats</span>(<span class="self">self</span>, <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">unreachable_pats</span>, <span class="ident">cx</span>);
+        <span class="prelude-val">Some</span>(<span class="ident">unreachable_pats</span>)
+    }
+
+    <span class="doccomment">/// When `self` refers to a patstack that was obtained from specialization, after running</span>
+    <span class="doccomment">/// `unspecialize` it will refer to the original patstack before specialization.</span>
+    <span class="kw">fn</span> <span class="ident">unspecialize</span>(<span class="self">self</span>, <span class="ident">arity</span>: <span class="ident">usize</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">use</span> <span class="ident">SubPatSet</span>::<span class="kw-2">*</span>;
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">Full</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Full</span>,
+            <span class="ident">Empty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Empty</span>,
+            <span class="ident">Seq</span> { <span class="ident">subpats</span> } <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="comment">// We gather the first `arity` subpatterns together and shift the remaining ones.</span>
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_subpats</span> <span class="op">=</span> <span class="ident">FxHashMap::default</span>();
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">new_subpats_first_col</span> <span class="op">=</span> <span class="ident">FxHashMap::default</span>();
+                <span class="kw">for</span> (<span class="ident">i</span>, <span class="ident">sub_set</span>) <span class="kw">in</span> <span class="ident">subpats</span> {
+                    <span class="kw">if</span> <span class="ident">i</span> <span class="op">&lt;</span> <span class="ident">arity</span> {
+                        <span class="comment">// The first `arity` indices are now part of the pattern in the first</span>
+                        <span class="comment">// column.</span>
+                        <span class="ident">new_subpats_first_col</span>.<span class="ident">insert</span>(<span class="ident">i</span>, <span class="ident">sub_set</span>);
+                    } <span class="kw">else</span> {
+                        <span class="comment">// Indices after `arity` are simply shifted</span>
+                        <span class="ident">new_subpats</span>.<span class="ident">insert</span>(<span class="ident">i</span> <span class="op">-</span> <span class="ident">arity</span> <span class="op">+</span> <span class="number">1</span>, <span class="ident">sub_set</span>);
+                    }
+                }
+                <span class="comment">// If `new_subpats_first_col` has no entries it counts as full, so we can omit it.</span>
+                <span class="kw">if</span> <span class="op">!</span><span class="ident">new_subpats_first_col</span>.<span class="ident">is_empty</span>() {
+                    <span class="ident">new_subpats</span>.<span class="ident">insert</span>(<span class="number">0</span>, <span class="ident">Seq</span> { <span class="ident">subpats</span>: <span class="ident">new_subpats_first_col</span> });
+                }
+                <span class="ident">Seq</span> { <span class="ident">subpats</span>: <span class="ident">new_subpats</span> }
+            }
+            <span class="ident">Alt</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>), <span class="comment">// `self` is a patstack</span>
+        }
+    }
+
+    <span class="doccomment">/// When `self` refers to a patstack that was obtained from splitting an or-pattern, after</span>
+    <span class="doccomment">/// running `unspecialize` it will refer to the original patstack before splitting.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// For example:</span>
+    <span class="doccomment">/// ```</span>
+    <span class="doccomment">/// match Some(true) {</span>
+    <span class="doccomment">///     Some(true) =&gt; {}</span>
+    <span class="doccomment">///     None | Some(true | false) =&gt; {}</span>
+    <span class="doccomment">/// }</span>
+    <span class="doccomment">/// ```</span>
+    <span class="doccomment">/// Here `None` would return the full set and `Some(true | false)` would return the set</span>
+    <span class="doccomment">/// containing `false`. After `unsplit_or_pat`, we want the set to contain `None` and `false`.</span>
+    <span class="doccomment">/// This is what this function does.</span>
+    <span class="kw">fn</span> <span class="ident">unsplit_or_pat</span>(<span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">alt_id</span>: <span class="ident">usize</span>, <span class="ident">alt_count</span>: <span class="ident">usize</span>, <span class="ident">pat</span>: <span class="ident">PatId</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">use</span> <span class="ident">SubPatSet</span>::<span class="kw-2">*</span>;
+        <span class="kw">if</span> <span class="self">self</span>.<span class="ident">is_empty</span>() {
+            <span class="kw">return</span> <span class="ident">Empty</span>;
+        }
+
+        <span class="comment">// Subpatterns coming from inside the or-pattern alternative itself, e.g. in `None | Some(0</span>
+        <span class="comment">// | 1)`.</span>
+        <span class="kw">let</span> <span class="ident">set_first_col</span> <span class="op">=</span> <span class="kw">match</span> <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span> {
+            <span class="ident">Full</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Full</span>,
+            <span class="ident">Seq</span> { <span class="ident">subpats</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">subpats</span>.<span class="ident">remove</span>(<span class="kw-2">&amp;</span><span class="number">0</span>).<span class="ident">unwrap_or</span>(<span class="ident">Full</span>),
+            <span class="ident">Empty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unreachable!</span>(),
+            <span class="ident">Alt</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>), <span class="comment">// `self` is a patstack</span>
+        };
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">subpats_first_col</span> <span class="op">=</span> <span class="ident">FxHashMap::default</span>();
+        <span class="ident">subpats_first_col</span>.<span class="ident">insert</span>(<span class="ident">alt_id</span>, <span class="ident">set_first_col</span>);
+        <span class="kw">let</span> <span class="ident">set_first_col</span> <span class="op">=</span> <span class="ident">Alt</span> { <span class="ident">subpats</span>: <span class="ident">subpats_first_col</span>, <span class="ident">pat</span>, <span class="ident">alt_count</span> };
+
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">subpats</span> <span class="op">=</span> <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">Full</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">FxHashMap::default</span>(),
+            <span class="ident">Seq</span> { <span class="ident">subpats</span> } <span class="op">=</span><span class="op">&gt;</span> <span class="ident">subpats</span>,
+            <span class="ident">Empty</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unreachable!</span>(),
+            <span class="ident">Alt</span> { .. } <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>), <span class="comment">// `self` is a patstack</span>
+        };
+        <span class="ident">subpats</span>.<span class="ident">insert</span>(<span class="number">0</span>, <span class="ident">set_first_col</span>);
+        <span class="ident">Seq</span> { <span class="ident">subpats</span> }
+    }
+}
+
+<span class="doccomment">/// This carries the results of computing usefulness, as described at the top of the file. When</span>
+<span class="doccomment">/// checking usefulness of a match branch, we use the `NoWitnesses` variant, which also keeps track</span>
+<span class="doccomment">/// of potential unreachable sub-patterns (in the presence of or-patterns). When checking</span>
+<span class="doccomment">/// exhaustiveness of a whole match, we use the `WithWitnesses` variant, which carries a list of</span>
+<span class="doccomment">/// witnesses of non-exhaustiveness when there are any.</span>
+<span class="doccomment">/// Which variant to use is dictated by `WitnessPreference`.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="kw">enum</span> <span class="ident">Usefulness</span> {
+    <span class="doccomment">/// Carries a set of subpatterns that have been found to be reachable. If empty, this indicates</span>
+    <span class="doccomment">/// the whole pattern is unreachable. If not, this indicates that the pattern is reachable but</span>
+    <span class="doccomment">/// that some sub-patterns may be unreachable (due to or-patterns). In the absence of</span>
+    <span class="doccomment">/// or-patterns this will always be either `Empty` (the whole pattern is unreachable) or `Full`</span>
+    <span class="doccomment">/// (the whole pattern is reachable).</span>
+    <span class="ident">NoWitnesses</span>(<span class="ident">SubPatSet</span>),
+    <span class="doccomment">/// Carries a list of witnesses of non-exhaustiveness. If empty, indicates that the whole</span>
+    <span class="doccomment">/// pattern is unreachable.</span>
+    <span class="ident">WithWitnesses</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Witness</span><span class="op">&gt;</span>),
+}
+
+<span class="kw">impl</span> <span class="ident">Usefulness</span> {
+    <span class="kw">fn</span> <span class="ident">new_useful</span>(<span class="ident">preference</span>: <span class="ident">WitnessPreference</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">match</span> <span class="ident">preference</span> {
+            <span class="ident">ConstructWitness</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">WithWitnesses</span>(<span class="macro">vec!</span>[<span class="ident">Witness</span>(<span class="macro">vec!</span>[])]),
+            <span class="ident">LeaveOutWitness</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NoWitnesses</span>(<span class="ident">SubPatSet::full</span>()),
+        }
+    }
+    <span class="kw">fn</span> <span class="ident">new_not_useful</span>(<span class="ident">preference</span>: <span class="ident">WitnessPreference</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">match</span> <span class="ident">preference</span> {
+            <span class="ident">ConstructWitness</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">WithWitnesses</span>(<span class="macro">vec!</span>[]),
+            <span class="ident">LeaveOutWitness</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NoWitnesses</span>(<span class="ident">SubPatSet::empty</span>()),
+        }
+    }
+
+    <span class="doccomment">/// Combine usefulnesses from two branches. This is an associative operation.</span>
+    <span class="kw">fn</span> <span class="ident">extend</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="self">self</span>, <span class="ident">other</span>: <span class="self">Self</span>) {
+        <span class="kw">match</span> (<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="kw-2">*</span><span class="self">self</span>, <span class="ident">other</span>) {
+            (<span class="ident">WithWitnesses</span>(<span class="kw">_</span>), <span class="ident">WithWitnesses</span>(<span class="ident">o</span>)) <span class="kw">if</span> <span class="ident">o</span>.<span class="ident">is_empty</span>() <span class="op">=</span><span class="op">&gt;</span> {}
+            (<span class="ident">WithWitnesses</span>(<span class="ident">s</span>), <span class="ident">WithWitnesses</span>(<span class="ident">o</span>)) <span class="kw">if</span> <span class="ident">s</span>.<span class="ident">is_empty</span>() <span class="op">=</span><span class="op">&gt;</span> <span class="kw-2">*</span><span class="self">self</span> <span class="op">=</span> <span class="ident">WithWitnesses</span>(<span class="ident">o</span>),
+            (<span class="ident">WithWitnesses</span>(<span class="ident">s</span>), <span class="ident">WithWitnesses</span>(<span class="ident">o</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">s</span>.<span class="ident">extend</span>(<span class="ident">o</span>),
+            (<span class="ident">NoWitnesses</span>(<span class="ident">s</span>), <span class="ident">NoWitnesses</span>(<span class="ident">o</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">s</span>.<span class="ident">union</span>(<span class="ident">o</span>),
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="macro">unreachable!</span>(),
+        }
+    }
+
+    <span class="doccomment">/// When trying several branches and each returns a `Usefulness`, we need to combine the</span>
+    <span class="doccomment">/// results together.</span>
+    <span class="kw">fn</span> <span class="ident">merge</span>(<span class="ident">pref</span>: <span class="ident">WitnessPreference</span>, <span class="ident">usefulnesses</span>: <span class="kw">impl</span> <span class="ident">Iterator</span><span class="op">&lt;</span><span class="ident">Item</span> <span class="op">=</span> <span class="self">Self</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">ret</span> <span class="op">=</span> <span class="self">Self</span><span class="ident">::new_not_useful</span>(<span class="ident">pref</span>);
+        <span class="kw">for</span> <span class="ident">u</span> <span class="kw">in</span> <span class="ident">usefulnesses</span> {
+            <span class="ident">ret</span>.<span class="ident">extend</span>(<span class="ident">u</span>);
+            <span class="kw">if</span> <span class="kw">let</span> <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>) <span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">ret</span> {
+                <span class="kw">if</span> <span class="ident">subpats</span>.<span class="ident">is_full</span>() {
+                    <span class="comment">// Once we reach the full set, more unions won&#39;t change the result.</span>
+                    <span class="kw">return</span> <span class="ident">ret</span>;
+                }
+            }
+        }
+        <span class="ident">ret</span>
+    }
+
+    <span class="doccomment">/// After calculating the usefulness for a branch of an or-pattern, call this to make this</span>
+    <span class="doccomment">/// usefulness mergeable with those from the other branches.</span>
+    <span class="kw">fn</span> <span class="ident">unsplit_or_pat</span>(<span class="self">self</span>, <span class="ident">alt_id</span>: <span class="ident">usize</span>, <span class="ident">alt_count</span>: <span class="ident">usize</span>, <span class="ident">pat</span>: <span class="ident">PatId</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>.<span class="ident">unsplit_or_pat</span>(<span class="ident">alt_id</span>, <span class="ident">alt_count</span>, <span class="ident">pat</span>)),
+            <span class="ident">WithWitnesses</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>),
+        }
+    }
+
+    <span class="doccomment">/// After calculating usefulness after a specialization, call this to recontruct a usefulness</span>
+    <span class="doccomment">/// that makes sense for the matrix pre-specialization. This new usefulness can then be merged</span>
+    <span class="doccomment">/// with the results of specializing with the other constructors.</span>
+    <span class="kw">fn</span> <span class="ident">apply_constructor</span>(
+        <span class="self">self</span>,
+        <span class="ident">pcx</span>: <span class="ident">PatCtxt</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+        <span class="ident">matrix</span>: <span class="kw-2">&amp;</span><span class="ident">Matrix</span>,
+        <span class="ident">ctor</span>: <span class="kw-2">&amp;</span><span class="ident">Constructor</span>,
+        <span class="ident">ctor_wild_subpatterns</span>: <span class="kw-2">&amp;</span><span class="ident">Fields</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">match</span> <span class="self">self</span> {
+            <span class="ident">WithWitnesses</span>(<span class="ident">witnesses</span>) <span class="kw">if</span> <span class="ident">witnesses</span>.<span class="ident">is_empty</span>() <span class="op">=</span><span class="op">&gt;</span> <span class="ident">WithWitnesses</span>(<span class="ident">witnesses</span>),
+            <span class="ident">WithWitnesses</span>(<span class="ident">witnesses</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="kw">let</span> <span class="ident">new_witnesses</span> <span class="op">=</span> <span class="kw">if</span> <span class="macro">matches!</span>(<span class="ident">ctor</span>, <span class="ident">Constructor::Missing</span>) {
+                    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">split_wildcard</span> <span class="op">=</span> <span class="ident">SplitWildcard::new</span>(<span class="ident">pcx</span>);
+                    <span class="ident">split_wildcard</span>.<span class="ident">split</span>(<span class="ident">pcx</span>, <span class="ident">matrix</span>.<span class="ident">head_ctors</span>(<span class="ident">pcx</span>.<span class="ident">cx</span>));
+                    <span class="comment">// Construct for each missing constructor a &quot;wild&quot; version of this</span>
+                    <span class="comment">// constructor, that matches everything that can be built with</span>
+                    <span class="comment">// it. For example, if `ctor` is a `Constructor::Variant` for</span>
+                    <span class="comment">// `Option::Some`, we get the pattern `Some(_)`.</span>
+                    <span class="kw">let</span> <span class="ident">new_patterns</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">split_wildcard</span>
+                        .<span class="ident">iter_missing</span>(<span class="ident">pcx</span>)
+                        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">missing_ctor</span><span class="op">|</span> {
+                            <span class="ident">Fields::wildcards</span>(<span class="ident">pcx</span>, <span class="ident">missing_ctor</span>).<span class="ident">apply</span>(<span class="ident">pcx</span>, <span class="ident">missing_ctor</span>)
+                        })
+                        .<span class="ident">collect</span>();
+                    <span class="ident">witnesses</span>
+                        .<span class="ident">into_iter</span>()
+                        .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">witness</span><span class="op">|</span> {
+                            <span class="ident">new_patterns</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="kw">move</span> <span class="op">|</span><span class="ident">pat</span><span class="op">|</span> {
+                                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">witness</span> <span class="op">=</span> <span class="ident">witness</span>.<span class="ident">clone</span>();
+                                <span class="ident">witness</span>.<span class="number">0</span>.<span class="ident">push</span>(<span class="ident">pat</span>.<span class="ident">clone</span>());
+                                <span class="ident">witness</span>
+                            })
+                        })
+                        .<span class="ident">collect</span>()
+                } <span class="kw">else</span> {
+                    <span class="ident">witnesses</span>
+                        .<span class="ident">into_iter</span>()
+                        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">witness</span><span class="op">|</span> <span class="ident">witness</span>.<span class="ident">apply_constructor</span>(<span class="ident">pcx</span>, <span class="ident">ctor</span>, <span class="ident">ctor_wild_subpatterns</span>))
+                        .<span class="ident">collect</span>()
+                };
+                <span class="ident">WithWitnesses</span>(<span class="ident">new_witnesses</span>)
+            }
+            <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>.<span class="ident">unspecialize</span>(<span class="ident">ctor_wild_subpatterns</span>.<span class="ident">len</span>())),
+        }
+    }
+}
+
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Copy</span>, <span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="kw">enum</span> <span class="ident">WitnessPreference</span> {
+    <span class="ident">ConstructWitness</span>,
+    <span class="ident">LeaveOutWitness</span>,
+}
+
+<span class="doccomment">/// A witness of non-exhaustiveness for error reporting, represented</span>
+<span class="doccomment">/// as a list of patterns (in reverse order of construction) with</span>
+<span class="doccomment">/// wildcards inside to represent elements that can take any inhabitant</span>
+<span class="doccomment">/// of the type as a value.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// A witness against a list of patterns should have the same types</span>
+<span class="doccomment">/// and length as the pattern matched against. Because Rust `match`</span>
+<span class="doccomment">/// is always against a single pattern, at the end the witness will</span>
+<span class="doccomment">/// have length 1, but in the middle of the algorithm, it can contain</span>
+<span class="doccomment">/// multiple patterns.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// For example, if we are constructing a witness for the match against</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// ```</span>
+<span class="doccomment">/// struct Pair(Option&lt;(u32, u32)&gt;, bool);</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// match (p: Pair) {</span>
+<span class="doccomment">///    Pair(None, _) =&gt; {}</span>
+<span class="doccomment">///    Pair(_, false) =&gt; {}</span>
+<span class="doccomment">/// }</span>
+<span class="doccomment">/// ```</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// We&#39;ll perform the following steps:</span>
+<span class="doccomment">/// 1. Start with an empty witness</span>
+<span class="doccomment">///     `Witness(vec![])`</span>
+<span class="doccomment">/// 2. Push a witness `true` against the `false`</span>
+<span class="doccomment">///     `Witness(vec![true])`</span>
+<span class="doccomment">/// 3. Push a witness `Some(_)` against the `None`</span>
+<span class="doccomment">///     `Witness(vec![true, Some(_)])`</span>
+<span class="doccomment">/// 4. Apply the `Pair` constructor to the witnesses</span>
+<span class="doccomment">///     `Witness(vec![Pair(Some(_), true)])`</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// The final `Pair(Some(_), true)` is then the resulting witness.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">Witness</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Pat</span><span class="op">&gt;</span>);
+
+<span class="kw">impl</span> <span class="ident">Witness</span> {
+    <span class="doccomment">/// Asserts that the witness contains a single pattern, and returns it.</span>
+    <span class="kw">fn</span> <span class="ident">single_pattern</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Pat</span> {
+        <span class="macro">assert_eq!</span>(<span class="self">self</span>.<span class="number">0</span>.<span class="ident">len</span>(), <span class="number">1</span>);
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">into_iter</span>().<span class="ident">next</span>().<span class="ident">unwrap</span>()
+    }
+
+    <span class="doccomment">/// Constructs a partial witness for a pattern given a list of</span>
+    <span class="doccomment">/// patterns expanded by the specialization step.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// When a pattern P is discovered to be useful, this function is used bottom-up</span>
+    <span class="doccomment">/// to reconstruct a complete witness, e.g., a pattern P&#39; that covers a subset</span>
+    <span class="doccomment">/// of values, V, where each value in that set is not covered by any previously</span>
+    <span class="doccomment">/// used patterns and is covered by the pattern P&#39;. Examples:</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// left_ty: tuple of 3 elements</span>
+    <span class="doccomment">/// pats: [10, 20, _]           =&gt; (10, 20, _)</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// left_ty: struct X { a: (bool, &amp;&#39;static str), b: usize}</span>
+    <span class="doccomment">/// pats: [(false, &quot;foo&quot;), 42]  =&gt; X { a: (false, &quot;foo&quot;), b: 42 }</span>
+    <span class="kw">fn</span> <span class="ident">apply_constructor</span>(
+        <span class="kw-2">mut</span> <span class="self">self</span>,
+        <span class="ident">pcx</span>: <span class="ident">PatCtxt</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+        <span class="ident">ctor</span>: <span class="kw-2">&amp;</span><span class="ident">Constructor</span>,
+        <span class="ident">ctor_wild_subpatterns</span>: <span class="kw-2">&amp;</span><span class="ident">Fields</span>,
+    ) <span class="op">-</span><span class="op">&gt;</span> <span class="self">Self</span> {
+        <span class="kw">let</span> <span class="ident">pat</span> <span class="op">=</span> {
+            <span class="kw">let</span> <span class="ident">len</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">len</span>();
+            <span class="kw">let</span> <span class="ident">arity</span> <span class="op">=</span> <span class="ident">ctor_wild_subpatterns</span>.<span class="ident">len</span>();
+            <span class="kw">let</span> <span class="ident">pats</span> <span class="op">=</span> <span class="self">self</span>.<span class="number">0</span>.<span class="ident">drain</span>((<span class="ident">len</span> <span class="op">-</span> <span class="ident">arity</span>)..).<span class="ident">rev</span>();
+            <span class="ident">ctor_wild_subpatterns</span>.<span class="ident">replace_fields</span>(<span class="ident">pcx</span>.<span class="ident">cx</span>, <span class="ident">pats</span>).<span class="ident">apply</span>(<span class="ident">pcx</span>, <span class="ident">ctor</span>)
+        };
+
+        <span class="self">self</span>.<span class="number">0</span>.<span class="ident">push</span>(<span class="ident">pat</span>);
+
+        <span class="self">self</span>
+    }
+}
+
+<span class="doccomment">/// Algorithm from &lt;http://moscova.inria.fr/~maranget/papers/warn/index.html&gt;.</span>
+<span class="doccomment">/// The algorithm from the paper has been modified to correctly handle empty</span>
+<span class="doccomment">/// types. The changes are:</span>
+<span class="doccomment">///   (0) We don&#39;t exit early if the pattern matrix has zero rows. We just</span>
+<span class="doccomment">///       continue to recurse over columns.</span>
+<span class="doccomment">///   (1) all_constructors will only return constructors that are statically</span>
+<span class="doccomment">///       possible. E.g., it will only return `Ok` for `Result&lt;T, !&gt;`.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// This finds whether a (row) vector `v` of patterns is &#39;useful&#39; in relation</span>
+<span class="doccomment">/// to a set of such vectors `m` - this is defined as there being a set of</span>
+<span class="doccomment">/// inputs that will match `v` but not any of the sets in `m`.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// All the patterns at each column of the `matrix ++ v` matrix must have the same type.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// This is used both for reachability checking (if a pattern isn&#39;t useful in</span>
+<span class="doccomment">/// relation to preceding patterns, it is not reachable) and exhaustiveness</span>
+<span class="doccomment">/// checking (if a wildcard pattern is useful in relation to a matrix, the</span>
+<span class="doccomment">/// matrix isn&#39;t exhaustive).</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// `is_under_guard` is used to inform if the pattern has a guard. If it</span>
+<span class="doccomment">/// has one it must not be inserted into the matrix. This shouldn&#39;t be</span>
+<span class="doccomment">/// relied on for soundness.</span>
+<span class="kw">fn</span> <span class="ident">is_useful</span>(
+    <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+    <span class="ident">matrix</span>: <span class="kw-2">&amp;</span><span class="ident">Matrix</span>,
+    <span class="ident">v</span>: <span class="kw-2">&amp;</span><span class="ident">PatStack</span>,
+    <span class="ident">witness_preference</span>: <span class="ident">WitnessPreference</span>,
+    <span class="ident">is_under_guard</span>: <span class="ident">bool</span>,
+    <span class="ident">is_top_level</span>: <span class="ident">bool</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Usefulness</span> {
+    <span class="kw">let</span> <span class="ident">Matrix</span> { <span class="ident">patterns</span>: <span class="ident">rows</span>, .. } <span class="op">=</span> <span class="ident">matrix</span>;
+
+    <span class="comment">// The base case. We are pattern-matching on () and the return value is</span>
+    <span class="comment">// based on whether our matrix has a row or not.</span>
+    <span class="comment">// NOTE: This could potentially be optimized by checking rows.is_empty()</span>
+    <span class="comment">// first and then, if v is non-empty, the return value is based on whether</span>
+    <span class="comment">// the type of the tuple we&#39;re checking is inhabited or not.</span>
+    <span class="kw">if</span> <span class="ident">v</span>.<span class="ident">is_empty</span>() {
+        <span class="kw">let</span> <span class="ident">ret</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">rows</span>.<span class="ident">is_empty</span>() {
+            <span class="ident">Usefulness::new_useful</span>(<span class="ident">witness_preference</span>)
+        } <span class="kw">else</span> {
+            <span class="ident">Usefulness::new_not_useful</span>(<span class="ident">witness_preference</span>)
+        };
+        <span class="kw">return</span> <span class="ident">ret</span>;
+    }
+
+    <span class="macro">assert!</span>(<span class="ident">rows</span>.<span class="ident">iter</span>().<span class="ident">all</span>(<span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">r</span>.<span class="ident">len</span>() <span class="op">=</span><span class="op">=</span> <span class="ident">v</span>.<span class="ident">len</span>()));
+
+    <span class="comment">// FIXME(Nadrieril): Hack to work around type normalization issues (see rust-lang/rust#72476).</span>
+    <span class="kw">let</span> <span class="ident">ty</span> <span class="op">=</span> <span class="ident">matrix</span>.<span class="ident">heads</span>().<span class="ident">next</span>().<span class="ident">map_or</span>(<span class="ident">cx</span>.<span class="ident">type_of</span>(<span class="ident">v</span>.<span class="ident">head</span>()), <span class="op">|</span><span class="ident">r</span><span class="op">|</span> <span class="ident">cx</span>.<span class="ident">type_of</span>(<span class="ident">r</span>));
+    <span class="kw">let</span> <span class="ident">pcx</span> <span class="op">=</span> <span class="ident">PatCtxt</span> { <span class="ident">cx</span>, <span class="ident">ty</span>: <span class="kw-2">&amp;</span><span class="ident">ty</span>, <span class="ident">is_top_level</span> };
+
+    <span class="comment">// If the first pattern is an or-pattern, expand it.</span>
+    <span class="kw">let</span> <span class="ident">ret</span> <span class="op">=</span> <span class="kw">if</span> <span class="ident">v</span>.<span class="ident">head</span>().<span class="ident">is_or_pat</span>(<span class="ident">cx</span>) {
+        <span class="comment">//expanding or-pattern</span>
+        <span class="kw">let</span> <span class="ident">v_head</span> <span class="op">=</span> <span class="ident">v</span>.<span class="ident">head</span>();
+        <span class="kw">let</span> <span class="ident">vs</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">v</span>.<span class="ident">expand_or_pat</span>(<span class="ident">cx</span>).<span class="ident">collect</span>();
+        <span class="kw">let</span> <span class="ident">alt_count</span> <span class="op">=</span> <span class="ident">vs</span>.<span class="ident">len</span>();
+        <span class="comment">// We try each or-pattern branch in turn.</span>
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">matrix</span> <span class="op">=</span> <span class="ident">matrix</span>.<span class="ident">clone</span>();
+        <span class="kw">let</span> <span class="ident">usefulnesses</span> <span class="op">=</span> <span class="ident">vs</span>.<span class="ident">into_iter</span>().<span class="ident">enumerate</span>().<span class="ident">map</span>(<span class="op">|</span>(<span class="ident">i</span>, <span class="ident">v</span>)<span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">usefulness</span> <span class="op">=</span> <span class="ident">is_useful</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;</span><span class="ident">matrix</span>, <span class="kw-2">&amp;</span><span class="ident">v</span>, <span class="ident">witness_preference</span>, <span class="ident">is_under_guard</span>, <span class="bool-val">false</span>);
+            <span class="comment">// If pattern has a guard don&#39;t add it to the matrix.</span>
+            <span class="kw">if</span> <span class="op">!</span><span class="ident">is_under_guard</span> {
+                <span class="comment">// We push the already-seen patterns into the matrix in order to detect redundant</span>
+                <span class="comment">// branches like `Some(_) | Some(0)`.</span>
+                <span class="ident">matrix</span>.<span class="ident">push</span>(<span class="ident">v</span>, <span class="ident">cx</span>);
+            }
+            <span class="ident">usefulness</span>.<span class="ident">unsplit_or_pat</span>(<span class="ident">i</span>, <span class="ident">alt_count</span>, <span class="ident">v_head</span>)
+        });
+        <span class="ident">Usefulness::merge</span>(<span class="ident">witness_preference</span>, <span class="ident">usefulnesses</span>)
+    } <span class="kw">else</span> {
+        <span class="kw">let</span> <span class="ident">v_ctor</span> <span class="op">=</span> <span class="ident">v</span>.<span class="ident">head_ctor</span>(<span class="ident">cx</span>);
+        <span class="comment">// if let Constructor::IntRange(ctor_range) = v_ctor {</span>
+        <span class="comment">//     // Lint on likely incorrect range patterns (#63987)</span>
+        <span class="comment">//     ctor_range.lint_overlapping_range_endpoints(</span>
+        <span class="comment">//         pcx,</span>
+        <span class="comment">//         matrix.head_ctors_and_spans(cx),</span>
+        <span class="comment">//         matrix.column_count().unwrap_or(0),</span>
+        <span class="comment">//         hir_id,</span>
+        <span class="comment">//     )</span>
+        <span class="comment">// }</span>
+
+        <span class="comment">// We split the head constructor of `v`.</span>
+        <span class="kw">let</span> <span class="ident">split_ctors</span> <span class="op">=</span> <span class="ident">v_ctor</span>.<span class="ident">split</span>(<span class="ident">pcx</span>, <span class="ident">matrix</span>.<span class="ident">head_ctors</span>(<span class="ident">cx</span>));
+        <span class="comment">// For each constructor, we compute whether there&#39;s a value that starts with it that would</span>
+        <span class="comment">// witness the usefulness of `v`.</span>
+        <span class="kw">let</span> <span class="ident">start_matrix</span> <span class="op">=</span> <span class="ident">matrix</span>;
+        <span class="kw">let</span> <span class="ident">usefulnesses</span> <span class="op">=</span> <span class="ident">split_ctors</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">ctor</span><span class="op">|</span> {
+            <span class="comment">// debug!(&quot;specialize({:?})&quot;, ctor);</span>
+            <span class="comment">// We cache the result of `Fields::wildcards` because it is used a lot.</span>
+            <span class="kw">let</span> <span class="ident">ctor_wild_subpatterns</span> <span class="op">=</span> <span class="ident">Fields::wildcards</span>(<span class="ident">pcx</span>, <span class="kw-2">&amp;</span><span class="ident">ctor</span>);
+            <span class="kw">let</span> <span class="ident">spec_matrix</span> <span class="op">=</span>
+                <span class="ident">start_matrix</span>.<span class="ident">specialize_constructor</span>(<span class="ident">pcx</span>, <span class="kw-2">&amp;</span><span class="ident">ctor</span>, <span class="kw-2">&amp;</span><span class="ident">ctor_wild_subpatterns</span>);
+            <span class="kw">let</span> <span class="ident">v</span> <span class="op">=</span> <span class="ident">v</span>.<span class="ident">pop_head_constructor</span>(<span class="kw-2">&amp;</span><span class="ident">ctor_wild_subpatterns</span>, <span class="ident">cx</span>);
+            <span class="kw">let</span> <span class="ident">usefulness</span> <span class="op">=</span>
+                <span class="ident">is_useful</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;</span><span class="ident">spec_matrix</span>, <span class="kw-2">&amp;</span><span class="ident">v</span>, <span class="ident">witness_preference</span>, <span class="ident">is_under_guard</span>, <span class="bool-val">false</span>);
+            <span class="ident">usefulness</span>.<span class="ident">apply_constructor</span>(<span class="ident">pcx</span>, <span class="ident">start_matrix</span>, <span class="kw-2">&amp;</span><span class="ident">ctor</span>, <span class="kw-2">&amp;</span><span class="ident">ctor_wild_subpatterns</span>)
+        });
+        <span class="ident">Usefulness::merge</span>(<span class="ident">witness_preference</span>, <span class="ident">usefulnesses</span>)
+    };
+
+    <span class="ident">ret</span>
+}
+
+<span class="doccomment">/// The arm of a match expression.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Copy</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">MatchArm</span> {
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">pat</span>: <span class="ident">PatId</span>,
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">has_guard</span>: <span class="ident">bool</span>,
+}
+
+<span class="doccomment">/// Indicates whether or not a given arm is reachable.</span>
+<span class="attribute">#[<span class="ident">derive</span>(<span class="ident">Clone</span>, <span class="ident">Debug</span>)]</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">enum</span> <span class="ident">Reachability</span> {
+    <span class="doccomment">/// The arm is reachable. This additionally carries a set of or-pattern branches that have been</span>
+    <span class="doccomment">/// found to be unreachable despite the overall arm being reachable. Used only in the presence</span>
+    <span class="doccomment">/// of or-patterns, otherwise it stays empty.</span>
+    <span class="ident">Reachable</span>(<span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">PatId</span><span class="op">&gt;</span>),
+    <span class="doccomment">/// The arm is unreachable.</span>
+    <span class="ident">Unreachable</span>,
+}
+
+<span class="doccomment">/// The output of checking a match for exhaustiveness and arm reachability.</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">struct</span> <span class="ident">UsefulnessReport</span> {
+    <span class="doccomment">/// For each arm of the input, whether that arm is reachable after the arms above it.</span>
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">_arm_usefulness</span>: <span class="ident">Vec</span><span class="op">&lt;</span>(<span class="ident">MatchArm</span>, <span class="ident">Reachability</span>)<span class="op">&gt;</span>,
+    <span class="doccomment">/// If the match is exhaustive, this is empty. If not, this contains witnesses for the lack of</span>
+    <span class="doccomment">/// exhaustiveness.</span>
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="ident">non_exhaustiveness_witnesses</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="ident">Pat</span><span class="op">&gt;</span>,
+}
+
+<span class="doccomment">/// The entrypoint for the usefulness algorithm. Computes whether a match is exhaustive and which</span>
+<span class="doccomment">/// of its arms are reachable.</span>
+<span class="doccomment">///</span>
+<span class="doccomment">/// Note: the input patterns must have been lowered through</span>
+<span class="doccomment">/// `check_match::MatchVisitor::lower_pattern`.</span>
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">compute_match_usefulness</span>(
+    <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>,
+    <span class="ident">arms</span>: <span class="kw-2">&amp;</span>[<span class="ident">MatchArm</span>],
+) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">UsefulnessReport</span> {
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">matrix</span> <span class="op">=</span> <span class="ident">Matrix::empty</span>();
+    <span class="kw">let</span> <span class="ident">arm_usefulness</span>: <span class="ident">Vec</span><span class="op">&lt;</span><span class="kw">_</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">arms</span>
+        .<span class="ident">iter</span>()
+        .<span class="ident">copied</span>()
+        .<span class="ident">map</span>(<span class="op">|</span><span class="ident">arm</span><span class="op">|</span> {
+            <span class="kw">let</span> <span class="ident">v</span> <span class="op">=</span> <span class="ident">PatStack::from_pattern</span>(<span class="ident">arm</span>.<span class="ident">pat</span>);
+            <span class="kw">let</span> <span class="ident">usefulness</span> <span class="op">=</span> <span class="ident">is_useful</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;</span><span class="ident">matrix</span>, <span class="kw-2">&amp;</span><span class="ident">v</span>, <span class="ident">LeaveOutWitness</span>, <span class="ident">arm</span>.<span class="ident">has_guard</span>, <span class="bool-val">true</span>);
+            <span class="kw">if</span> <span class="op">!</span><span class="ident">arm</span>.<span class="ident">has_guard</span> {
+                <span class="ident">matrix</span>.<span class="ident">push</span>(<span class="ident">v</span>, <span class="ident">cx</span>);
+            }
+            <span class="kw">let</span> <span class="ident">reachability</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">usefulness</span> {
+                <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>) <span class="kw">if</span> <span class="ident">subpats</span>.<span class="ident">is_empty</span>() <span class="op">=</span><span class="op">&gt;</span> <span class="ident">Reachability::Unreachable</span>,
+                <span class="ident">NoWitnesses</span>(<span class="ident">subpats</span>) <span class="op">=</span><span class="op">&gt;</span> {
+                    <span class="ident">Reachability::Reachable</span>(<span class="ident">subpats</span>.<span class="ident">list_unreachable_subpatterns</span>(<span class="ident">cx</span>).<span class="ident">unwrap</span>())
+                }
+                <span class="ident">WithWitnesses</span>(..) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>),
+            };
+            (<span class="ident">arm</span>, <span class="ident">reachability</span>)
+        })
+        .<span class="ident">collect</span>();
+
+    <span class="kw">let</span> <span class="ident">wild_pattern</span> <span class="op">=</span>
+        <span class="ident">cx</span>.<span class="ident">pattern_arena</span>.<span class="ident">borrow_mut</span>().<span class="ident">alloc</span>(<span class="ident">Pat::wildcard_from_ty</span>(<span class="ident">cx</span>.<span class="ident">infer</span>[<span class="ident">cx</span>.<span class="ident">match_expr</span>].<span class="ident">clone</span>()));
+    <span class="kw">let</span> <span class="ident">v</span> <span class="op">=</span> <span class="ident">PatStack::from_pattern</span>(<span class="ident">wild_pattern</span>);
+    <span class="kw">let</span> <span class="ident">usefulness</span> <span class="op">=</span> <span class="ident">is_useful</span>(<span class="ident">cx</span>, <span class="kw-2">&amp;</span><span class="ident">matrix</span>, <span class="kw-2">&amp;</span><span class="ident">v</span>, <span class="ident">ConstructWitness</span>, <span class="bool-val">false</span>, <span class="bool-val">true</span>);
+    <span class="kw">let</span> <span class="ident">non_exhaustiveness_witnesses</span> <span class="op">=</span> <span class="kw">match</span> <span class="ident">usefulness</span> {
+        <span class="ident">WithWitnesses</span>(<span class="ident">pats</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">pats</span>.<span class="ident">into_iter</span>().<span class="ident">map</span>(<span class="ident">Witness::single_pattern</span>).<span class="ident">collect</span>(),
+        <span class="ident">NoWitnesses</span>(<span class="kw">_</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="macro">panic!</span>(<span class="string">&quot;bug&quot;</span>),
+    };
+    <span class="ident">UsefulnessReport</span> { <span class="ident">_arm_usefulness</span>: <span class="ident">arm_usefulness</span>, <span class="ident">non_exhaustiveness_witnesses</span> }
+}
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">type</span> <span class="ident">PatternArena</span> <span class="op">=</span> <span class="ident">Arena</span><span class="op">&lt;</span><span class="ident">Pat</span><span class="op">&gt;</span>;
+
+<span class="kw">mod</span> <span class="ident">helper</span> {
+    <span class="kw">use</span> <span class="kw">super</span><span class="ident">::MatchCheckCtx</span>;
+
+    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">trait</span> <span class="ident">PatIdExt</span>: <span class="ident">Sized</span> {
+        <span class="comment">// fn is_wildcard(self, cx: &amp;MatchCheckCtx&lt;&#39;_&gt;) -&gt; bool;</span>
+        <span class="kw">fn</span> <span class="ident">is_or_pat</span>(<span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">bool</span>;
+        <span class="kw">fn</span> <span class="ident">expand_or_pat</span>(<span class="self">self</span>, <span class="ident">cx</span>: <span class="kw-2">&amp;</span><span class="ident">MatchCheckCtx</span><span class="op">&lt;</span><span class="lifetime">&#39;_</span><span class="op">&gt;</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">Vec</span><span class="op">&lt;</span><span class="self">Self</span><span class="op">&gt;</span>;
+    }
+
+    <span class="comment">// Copy-pasted from rust/compiler/rustc_data_structures/src/captures.rs</span>
+    <span class="doccomment">/// &quot;Signaling&quot; trait used in impl trait to tag lifetimes that you may</span>
+    <span class="doccomment">/// need to capture but don&#39;t really need for other reasons.</span>
+    <span class="doccomment">/// Basically a workaround; see [this comment] for details.</span>
+    <span class="doccomment">///</span>
+    <span class="doccomment">/// [this comment]: https://github.com/rust-lang/rust/issues/34511#issuecomment-373423999</span>
+    <span class="comment">// FIXME(eddyb) false positive, the lifetime parameter is &quot;phantom&quot; but needed.</span>
+    <span class="attribute">#[<span class="ident">allow</span>(<span class="ident">unused_lifetimes</span>)]</span>
+    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">trait</span> <span class="ident">Captures</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> {}
+
+    <span class="kw">impl</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span>, <span class="ident">T</span>: <span class="question-mark">?</span><span class="ident">Sized</span><span class="op">&gt;</span> <span class="ident">Captures</span><span class="op">&lt;</span><span class="lifetime">&#39;a</span><span class="op">&gt;</span> <span class="kw">for</span> <span class="ident">T</span> {}
+}
+</pre></div>
+</section><section id="search" class="content hidden"></section><div id="rustdoc-vars" data-root-path="../../../../" data-current-crate="hir_ty" data-search-index-js="../../../../search-index.js" data-search-js="../../../../search.js"></div>
+    <script src="../../../../main.js"></script><script src="../../../../source-script.js"></script><script src="../../../../source-files.js"></script></body></html>

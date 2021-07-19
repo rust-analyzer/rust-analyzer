@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["IdentifierKind",""]],"fn":[["source_edit_from_references",""]],"struct":[["RenameError",""]],"type":[["Result",""]]});

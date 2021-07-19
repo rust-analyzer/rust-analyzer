@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["BodyValidationDiagnostic",""],["CaseType",""],["IdentType",""]],"fn":[["missing_unsafe",""],["record_literal_missing_fields",""],["record_pattern_missing_fields",""],["validate_module_item",""]],"struct":[["IncorrectCase",""]]});

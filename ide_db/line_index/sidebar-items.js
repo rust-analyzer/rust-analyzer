@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["LineCol",""],["LineColUtf16",""],["LineIndex",""]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["EXTRA_ATTRIBUTES","Built-in macro-like attributes."],["INERT_ATTRIBUTES","“Inert” built-in attributes that have a special meaning to rustc or rustdoc."],["TOOL_MODULES","Ignored attribute namespaces used by tools."]]});

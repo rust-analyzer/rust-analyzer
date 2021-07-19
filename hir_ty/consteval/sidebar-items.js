@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["eval_usize",""],["usize_const","Interns a possibly-unknown target usize"]],"trait":[["ConstExt","Extension trait for [`Const`]"]]});

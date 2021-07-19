@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["Indel","`InsertDelete` – a single “atomic” change to text"],["TextEdit",""],["TextEditBuilder",""],["TextRange","A range in text, represented as a pair of [`TextSize`][struct@TextSize]."],["TextSize","A measure of text length. Also, equivalently, an index into text."]]});

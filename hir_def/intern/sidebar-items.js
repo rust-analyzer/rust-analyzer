@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["InternStorage",""],["Interned",""]],"trait":[["Internable",""]]});

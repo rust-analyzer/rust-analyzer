@@ -1,0 +1,1 @@
+initSidebarItems({"struct":[["PathTransform","`PathTransform` substitutes path in SyntaxNodes in bulk."]]});

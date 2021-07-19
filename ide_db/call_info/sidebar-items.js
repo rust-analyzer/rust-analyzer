@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["FnCallNode",""]],"fn":[["call_info","Computes parameter information for the given call expression."]],"struct":[["ActiveParameter",""],["CallInfo","Contains information about a call site. Specifically the `FunctionSignature`and current parameter."]]});

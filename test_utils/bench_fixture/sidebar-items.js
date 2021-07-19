@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["big_struct",""],["big_struct_n",""],["glorious_old_parser",""],["numerous_macro_rules",""]]});

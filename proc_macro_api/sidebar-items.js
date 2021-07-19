@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["ProcMacroKind",""]],"fn":[["read_dylib_info","Read rustc dylib information"]],"mod":[["msg","Defines messages for cross-process message passing based on `ndjson` wire protocol"]],"struct":[["ExpansionResult",""],["ExpansionTask",""],["ListMacrosResult",""],["ListMacrosTask",""],["ProcMacroClient",""],["RustCInfo",""]]});

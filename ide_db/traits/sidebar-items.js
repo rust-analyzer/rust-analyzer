@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["get_missing_assoc_items","Given the `impl` block, returns the list of associated items (e.g. functions or types) that are missing in this `impl` block."],["resolve_target_trait","Given the `impl` block, attempts to find the trait this `impl` corresponds to."]]});

@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["is_rust_fence",""]]});

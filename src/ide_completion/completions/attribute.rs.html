@@ -1,0 +1,685 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/ide_completion/src/completions/attribute.rs`."><meta name="keywords" content="rust, rustlang, rust-lang"><title>attribute.rs - source</title><link rel="stylesheet" type="text/css" href="../../../normalize.css"><link rel="stylesheet" type="text/css" href="../../../rustdoc.css" id="mainThemeStyle"><link rel="stylesheet" type="text/css" href="../../../light.css"  id="themeStyle"><link rel="stylesheet" type="text/css" href="../../../dark.css" disabled ><link rel="stylesheet" type="text/css" href="../../../ayu.css" disabled ><script id="default-settings"></script><script src="../../../storage.js"></script><script src="../../../crates.js"></script><noscript><link rel="stylesheet" href="../../../noscript.css"></noscript><link rel="icon" type="image/svg+xml" href="../../../favicon.svg">
+<link rel="alternate icon" type="image/png" href="../../../favicon-16x16.png">
+<link rel="alternate icon" type="image/png" href="../../../favicon-32x32.png"><style type="text/css">#crate-search{background-image:url("../../../down-arrow.svg");}</style></head><body class="rustdoc source"><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="sidebar-menu" role="button">&#9776;</div><a href='../../../ide_completion/index.html'><div class='logo-container rust-logo'><img src='../../../rust-logo.png' alt='logo'></div></a></nav><div class="theme-picker"><button id="theme-picker" aria-label="Pick another theme!" aria-haspopup="menu"><img src="../../../brush.svg" width="18" height="18" alt="Pick another theme!"></button><div id="theme-choices" role="menu"></div></div><nav class="sub"><form class="search-form"><div class="search-container"><div><select id="crate-search"><option value="All crates">All crates</option></select><input class="search-input" name="search" disabled autocomplete="off" spellcheck="false" placeholder="Click or press ‘S’ to search, ‘?’ for more options…" type="search"></div><button type="button" class="help-button">?</button>
+                <a id="settings-menu" href="../../../settings.html"><img src="../../../wheel.svg" width="18" height="18" alt="Change settings"></a></div></form></nav><section id="main" class="content"><pre class="line-numbers"><span id="1">  1</span>
+<span id="2">  2</span>
+<span id="3">  3</span>
+<span id="4">  4</span>
+<span id="5">  5</span>
+<span id="6">  6</span>
+<span id="7">  7</span>
+<span id="8">  8</span>
+<span id="9">  9</span>
+<span id="10"> 10</span>
+<span id="11"> 11</span>
+<span id="12"> 12</span>
+<span id="13"> 13</span>
+<span id="14"> 14</span>
+<span id="15"> 15</span>
+<span id="16"> 16</span>
+<span id="17"> 17</span>
+<span id="18"> 18</span>
+<span id="19"> 19</span>
+<span id="20"> 20</span>
+<span id="21"> 21</span>
+<span id="22"> 22</span>
+<span id="23"> 23</span>
+<span id="24"> 24</span>
+<span id="25"> 25</span>
+<span id="26"> 26</span>
+<span id="27"> 27</span>
+<span id="28"> 28</span>
+<span id="29"> 29</span>
+<span id="30"> 30</span>
+<span id="31"> 31</span>
+<span id="32"> 32</span>
+<span id="33"> 33</span>
+<span id="34"> 34</span>
+<span id="35"> 35</span>
+<span id="36"> 36</span>
+<span id="37"> 37</span>
+<span id="38"> 38</span>
+<span id="39"> 39</span>
+<span id="40"> 40</span>
+<span id="41"> 41</span>
+<span id="42"> 42</span>
+<span id="43"> 43</span>
+<span id="44"> 44</span>
+<span id="45"> 45</span>
+<span id="46"> 46</span>
+<span id="47"> 47</span>
+<span id="48"> 48</span>
+<span id="49"> 49</span>
+<span id="50"> 50</span>
+<span id="51"> 51</span>
+<span id="52"> 52</span>
+<span id="53"> 53</span>
+<span id="54"> 54</span>
+<span id="55"> 55</span>
+<span id="56"> 56</span>
+<span id="57"> 57</span>
+<span id="58"> 58</span>
+<span id="59"> 59</span>
+<span id="60"> 60</span>
+<span id="61"> 61</span>
+<span id="62"> 62</span>
+<span id="63"> 63</span>
+<span id="64"> 64</span>
+<span id="65"> 65</span>
+<span id="66"> 66</span>
+<span id="67"> 67</span>
+<span id="68"> 68</span>
+<span id="69"> 69</span>
+<span id="70"> 70</span>
+<span id="71"> 71</span>
+<span id="72"> 72</span>
+<span id="73"> 73</span>
+<span id="74"> 74</span>
+<span id="75"> 75</span>
+<span id="76"> 76</span>
+<span id="77"> 77</span>
+<span id="78"> 78</span>
+<span id="79"> 79</span>
+<span id="80"> 80</span>
+<span id="81"> 81</span>
+<span id="82"> 82</span>
+<span id="83"> 83</span>
+<span id="84"> 84</span>
+<span id="85"> 85</span>
+<span id="86"> 86</span>
+<span id="87"> 87</span>
+<span id="88"> 88</span>
+<span id="89"> 89</span>
+<span id="90"> 90</span>
+<span id="91"> 91</span>
+<span id="92"> 92</span>
+<span id="93"> 93</span>
+<span id="94"> 94</span>
+<span id="95"> 95</span>
+<span id="96"> 96</span>
+<span id="97"> 97</span>
+<span id="98"> 98</span>
+<span id="99"> 99</span>
+<span id="100">100</span>
+<span id="101">101</span>
+<span id="102">102</span>
+<span id="103">103</span>
+<span id="104">104</span>
+<span id="105">105</span>
+<span id="106">106</span>
+<span id="107">107</span>
+<span id="108">108</span>
+<span id="109">109</span>
+<span id="110">110</span>
+<span id="111">111</span>
+<span id="112">112</span>
+<span id="113">113</span>
+<span id="114">114</span>
+<span id="115">115</span>
+<span id="116">116</span>
+<span id="117">117</span>
+<span id="118">118</span>
+<span id="119">119</span>
+<span id="120">120</span>
+<span id="121">121</span>
+<span id="122">122</span>
+<span id="123">123</span>
+<span id="124">124</span>
+<span id="125">125</span>
+<span id="126">126</span>
+<span id="127">127</span>
+<span id="128">128</span>
+<span id="129">129</span>
+<span id="130">130</span>
+<span id="131">131</span>
+<span id="132">132</span>
+<span id="133">133</span>
+<span id="134">134</span>
+<span id="135">135</span>
+<span id="136">136</span>
+<span id="137">137</span>
+<span id="138">138</span>
+<span id="139">139</span>
+<span id="140">140</span>
+<span id="141">141</span>
+<span id="142">142</span>
+<span id="143">143</span>
+<span id="144">144</span>
+<span id="145">145</span>
+<span id="146">146</span>
+<span id="147">147</span>
+<span id="148">148</span>
+<span id="149">149</span>
+<span id="150">150</span>
+<span id="151">151</span>
+<span id="152">152</span>
+<span id="153">153</span>
+<span id="154">154</span>
+<span id="155">155</span>
+<span id="156">156</span>
+<span id="157">157</span>
+<span id="158">158</span>
+<span id="159">159</span>
+<span id="160">160</span>
+<span id="161">161</span>
+<span id="162">162</span>
+<span id="163">163</span>
+<span id="164">164</span>
+<span id="165">165</span>
+<span id="166">166</span>
+<span id="167">167</span>
+<span id="168">168</span>
+<span id="169">169</span>
+<span id="170">170</span>
+<span id="171">171</span>
+<span id="172">172</span>
+<span id="173">173</span>
+<span id="174">174</span>
+<span id="175">175</span>
+<span id="176">176</span>
+<span id="177">177</span>
+<span id="178">178</span>
+<span id="179">179</span>
+<span id="180">180</span>
+<span id="181">181</span>
+<span id="182">182</span>
+<span id="183">183</span>
+<span id="184">184</span>
+<span id="185">185</span>
+<span id="186">186</span>
+<span id="187">187</span>
+<span id="188">188</span>
+<span id="189">189</span>
+<span id="190">190</span>
+<span id="191">191</span>
+<span id="192">192</span>
+<span id="193">193</span>
+<span id="194">194</span>
+<span id="195">195</span>
+<span id="196">196</span>
+<span id="197">197</span>
+<span id="198">198</span>
+<span id="199">199</span>
+<span id="200">200</span>
+<span id="201">201</span>
+<span id="202">202</span>
+<span id="203">203</span>
+<span id="204">204</span>
+<span id="205">205</span>
+<span id="206">206</span>
+<span id="207">207</span>
+<span id="208">208</span>
+<span id="209">209</span>
+<span id="210">210</span>
+<span id="211">211</span>
+<span id="212">212</span>
+<span id="213">213</span>
+<span id="214">214</span>
+<span id="215">215</span>
+<span id="216">216</span>
+<span id="217">217</span>
+<span id="218">218</span>
+<span id="219">219</span>
+<span id="220">220</span>
+<span id="221">221</span>
+<span id="222">222</span>
+<span id="223">223</span>
+<span id="224">224</span>
+<span id="225">225</span>
+<span id="226">226</span>
+<span id="227">227</span>
+<span id="228">228</span>
+<span id="229">229</span>
+<span id="230">230</span>
+<span id="231">231</span>
+<span id="232">232</span>
+<span id="233">233</span>
+<span id="234">234</span>
+<span id="235">235</span>
+<span id="236">236</span>
+<span id="237">237</span>
+<span id="238">238</span>
+<span id="239">239</span>
+<span id="240">240</span>
+<span id="241">241</span>
+<span id="242">242</span>
+<span id="243">243</span>
+<span id="244">244</span>
+<span id="245">245</span>
+<span id="246">246</span>
+<span id="247">247</span>
+<span id="248">248</span>
+<span id="249">249</span>
+<span id="250">250</span>
+<span id="251">251</span>
+<span id="252">252</span>
+<span id="253">253</span>
+<span id="254">254</span>
+<span id="255">255</span>
+<span id="256">256</span>
+<span id="257">257</span>
+<span id="258">258</span>
+<span id="259">259</span>
+<span id="260">260</span>
+<span id="261">261</span>
+<span id="262">262</span>
+<span id="263">263</span>
+<span id="264">264</span>
+<span id="265">265</span>
+<span id="266">266</span>
+<span id="267">267</span>
+<span id="268">268</span>
+<span id="269">269</span>
+<span id="270">270</span>
+<span id="271">271</span>
+<span id="272">272</span>
+<span id="273">273</span>
+<span id="274">274</span>
+<span id="275">275</span>
+<span id="276">276</span>
+<span id="277">277</span>
+<span id="278">278</span>
+<span id="279">279</span>
+<span id="280">280</span>
+<span id="281">281</span>
+<span id="282">282</span>
+<span id="283">283</span>
+<span id="284">284</span>
+<span id="285">285</span>
+<span id="286">286</span>
+<span id="287">287</span>
+<span id="288">288</span>
+<span id="289">289</span>
+<span id="290">290</span>
+<span id="291">291</span>
+<span id="292">292</span>
+<span id="293">293</span>
+<span id="294">294</span>
+<span id="295">295</span>
+<span id="296">296</span>
+<span id="297">297</span>
+<span id="298">298</span>
+<span id="299">299</span>
+<span id="300">300</span>
+<span id="301">301</span>
+<span id="302">302</span>
+<span id="303">303</span>
+<span id="304">304</span>
+<span id="305">305</span>
+<span id="306">306</span>
+<span id="307">307</span>
+<span id="308">308</span>
+<span id="309">309</span>
+<span id="310">310</span>
+<span id="311">311</span>
+<span id="312">312</span>
+<span id="313">313</span>
+<span id="314">314</span>
+<span id="315">315</span>
+<span id="316">316</span>
+<span id="317">317</span>
+<span id="318">318</span>
+<span id="319">319</span>
+<span id="320">320</span>
+<span id="321">321</span>
+<span id="322">322</span>
+<span id="323">323</span>
+<span id="324">324</span>
+<span id="325">325</span>
+<span id="326">326</span>
+<span id="327">327</span>
+<span id="328">328</span>
+<span id="329">329</span>
+<span id="330">330</span>
+<span id="331">331</span>
+<span id="332">332</span>
+<span id="333">333</span>
+<span id="334">334</span>
+<span id="335">335</span>
+<span id="336">336</span>
+<span id="337">337</span>
+<span id="338">338</span>
+<span id="339">339</span>
+</pre><div class="example-wrap"><pre class="rust ">
+<span class="doccomment">//! Completion for attributes</span>
+<span class="doccomment">//!</span>
+<span class="doccomment">//! This module uses a bit of static metadata to provide completions</span>
+<span class="doccomment">//! for built-in attributes.</span>
+
+<span class="kw">use</span> <span class="ident">hir::HasAttrs</span>;
+<span class="kw">use</span> <span class="ident">ide_db::helpers::generated_lints</span>::{<span class="ident">CLIPPY_LINTS</span>, <span class="ident">DEFAULT_LINTS</span>, <span class="ident">FEATURES</span>};
+<span class="kw">use</span> <span class="ident">once_cell::sync::Lazy</span>;
+<span class="kw">use</span> <span class="ident">rustc_hash</span>::{<span class="ident">FxHashMap</span>, <span class="ident">FxHashSet</span>};
+<span class="kw">use</span> <span class="ident">syntax</span>::{<span class="ident">algo::non_trivia_sibling</span>, <span class="ident">ast</span>, <span class="ident">AstNode</span>, <span class="ident">Direction</span>, <span class="ident">NodeOrToken</span>, <span class="ident">SyntaxKind</span>, <span class="ident">T</span>};
+
+<span class="kw">use</span> <span class="kw">crate</span>::{
+    <span class="ident">context::CompletionContext</span>,
+    <span class="ident">item</span>::{<span class="ident">CompletionItem</span>, <span class="ident">CompletionItemKind</span>, <span class="ident">CompletionKind</span>},
+    <span class="ident">Completions</span>,
+};
+
+<span class="kw">mod</span> <span class="ident">cfg</span>;
+<span class="kw">mod</span> <span class="ident">derive</span>;
+<span class="kw">mod</span> <span class="ident">lint</span>;
+<span class="kw">mod</span> <span class="ident">repr</span>;
+
+<span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn</span> <span class="ident">complete_attribute</span>(<span class="ident">acc</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Completions</span>, <span class="ident">ctx</span>: <span class="kw-2">&amp;</span><span class="ident">CompletionContext</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span>()<span class="op">&gt;</span> {
+    <span class="kw">let</span> <span class="ident">attribute</span> <span class="op">=</span> <span class="ident">ctx</span>.<span class="ident">attribute_under_caret</span>.<span class="ident">as_ref</span>()<span class="question-mark">?</span>;
+    <span class="kw">match</span> (<span class="ident">attribute</span>.<span class="ident">path</span>().<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">p</span><span class="op">|</span> <span class="ident">p</span>.<span class="ident">as_single_name_ref</span>()), <span class="ident">attribute</span>.<span class="ident">token_tree</span>()) {
+        (<span class="prelude-val">Some</span>(<span class="ident">path</span>), <span class="prelude-val">Some</span>(<span class="ident">token_tree</span>)) <span class="op">=</span><span class="op">&gt;</span> <span class="kw">match</span> <span class="ident">path</span>.<span class="ident">text</span>().<span class="ident">as_str</span>() {
+            <span class="string">&quot;derive&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">derive::complete_derive</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>, <span class="ident">token_tree</span>),
+            <span class="string">&quot;repr&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">repr::complete_repr</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>, <span class="ident">token_tree</span>),
+            <span class="string">&quot;feature&quot;</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">lint::complete_lint</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>, <span class="ident">token_tree</span>, <span class="ident">FEATURES</span>),
+            <span class="string">&quot;allow&quot;</span> <span class="op">|</span> <span class="string">&quot;warn&quot;</span> <span class="op">|</span> <span class="string">&quot;deny&quot;</span> <span class="op">|</span> <span class="string">&quot;forbid&quot;</span> <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">lint::complete_lint</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>, <span class="ident">token_tree</span>.<span class="ident">clone</span>(), <span class="ident">DEFAULT_LINTS</span>);
+                <span class="ident">lint::complete_lint</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>, <span class="ident">token_tree</span>, <span class="ident">CLIPPY_LINTS</span>);
+            }
+            <span class="string">&quot;cfg&quot;</span> <span class="op">=</span><span class="op">&gt;</span> {
+                <span class="ident">cfg::complete_cfg</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>);
+            }
+            <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> (),
+        },
+        (<span class="prelude-val">None</span>, <span class="prelude-val">Some</span>(<span class="kw">_</span>)) <span class="op">=</span><span class="op">&gt;</span> (),
+        <span class="kw">_</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">complete_new_attribute</span>(<span class="ident">acc</span>, <span class="ident">ctx</span>, <span class="ident">attribute</span>),
+    }
+    <span class="prelude-val">Some</span>(())
+}
+
+<span class="kw">fn</span> <span class="ident">complete_new_attribute</span>(<span class="ident">acc</span>: <span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="ident">Completions</span>, <span class="ident">ctx</span>: <span class="kw-2">&amp;</span><span class="ident">CompletionContext</span>, <span class="ident">attribute</span>: <span class="kw-2">&amp;</span><span class="ident">ast::Attr</span>) {
+    <span class="kw">let</span> <span class="ident">is_inner</span> <span class="op">=</span> <span class="ident">attribute</span>.<span class="ident">kind</span>() <span class="op">=</span><span class="op">=</span> <span class="ident">ast::AttrKind::Inner</span>;
+    <span class="kw">let</span> <span class="ident">attribute_annotated_item_kind</span> <span class="op">=</span>
+        <span class="ident">attribute</span>.<span class="ident">syntax</span>().<span class="ident">parent</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">it</span><span class="op">|</span> <span class="ident">it</span>.<span class="ident">kind</span>()).<span class="ident">filter</span>(<span class="op">|</span><span class="kw">_</span><span class="op">|</span> {
+            <span class="ident">is_inner</span>
+            <span class="comment">// If we got nothing coming after the attribute it could be anything so filter it the kind out</span>
+                <span class="op">|</span><span class="op">|</span> <span class="ident">non_trivia_sibling</span>(<span class="ident">attribute</span>.<span class="ident">syntax</span>().<span class="ident">clone</span>().<span class="ident">into</span>(), <span class="ident">Direction::Next</span>).<span class="ident">is_some</span>()
+        });
+    <span class="kw">let</span> <span class="ident">attributes</span> <span class="op">=</span> <span class="ident">attribute_annotated_item_kind</span>.<span class="ident">and_then</span>(<span class="op">|</span><span class="ident">kind</span><span class="op">|</span> {
+        <span class="kw">if</span> <span class="ident">ast::Expr::can_cast</span>(<span class="ident">kind</span>) {
+            <span class="prelude-val">Some</span>(<span class="ident">EXPR_ATTRIBUTES</span>)
+        } <span class="kw">else</span> {
+            <span class="ident">KIND_TO_ATTRIBUTES</span>.<span class="ident">get</span>(<span class="kw-2">&amp;</span><span class="ident">kind</span>).<span class="ident">copied</span>()
+        }
+    });
+
+    <span class="kw">let</span> <span class="ident">add_completion</span> <span class="op">=</span> <span class="op">|</span><span class="ident">attr_completion</span>: <span class="kw-2">&amp;</span><span class="ident">AttrCompletion</span><span class="op">|</span> {
+        <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">item</span> <span class="op">=</span> <span class="ident">CompletionItem::new</span>(
+            <span class="ident">CompletionKind::Attribute</span>,
+            <span class="ident">ctx</span>.<span class="ident">source_range</span>(),
+            <span class="ident">attr_completion</span>.<span class="ident">label</span>,
+        );
+        <span class="ident">item</span>.<span class="ident">kind</span>(<span class="ident">CompletionItemKind::Attribute</span>);
+
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">lookup</span>) <span class="op">=</span> <span class="ident">attr_completion</span>.<span class="ident">lookup</span> {
+            <span class="ident">item</span>.<span class="ident">lookup_by</span>(<span class="ident">lookup</span>);
+        }
+
+        <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>((<span class="ident">snippet</span>, <span class="ident">cap</span>)) <span class="op">=</span> <span class="ident">attr_completion</span>.<span class="ident">snippet</span>.<span class="ident">zip</span>(<span class="ident">ctx</span>.<span class="ident">config</span>.<span class="ident">snippet_cap</span>) {
+            <span class="ident">item</span>.<span class="ident">insert_snippet</span>(<span class="ident">cap</span>, <span class="ident">snippet</span>);
+        }
+
+        <span class="kw">if</span> <span class="ident">is_inner</span> <span class="op">|</span><span class="op">|</span> <span class="op">!</span><span class="ident">attr_completion</span>.<span class="ident">prefer_inner</span> {
+            <span class="ident">item</span>.<span class="ident">add_to</span>(<span class="ident">acc</span>);
+        }
+    };
+
+    <span class="kw">match</span> <span class="ident">attributes</span> {
+        <span class="prelude-val">Some</span>(<span class="ident">applicable</span>) <span class="op">=</span><span class="op">&gt;</span> <span class="ident">applicable</span>
+            .<span class="ident">iter</span>()
+            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">name</span><span class="op">|</span> <span class="ident">ATTRIBUTES</span>.<span class="ident">binary_search_by</span>(<span class="op">|</span><span class="ident">attr</span><span class="op">|</span> <span class="ident">attr</span>.<span class="ident">key</span>().<span class="ident">cmp</span>(<span class="ident">name</span>)).<span class="ident">ok</span>())
+            .<span class="ident">flat_map</span>(<span class="op">|</span><span class="ident">idx</span><span class="op">|</span> <span class="ident">ATTRIBUTES</span>.<span class="ident">get</span>(<span class="ident">idx</span>))
+            .<span class="ident">for_each</span>(<span class="ident">add_completion</span>),
+        <span class="prelude-val">None</span> <span class="kw">if</span> <span class="ident">is_inner</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">ATTRIBUTES</span>.<span class="ident">iter</span>().<span class="ident">for_each</span>(<span class="ident">add_completion</span>),
+        <span class="prelude-val">None</span> <span class="op">=</span><span class="op">&gt;</span> <span class="ident">ATTRIBUTES</span>.<span class="ident">iter</span>().<span class="ident">filter</span>(<span class="op">|</span><span class="ident">compl</span><span class="op">|</span> <span class="op">!</span><span class="ident">compl</span>.<span class="ident">prefer_inner</span>).<span class="ident">for_each</span>(<span class="ident">add_completion</span>),
+    }
+
+    <span class="comment">// FIXME: write a test for this when we can</span>
+    <span class="ident">ctx</span>.<span class="ident">scope</span>.<span class="ident">process_all_names</span>(<span class="kw-2">&amp;</span><span class="kw-2">mut</span> <span class="op">|</span><span class="ident">name</span>, <span class="ident">scope_def</span><span class="op">|</span> {
+        <span class="kw">if</span> <span class="kw">let</span> <span class="ident">hir::ScopeDef::MacroDef</span>(<span class="ident">mac</span>) <span class="op">=</span> <span class="ident">scope_def</span> {
+            <span class="kw">if</span> <span class="ident">mac</span>.<span class="ident">kind</span>() <span class="op">=</span><span class="op">=</span> <span class="ident">hir::MacroKind::Attr</span> {
+                <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">item</span> <span class="op">=</span> <span class="ident">CompletionItem::new</span>(
+                    <span class="ident">CompletionKind::Attribute</span>,
+                    <span class="ident">ctx</span>.<span class="ident">source_range</span>(),
+                    <span class="ident">name</span>.<span class="ident">to_string</span>(),
+                );
+                <span class="ident">item</span>.<span class="ident">kind</span>(<span class="ident">CompletionItemKind::Attribute</span>);
+                <span class="kw">if</span> <span class="kw">let</span> <span class="prelude-val">Some</span>(<span class="ident">docs</span>) <span class="op">=</span> <span class="ident">mac</span>.<span class="ident">docs</span>(<span class="ident">ctx</span>.<span class="ident">sema</span>.<span class="ident">db</span>) {
+                    <span class="ident">item</span>.<span class="ident">documentation</span>(<span class="ident">docs</span>);
+                }
+                <span class="ident">item</span>.<span class="ident">add_to</span>(<span class="ident">acc</span>);
+            }
+        }
+    });
+}
+
+<span class="kw">struct</span> <span class="ident">AttrCompletion</span> {
+    <span class="ident">label</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
+    <span class="ident">lookup</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span><span class="op">&gt;</span>,
+    <span class="ident">snippet</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span><span class="op">&gt;</span>,
+    <span class="ident">prefer_inner</span>: <span class="ident">bool</span>,
+}
+
+<span class="kw">impl</span> <span class="ident">AttrCompletion</span> {
+    <span class="kw">fn</span> <span class="ident">key</span>(<span class="kw-2">&amp;</span><span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span> {
+        <span class="self">self</span>.<span class="ident">lookup</span>.<span class="ident">unwrap_or</span>(<span class="self">self</span>.<span class="ident">label</span>)
+    }
+
+    <span class="kw">const</span> <span class="kw">fn</span> <span class="ident">prefer_inner</span>(<span class="self">self</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">AttrCompletion</span> {
+        <span class="ident">AttrCompletion</span> { <span class="ident">prefer_inner</span>: <span class="bool-val">true</span>, ..<span class="self">self</span> }
+    }
+}
+
+<span class="kw">const</span> <span class="kw">fn</span> <span class="ident">attr</span>(
+    <span class="ident">label</span>: <span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span>,
+    <span class="ident">lookup</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span><span class="op">&gt;</span>,
+    <span class="ident">snippet</span>: <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="kw-2">&amp;</span><span class="lifetime">&#39;static</span> <span class="ident">str</span><span class="op">&gt;</span>,
+) <span class="op">-</span><span class="op">&gt;</span> <span class="ident">AttrCompletion</span> {
+    <span class="ident">AttrCompletion</span> { <span class="ident">label</span>, <span class="ident">lookup</span>, <span class="ident">snippet</span>, <span class="ident">prefer_inner</span>: <span class="bool-val">false</span> }
+}
+
+<span class="macro">macro_rules!</span> <span class="ident">attrs</span> {
+    <span class="comment">// attributes applicable to all items</span>
+    [@ { <span class="ident">item</span> $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="op">*</span> } {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">attrs!</span>(@ { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="op">*</span> } { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>)<span class="kw-2">*</span>, <span class="string">&quot;deprecated&quot;</span>, <span class="string">&quot;doc&quot;</span>, <span class="string">&quot;dochidden&quot;</span>, <span class="string">&quot;docalias&quot;</span>, <span class="string">&quot;must_use&quot;</span>, <span class="string">&quot;no_mangle&quot;</span> })
+    };
+    <span class="comment">// attributes applicable to all adts</span>
+    [@ { <span class="ident">adt</span> $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="op">*</span> } {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">attrs!</span>(@ { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="op">*</span> } { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>)<span class="kw-2">*</span>, <span class="string">&quot;derive&quot;</span>, <span class="string">&quot;repr&quot;</span> })
+    };
+    <span class="comment">// attributes applicable to all linkable things aka functions/statics</span>
+    [@ { <span class="ident">linkable</span> $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="op">*</span> } {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">attrs!</span>(@ { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="op">*</span> } { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>)<span class="kw-2">*</span>, <span class="string">&quot;export_name&quot;</span>, <span class="string">&quot;link_name&quot;</span>, <span class="string">&quot;link_section&quot;</span> })
+    };
+    <span class="comment">// error fallback for nicer error message</span>
+    [@ { <span class="macro-nonterminal">$</span><span class="macro-nonterminal">ty</span>:<span class="ident">ident</span> $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="op">*</span> } {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">compile_error!</span>(<span class="macro">concat!</span>(<span class="string">&quot;unknown attr subtype &quot;</span>, <span class="macro">stringify!</span>(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">ty</span>)))
+    };
+    <span class="comment">// general push down accumulation</span>
+    [@ { <span class="macro-nonterminal">$</span><span class="macro-nonterminal">lit</span>:<span class="ident">literal</span> $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>} {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">attrs!</span>(@ { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="op">*</span> } { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">acc</span>)<span class="kw-2">*</span>, <span class="macro-nonterminal">$</span><span class="macro-nonterminal">lit</span> })
+    };
+    [@ {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="op">+</span>} {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt2</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">compile_error!</span>(<span class="macro">concat!</span>(<span class="string">&quot;Unexpected input &quot;</span>, <span class="macro">stringify!</span>($(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="op">+</span>)))
+    };
+    <span class="comment">// final output construction</span>
+    [@ {} {$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>)<span class="kw-2">*</span>}] <span class="op">=</span><span class="op">&gt;</span> { <span class="kw-2">&amp;</span>[$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="kw-2">*</span>] <span class="kw">as</span> <span class="kw">_</span> };
+    <span class="comment">// starting matcher</span>
+    [$(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>:<span class="ident">tt</span>),<span class="kw-2">*</span>] <span class="op">=</span><span class="op">&gt;</span> {
+        <span class="macro">attrs!</span>(@ { $(<span class="macro-nonterminal">$</span><span class="macro-nonterminal">tt</span>)<span class="op">*</span> } { <span class="string">&quot;allow&quot;</span>, <span class="string">&quot;cfg&quot;</span>, <span class="string">&quot;cfg_attr&quot;</span>, <span class="string">&quot;deny&quot;</span>, <span class="string">&quot;forbid&quot;</span>, <span class="string">&quot;warn&quot;</span> })
+    };
+}
+
+<span class="attribute">#[<span class="ident">rustfmt::skip</span>]</span>
+<span class="kw">static</span> <span class="ident">KIND_TO_ATTRIBUTES</span>: <span class="ident">Lazy</span><span class="op">&lt;</span><span class="ident">FxHashMap</span><span class="op">&lt;</span><span class="ident">SyntaxKind</span>, <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="ident">str</span>]<span class="op">&gt;</span><span class="op">&gt;</span> <span class="op">=</span> <span class="ident">Lazy::new</span>(<span class="op">|</span><span class="op">|</span> {
+    <span class="kw">use</span> <span class="ident">SyntaxKind</span>::<span class="kw-2">*</span>;
+    <span class="ident">std::array::IntoIter::new</span>([
+        (
+            <span class="ident">SOURCE_FILE</span>,
+            <span class="macro">attrs!</span>(
+                <span class="ident">item</span>,
+                <span class="string">&quot;crate_name&quot;</span>, <span class="string">&quot;feature&quot;</span>, <span class="string">&quot;no_implicit_prelude&quot;</span>, <span class="string">&quot;no_main&quot;</span>, <span class="string">&quot;no_std&quot;</span>,
+                <span class="string">&quot;recursion_limit&quot;</span>, <span class="string">&quot;type_length_limit&quot;</span>, <span class="string">&quot;windows_subsystem&quot;</span>
+            ),
+        ),
+        (<span class="ident">MODULE</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;macro_use&quot;</span>, <span class="string">&quot;no_implicit_prelude&quot;</span>, <span class="string">&quot;path&quot;</span>)),
+        (<span class="ident">ITEM_LIST</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;no_implicit_prelude&quot;</span>)),
+        (<span class="ident">MACRO_RULES</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;macro_export&quot;</span>, <span class="string">&quot;macro_use&quot;</span>)),
+        (<span class="ident">MACRO_DEF</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>)),
+        (<span class="ident">EXTERN_CRATE</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;macro_use&quot;</span>, <span class="string">&quot;no_link&quot;</span>)),
+        (<span class="ident">USE</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>)),
+        (<span class="ident">TYPE_ALIAS</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>)),
+        (<span class="ident">STRUCT</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="ident">adt</span>, <span class="string">&quot;non_exhaustive&quot;</span>)),
+        (<span class="ident">ENUM</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="ident">adt</span>, <span class="string">&quot;non_exhaustive&quot;</span>)),
+        (<span class="ident">UNION</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="ident">adt</span>)),
+        (<span class="ident">CONST</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>)),
+        (
+            <span class="ident">FN</span>,
+            <span class="macro">attrs!</span>(
+                <span class="ident">item</span>, <span class="ident">linkable</span>,
+                <span class="string">&quot;cold&quot;</span>, <span class="string">&quot;ignore&quot;</span>, <span class="string">&quot;inline&quot;</span>, <span class="string">&quot;must_use&quot;</span>, <span class="string">&quot;panic_handler&quot;</span>, <span class="string">&quot;proc_macro&quot;</span>,
+                <span class="string">&quot;proc_macro_derive&quot;</span>, <span class="string">&quot;proc_macro_attribute&quot;</span>, <span class="string">&quot;should_panic&quot;</span>, <span class="string">&quot;target_feature&quot;</span>,
+                <span class="string">&quot;test&quot;</span>, <span class="string">&quot;track_caller&quot;</span>
+            ),
+        ),
+        (<span class="ident">STATIC</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="ident">linkable</span>, <span class="string">&quot;global_allocator&quot;</span>, <span class="string">&quot;used&quot;</span>)),
+        (<span class="ident">TRAIT</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;must_use&quot;</span>)),
+        (<span class="ident">IMPL</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;automatically_derived&quot;</span>)),
+        (<span class="ident">ASSOC_ITEM_LIST</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>)),
+        (<span class="ident">EXTERN_BLOCK</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;link&quot;</span>)),
+        (<span class="ident">EXTERN_ITEM_LIST</span>, <span class="macro">attrs!</span>(<span class="ident">item</span>, <span class="string">&quot;link&quot;</span>)),
+        (<span class="ident">MACRO_CALL</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">SELF_PARAM</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">PARAM</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">RECORD_FIELD</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">VARIANT</span>, <span class="macro">attrs!</span>(<span class="string">&quot;non_exhaustive&quot;</span>)),
+        (<span class="ident">TYPE_PARAM</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">CONST_PARAM</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">LIFETIME_PARAM</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">LET_STMT</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">EXPR_STMT</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">LITERAL</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">RECORD_EXPR_FIELD_LIST</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">RECORD_EXPR_FIELD</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">MATCH_ARM_LIST</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">MATCH_ARM</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">IDENT_PAT</span>, <span class="macro">attrs!</span>()),
+        (<span class="ident">RECORD_PAT_FIELD</span>, <span class="macro">attrs!</span>()),
+    ])
+    .<span class="ident">collect</span>()
+});
+<span class="kw">const</span> <span class="ident">EXPR_ATTRIBUTES</span>: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span><span class="ident">str</span>] <span class="op">=</span> <span class="macro">attrs!</span>();
+
+<span class="doccomment">/// &lt;https://doc.rust-lang.org/reference/attributes.html#built-in-attributes-index&gt;</span>
+<span class="comment">// Keep these sorted for the binary search!</span>
+<span class="kw">const</span> <span class="ident">ATTRIBUTES</span>: <span class="kw-2">&amp;</span>[<span class="ident">AttrCompletion</span>] <span class="op">=</span> <span class="kw-2">&amp;</span>[
+    <span class="ident">attr</span>(<span class="string">&quot;allow(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;allow&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;allow(${0:lint})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;automatically_derived&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;cfg(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;cfg&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;cfg(${0:predicate})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;cfg_attr(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;cfg_attr&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;cfg_attr(${1:predicate}, ${0:attr})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;cold&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">r#&quot;crate_name = &quot;&quot;&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;crate_name&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;crate_name = &quot;${0:crate_name}&quot;&quot;#</span>))
+        .<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;deny(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;deny&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;deny(${0:lint})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">r#&quot;deprecated&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;deprecated&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;deprecated&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;derive(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;derive&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;derive(${0:Debug})&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">r#&quot;doc = &quot;…&quot;&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;doc&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;doc = &quot;${0:docs}&quot;&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">r#&quot;doc(alias = &quot;…&quot;)&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;docalias&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;doc(alias = &quot;${0:docs}&quot;)&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">r#&quot;doc(hidden)&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;dochidden&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;doc(hidden)&quot;#</span>)),
+    <span class="ident">attr</span>(
+        <span class="string">r#&quot;export_name = &quot;…&quot;&quot;#</span>,
+        <span class="prelude-val">Some</span>(<span class="string">&quot;export_name&quot;</span>),
+        <span class="prelude-val">Some</span>(<span class="string">r#&quot;export_name = &quot;${0:exported_symbol_name}&quot;&quot;#</span>),
+    ),
+    <span class="ident">attr</span>(<span class="string">&quot;feature(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;feature&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;feature(${0:flag})&quot;</span>)).<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;forbid(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;forbid&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;forbid(${0:lint})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;global_allocator&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">r#&quot;ignore = &quot;…&quot;&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;ignore&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;ignore = &quot;${0:reason}&quot;&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;inline&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;inline&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;inline&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;link&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">r#&quot;link_name = &quot;…&quot;&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;link_name&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;link_name = &quot;${0:symbol_name}&quot;&quot;#</span>)),
+    <span class="ident">attr</span>(
+        <span class="string">r#&quot;link_section = &quot;…&quot;&quot;#</span>,
+        <span class="prelude-val">Some</span>(<span class="string">&quot;link_section&quot;</span>),
+        <span class="prelude-val">Some</span>(<span class="string">r#&quot;link_section = &quot;${0:section_name}&quot;&quot;#</span>),
+    ),
+    <span class="ident">attr</span>(<span class="string">&quot;macro_export&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;macro_use&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">r#&quot;must_use&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;must_use&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;must_use&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;no_implicit_prelude&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;no_link&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;no_main&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;no_mangle&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;no_std&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>).<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;non_exhaustive&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;panic_handler&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">r#&quot;path = &quot;…&quot;&quot;#</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;path&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;path =&quot;${0:path}&quot;&quot;#</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;proc_macro&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;proc_macro_attribute&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;proc_macro_derive(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;proc_macro_derive&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;proc_macro_derive(${0:Trait})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;recursion_limit = …&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;recursion_limit&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;recursion_limit = ${0:128}&quot;</span>))
+        .<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;repr(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;repr&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;repr(${0:C})&quot;</span>)),
+    <span class="ident">attr</span>(<span class="string">&quot;should_panic&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;should_panic&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">r#&quot;should_panic&quot;#</span>)),
+    <span class="ident">attr</span>(
+        <span class="string">r#&quot;target_feature = &quot;…&quot;&quot;#</span>,
+        <span class="prelude-val">Some</span>(<span class="string">&quot;target_feature&quot;</span>),
+        <span class="prelude-val">Some</span>(<span class="string">r#&quot;target_feature = &quot;${0:feature}&quot;&quot;#</span>),
+    ),
+    <span class="ident">attr</span>(<span class="string">&quot;test&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;track_caller&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;type_length_limit = …&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;type_length_limit&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;type_length_limit = ${0:128}&quot;</span>))
+        .<span class="ident">prefer_inner</span>(),
+    <span class="ident">attr</span>(<span class="string">&quot;used&quot;</span>, <span class="prelude-val">None</span>, <span class="prelude-val">None</span>),
+    <span class="ident">attr</span>(<span class="string">&quot;warn(…)&quot;</span>, <span class="prelude-val">Some</span>(<span class="string">&quot;warn&quot;</span>), <span class="prelude-val">Some</span>(<span class="string">&quot;warn(${0:lint})&quot;</span>)),
+    <span class="ident">attr</span>(
+        <span class="string">r#&quot;windows_subsystem = &quot;…&quot;&quot;#</span>,
+        <span class="prelude-val">Some</span>(<span class="string">&quot;windows_subsystem&quot;</span>),
+        <span class="prelude-val">Some</span>(<span class="string">r#&quot;windows_subsystem = &quot;${0:subsystem}&quot;&quot;#</span>),
+    )
+    .<span class="ident">prefer_inner</span>(),
+];
+
+<span class="kw">fn</span> <span class="ident">parse_comma_sep_input</span>(<span class="ident">derive_input</span>: <span class="ident">ast::TokenTree</span>) <span class="op">-</span><span class="op">&gt;</span> <span class="prelude-ty">Option</span><span class="op">&lt;</span><span class="ident">FxHashSet</span><span class="op">&lt;</span><span class="ident">String</span><span class="op">&gt;</span><span class="op">&gt;</span> {
+    <span class="kw">let</span> (<span class="ident">l_paren</span>, <span class="ident">r_paren</span>) <span class="op">=</span> <span class="ident">derive_input</span>.<span class="ident">l_paren_token</span>().<span class="ident">zip</span>(<span class="ident">derive_input</span>.<span class="ident">r_paren_token</span>())<span class="question-mark">?</span>;
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">input_derives</span> <span class="op">=</span> <span class="ident">FxHashSet::default</span>();
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">tokens</span> <span class="op">=</span> <span class="ident">derive_input</span>
+        .<span class="ident">syntax</span>()
+        .<span class="ident">children_with_tokens</span>()
+        .<span class="ident">filter_map</span>(<span class="ident">NodeOrToken::into_token</span>)
+        .<span class="ident">skip_while</span>(<span class="op">|</span><span class="ident">token</span><span class="op">|</span> <span class="ident">token</span> <span class="op">!</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">l_paren</span>)
+        .<span class="ident">skip</span>(<span class="number">1</span>)
+        .<span class="ident">take_while</span>(<span class="op">|</span><span class="ident">token</span><span class="op">|</span> <span class="ident">token</span> <span class="op">!</span><span class="op">=</span> <span class="kw-2">&amp;</span><span class="ident">r_paren</span>)
+        .<span class="ident">peekable</span>();
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">input</span> <span class="op">=</span> <span class="ident">String::new</span>();
+    <span class="kw">while</span> <span class="ident">tokens</span>.<span class="ident">peek</span>().<span class="ident">is_some</span>() {
+        <span class="kw">for</span> <span class="ident">token</span> <span class="kw">in</span> <span class="ident">tokens</span>.<span class="ident">by_ref</span>().<span class="ident">take_while</span>(<span class="op">|</span><span class="ident">t</span><span class="op">|</span> <span class="ident">t</span>.<span class="ident">kind</span>() <span class="op">!</span><span class="op">=</span> <span class="macro">T!</span>[,]) {
+            <span class="ident">input</span>.<span class="ident">push_str</span>(<span class="ident">token</span>.<span class="ident">text</span>());
+        }
+
+        <span class="kw">if</span> <span class="op">!</span><span class="ident">input</span>.<span class="ident">is_empty</span>() {
+            <span class="ident">input_derives</span>.<span class="ident">insert</span>(<span class="ident">input</span>.<span class="ident">trim</span>().<span class="ident">to_owned</span>());
+        }
+
+        <span class="ident">input</span>.<span class="ident">clear</span>();
+    }
+
+    <span class="prelude-val">Some</span>(<span class="ident">input_derives</span>)
+}
+
+<span class="attribute">#[<span class="ident">test</span>]</span>
+<span class="kw">fn</span> <span class="ident">attributes_are_sorted</span>() {
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">attrs</span> <span class="op">=</span> <span class="ident">ATTRIBUTES</span>.<span class="ident">iter</span>().<span class="ident">map</span>(<span class="op">|</span><span class="ident">attr</span><span class="op">|</span> <span class="ident">attr</span>.<span class="ident">key</span>());
+    <span class="kw">let</span> <span class="kw-2">mut</span> <span class="ident">prev</span> <span class="op">=</span> <span class="ident">attrs</span>.<span class="ident">next</span>().<span class="ident">unwrap</span>();
+
+    <span class="ident">attrs</span>.<span class="ident">for_each</span>(<span class="op">|</span><span class="ident">next</span><span class="op">|</span> {
+        <span class="macro">assert!</span>(
+            <span class="ident">prev</span> <span class="op">&lt;</span> <span class="ident">next</span>,
+            <span class="string">r#&quot;ATTRIBUTES array is not sorted, &quot;{}&quot; should come after &quot;{}&quot;&quot;#</span>,
+            <span class="ident">prev</span>,
+            <span class="ident">next</span>
+        );
+        <span class="ident">prev</span> <span class="op">=</span> <span class="ident">next</span>;
+    });
+}
+</pre></div>
+</section><section id="search" class="content hidden"></section><div id="rustdoc-vars" data-root-path="../../../" data-current-crate="ide_completion" data-search-index-js="../../../search-index.js" data-search-js="../../../search.js"></div>
+    <script src="../../../main.js"></script><script src="../../../source-script.js"></script><script src="../../../source-files.js"></script></body></html>

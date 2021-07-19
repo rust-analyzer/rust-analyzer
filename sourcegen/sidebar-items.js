@@ -1,0 +1,1 @@
+initSidebarItems({"fn":[["add_preamble",""],["ensure_file_contents","Checks that the `file` has the specified `contents`. If that is not the case, updates the file and then fails the test."],["list_files",""],["list_rust_files",""],["project_root",""],["reformat",""]],"struct":[["CommentBlock",""],["Location",""]]});

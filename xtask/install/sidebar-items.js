@@ -1,0 +1,1 @@
+initSidebarItems({"constant":[["REQUIRED_RUST_VERSION",""],["VS_CODES",""]],"enum":[["Malloc",""]],"fn":[["check_version",""],["fix_path_for_mac",""],["install_client",""],["install_server",""]],"struct":[["ClientOpt",""],["ServerOpt",""]]});

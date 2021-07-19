@@ -1,0 +1,1 @@
+initSidebarItems({"enum":[["FilesWatcher",""],["LinkedProject",""],["RustfmtConfig",""]],"struct":[["Config",""],["FilesConfig",""],["HoverActionsConfig",""],["LensConfig",""],["NotificationsConfig",""],["RunnablesConfig","Configuration for runnable items, such as `main` function or tests."],["WorkspaceSymbolConfig","Configuration for workspace symbol search requests."]]});
