@@ -458,3 +458,157 @@ pub(super) struct S {
 "#,
     );
 }
+
+#[test]
+fn completes_fully_field() {
+    check(
+        r#"
+struct Foo {
+    data: i32,
+    span: Span,
+}
+struct Bar {
+    data: f32,
+    sp$0
+}
+"#,
+        expect![[r#"
+            bn span: Span,
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+
+    check(
+        r#"
+struct Foo {
+    data: i32,
+    pub span: Span,
+}
+struct Bar {
+    data: f32,
+    sp$0
+}
+"#,
+        expect![[r#"
+            bn span: Span,
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+
+    check(
+        r#"
+struct Foo {
+    data: i32,
+    pub span: Span,
+}
+struct Bar {
+    data: f32,
+    pub sp$0
+}
+"#,
+        expect![[r#"
+            bn span: Span,
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+
+    check(
+        r#"
+struct Foo {
+    data: i32,
+    pub span: Span,
+}
+struct Bar {
+    sp$0
+    data: f32,
+}
+"#,
+        expect![[r#"
+            bn span: Span,
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+
+    check(
+        r#"
+struct Foo {
+    data: i32,
+    pub span: Span,
+}
+struct Bar {
+    sp$0,
+    data: f32,
+}
+"#,
+        expect![[r#"
+            bn span: Span
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+
+    check(
+        r#"
+enum Foo {
+    Data { id: usize, span: Span },
+    Dummy { span: Span },
+}
+struct Bar {
+    data: f32,
+    pub sp$0
+}
+"#,
+        expect![[r#"
+            bn id: usize,
+            bn span: Span,
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+
+    check(
+        r#"
+enum Foo {
+    Data { id: usize, span: Span },
+    Dummy { i$0 span: Span },
+}
+"#,
+        expect![[r#"
+            bn id: usize,
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+}
+
+#[test]
+fn not_shows_fully_field() {
+    check(
+        r#"
+struct Foo {
+    data: i32,
+    span: Span,
+}
+struct Bar {
+    data: f32,
+    sp$0: Span,
+}
+"#,
+        expect![[r#"
+            kw pub
+            kw pub(crate)
+            kw pub(super)
+        "#]],
+    );
+}
