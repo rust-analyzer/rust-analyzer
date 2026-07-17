@@ -1252,6 +1252,7 @@ impl Printer<'_> {
             }
             LifetimeRef::Placeholder => w!(self, "'_"),
             LifetimeRef::Error => w!(self, "'{{error}}"),
+            LifetimeRef::HrtbParam(_) => w!(self, "'_"), // FIXME: properly handle it, currently do not have enough data to handle
             &LifetimeRef::Param(p) => self.print_lifetime_param(p),
         }
     }
@@ -1309,7 +1310,9 @@ impl Printer<'_> {
             TypeRef::Fn(fn_) => {
                 let ((_, return_type), args) =
                     fn_.params.split_last().expect("TypeRef::Fn is missing return type");
-                if let Some(binder) = &fn_.binder {
+                if let Some(binder) = &fn_.binder
+                    && !binder.is_empty()
+                {
                     w!(
                         self,
                         "for<{}> ",

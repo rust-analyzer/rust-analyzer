@@ -7,7 +7,7 @@ use rustc_abi::ExternAbi;
 use thin_vec::ThinVec;
 
 use crate::{
-    LifetimeParamId, TypeParamId,
+    HrtbLifetimeParamId, LifetimeParamId, TypeParamId,
     expr_store::{ExpressionStore, path::Path},
     hir::{ExprId, PatId},
 };
@@ -157,6 +157,7 @@ pub enum LifetimeRef {
     Static,
     Placeholder,
     Param(LifetimeParamId),
+    HrtbParam(HrtbLifetimeParamId),
     Error,
 }
 

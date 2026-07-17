@@ -546,7 +546,7 @@ fn check(#[rust_analyzer::rust_fixture] ra_fixture: &str, expected: Expect) {
                 res,
                 "{name}[{}]\n",
                 generics(&db, def)
-                    .iter(false)
+                    .iter(true)
                     .map(|(_, param)| match param {
                         GenericParamDataRef::TypeParamData(type_param_data) => {
                             type_param_data.name.as_ref().unwrap()

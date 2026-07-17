@@ -1002,8 +1002,11 @@ fn lower_fields<Field: ast::HasAttrs + ast::HasVisibility>(
         has_fields = true;
         match AttrFlags::is_cfg_enabled_for(&field, cfg_options) {
             Ok(()) => {
-                let type_ref =
-                    col.lower_type_ref_opt(ty, &mut ExprCollector::impl_trait_error_allocator);
+                let type_ref = col.lower_type_ref_opt(
+                    ty,
+                    &mut ExprCollector::impl_trait_error_allocator,
+                    &mut ExprCollector::elided_lifetime_error_allocator,
+                );
                 let visibility = override_visibility.as_ref().map_or_else(
                     || {
                         visibility_from_ast(db, field.visibility(), &mut |range| {

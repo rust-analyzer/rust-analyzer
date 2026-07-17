@@ -46,8 +46,8 @@ use rustc_hash::FxHashSet;
 use rustc_type_ir::{
     AliasTyKind, BoundRegion, BoundRegionKind, BoundTyKind, BoundVar, BoundVarIndexKind,
     DebruijnIndex, ExistentialPredicate, ExistentialProjection, ExistentialTraitRef, FnSig,
-    Interner, OutlivesPredicate, TermKind, TyKind, TypeFoldable, TypeFolder, TypeSuperFoldable,
-    TypeVisitableExt, Upcast, UpcastFrom, elaborate,
+    INNERMOST, Interner, OutlivesPredicate, TermKind, TyKind, TypeFoldable, TypeFolder,
+    TypeSuperFoldable, TypeVisitableExt, Upcast, UpcastFrom, elaborate,
     inherent::{
         Clause as _, GenericArg as _, GenericArgs as _, IntoKind as _, Region as _, Ty as _,
     },
@@ -1379,20 +1379,24 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     }
 
     fn find_and_lower_hrtb_lifetime(&mut self, lifetime: LifetimeRefId) -> Option<Region<'db>> {
-        if let LifetimeRef::Named(lt_name) = &self.store[lifetime] {
-            self.bound_vars.iter().rev().enumerate().find_map(|(debruijn, (binder, _))| {
-                binder.iter().enumerate().find_map(|(index, l)| {
-                    (l == lt_name).then(|| {
-                        self.hrtb_region_param(
-                            index as u32,
-                            DebruijnIndex::from_usize(debruijn),
-                            self.generic_def,
-                        )
+        match &self.store[lifetime] {
+            LifetimeRef::Named(lt_name) => {
+                self.bound_vars.iter().rev().enumerate().find_map(|(debruijn, (binder, _))| {
+                    binder.iter().enumerate().find_map(|(index, l)| {
+                        (l == lt_name).then(|| {
+                            self.hrtb_region_param(
+                                index as u32,
+                                DebruijnIndex::from_usize(debruijn),
+                                self.generic_def,
+                            )
+                        })
                     })
                 })
-            })
-        } else {
-            None
+            }
+            LifetimeRef::HrtbParam(hrtb_param_id) => {
+                Some(self.hrtb_region_param(hrtb_param_id.0 as u32, INNERMOST, self.generic_def))
+            }
+            _ => None,
         }
     }
 }

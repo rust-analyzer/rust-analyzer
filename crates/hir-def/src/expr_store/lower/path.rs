@@ -6,10 +6,12 @@ mod tests;
 use std::iter;
 
 use crate::{
+    ModuleDefId,
     expr_store::{
-        lower::{ExprCollector, generics::ImplTraitLowerFn},
+        lower::{ElisionBinderSource, ExprCollector, generics::ImplTraitLowerFn},
         path::NormalPath,
     },
+    item_scope::BuiltinShadowMode,
     type_ref::LifetimeRef,
 };
 
@@ -28,6 +30,8 @@ use crate::{
     type_ref::TypeRef,
 };
 
+use super::generics::LifetimeElisionFn;
+
 #[cfg(test)]
 thread_local! {
     /// This is used to test `hir_segment_to_ast_segment()`. It's a hack, but it makes testing much easier.
@@ -42,6 +46,7 @@ pub(super) fn lower_path(
     collector: &mut ExprCollector<'_>,
     mut path: ast::Path,
     impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+    lifetime_elision_fn: LifetimeElisionFn<'_>,
 ) -> Option<Path> {
     let mut kind = PathKind::Plain;
     let mut type_anchor = None;
@@ -99,13 +104,18 @@ pub(super) fn lower_path(
                 let name = name_ref.as_name();
                 let args = segment
                     .generic_arg_list()
-                    .and_then(|it| collector.lower_generic_args(it, impl_trait_lower_fn))
+                    .and_then(|it| {
+                        collector.lower_generic_args(it, impl_trait_lower_fn, lifetime_elision_fn)
+                    })
                     .or_else(|| {
-                        collector.lower_generic_args_from_fn_path(
-                            segment.parenthesized_arg_list(),
-                            segment.ret_type(),
-                            impl_trait_lower_fn,
-                        )
+                        collector.with_type_bound_source(ElisionBinderSource::ForBinder, |this| {
+                            this.lower_generic_args_from_fn_path(
+                                segment.parenthesized_arg_list(),
+                                segment.ret_type(),
+                                impl_trait_lower_fn,
+                                lifetime_elision_fn,
+                            )
+                        })
                     })
                     .or_else(|| {
                         segment.return_type_syntax().map(|_| GenericArgs::return_type_notation())
@@ -124,7 +134,7 @@ pub(super) fn lower_path(
 
                 let type_ref = type_ref?;
                 let self_type = collector.for_path_type_projection(|collector| {
-                    collector.lower_type_ref(type_ref, impl_trait_lower_fn)
+                    collector.lower_type_ref(type_ref, impl_trait_lower_fn, lifetime_elision_fn)
                 });
 
                 match trait_ref {
@@ -136,7 +146,11 @@ pub(super) fn lower_path(
                     // <T as Trait<A>>::Foo desugars to Trait<Self=T, A>::Foo
                     Some(trait_ref) => {
                         let path = collector.for_path_type_projection(|collector| {
-                            collector.lower_path(trait_ref.path()?, impl_trait_lower_fn)
+                            collector.lower_path(
+                                trait_ref.path()?,
+                                impl_trait_lower_fn,
+                                lifetime_elision_fn,
+                            )
                         })?;
                         // FIXME: Unnecessary clone
                         collector.alloc_type_ref(
@@ -256,11 +270,49 @@ pub(super) fn lower_path(
         *last_segment_args = None;
     }
 
+    let segments_len = segments.len();
     let mod_path = Interned::new(ModPath::from_segments(kind, segments));
+
+    let (resolved_module_def_id, is_trait_assoc_item) = {
+        let (per_ns, remaining_idx) = collector.def_map.resolve_path(
+            collector.local_def_map,
+            collector.db,
+            collector.module,
+            &mod_path,
+            BuiltinShadowMode::Module,
+            None,
+        );
+        let def = per_ns.types.map(|item| item.def);
+
+        let is_trait_assoc_item = matches!(def, Some(ModuleDefId::TraitId(..)))
+            && remaining_idx.is_some_and(|idx| idx > 0);
+        (def, is_trait_assoc_item)
+    };
+
+    if collector.elision_context.is_some() && !is_trait_assoc_item {
+        let args_in_source = generic_args.last().and_then(|g| g.as_ref());
+        let merged_args_with_elided = collector.collect_path_elided_liftetimes(
+            resolved_module_def_id,
+            args_in_source,
+            lifetime_elision_fn,
+        );
+        match &merged_args_with_elided {
+            // there are elided args
+            Some(_) => {
+                if args_in_source.is_none() {
+                    generic_args.resize(segments_len, None);
+                }
+                if let Some(args) = generic_args.last_mut() {
+                    *args = merged_args_with_elided
+                }
+            }
+            _ => {} // there are no elided args
+        }
+    }
 
     if let Some(old_lifetimes_constrained_by_input) = old_lifetimes_constrained_by_input {
         let type_alias_constrained_lifetimes = collector.get_constrained_lifetimes_if_type_alias(
-            &mod_path,
+            resolved_module_def_id,
             generic_args.last().and_then(|g| g.as_ref()),
         );
         if let Some(lifetimes) = type_alias_constrained_lifetimes {

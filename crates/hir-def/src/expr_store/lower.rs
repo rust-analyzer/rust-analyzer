@@ -11,6 +11,7 @@ use std::{cell::OnceCell, mem};
 use base_db::{FxIndexSet, SourceDatabase};
 use cfg::CfgOptions;
 use either::Either;
+use generics::LifetimeElisionFn;
 use hir_expand::{
     HirFileId, InFile, MacroDefId,
     mod_path::ModPath,
@@ -35,9 +36,9 @@ use thin_vec::ThinVec;
 use tt::TextRange;
 
 use crate::{
-    AdtId, BlockId, BlockIdLt, ConstId, DefWithBodyId, FunctionId, GenericDefId, HasModule, ImplId,
-    ItemContainerId, LoweringMode, MacroId, ModuleDefId, ModuleId, TraitId, TypeAliasId,
-    UnresolvedMacro,
+    AdtId, BlockId, BlockIdLt, ConstId, DefWithBodyId, FunctionId, GenericDefId, HasModule,
+    HrtbLifetimeParamId, ImplId, ItemContainerId, LoweringMode, MacroId, ModuleDefId, ModuleId,
+    TraitId, TypeAliasId, UnresolvedMacro,
     attrs::AttrFlags,
     expr_store::{
         Body, BodySourceMap, ExprPtr, ExprRoot, ExpressionStore, ExpressionStoreBuilder,
@@ -52,7 +53,8 @@ use crate::{
         Array, Binding, BindingAnnotation, BindingId, BindingProblems, CaptureBy, ClosureKind,
         CoroutineKind, CoroutineSource, Expr, ExprId, Item, Label, LabelId, Literal, LoopSource,
         MatchArm, Movability, OffsetOf, Pat, PatId, RecordFieldPat, RecordLitField, RecordSpread,
-        Statement, Unsafe, generics::GenericParams,
+        Statement, Unsafe,
+        generics::{ElidedSource, GenericParams},
     },
     item_scope::BuiltinShadowMode,
     lang_item::{LangItemTarget, LangItems},
@@ -248,8 +250,11 @@ pub(crate) fn lower_type_ref(
 ) -> (ExpressionStore, ExpressionStoreSourceMap, TypeRefId) {
     let mut expr_collector =
         ExprCollector::new(db, module, type_ref.file_id, LoweringMode::Analysis);
-    let type_ref =
-        expr_collector.lower_type_ref_opt(type_ref.value, &mut ExprCollector::impl_trait_allocator);
+    let type_ref = expr_collector.lower_type_ref_opt(
+        type_ref.value,
+        &mut ExprCollector::impl_trait_allocator,
+        &mut ExprCollector::elided_lifetime_static_allocator,
+    );
     let (store, source_map) = expr_collector.store.finish();
     (store, source_map, type_ref)
 }
@@ -279,22 +284,27 @@ pub(crate) fn lower_impl(
 ) -> (ExpressionStore, ExpressionStoreSourceMap, TypeRefId, Option<TraitRef>, GenericParams) {
     let mut expr_collector =
         ExprCollector::new(db, module, impl_syntax.file_id, LoweringMode::Analysis);
-    let self_ty =
-        expr_collector.lower_type_ref_opt_disallow_impl_trait(impl_syntax.value.self_ty());
-    let trait_ = impl_syntax.value.trait_().and_then(|it| match &it {
-        ast::Type::PathType(path_type) => {
-            let path = expr_collector
-                .lower_path_type(path_type, &mut ExprCollector::impl_trait_allocator)?;
-            Some(TraitRef { path: expr_collector.alloc_path(path, AstPtr::new(&it)) })
-        }
-        _ => None,
-    });
     let mut collector = generics::GenericParamsCollector::new(impl_id.into());
     collector.lower(
         &mut expr_collector,
         impl_syntax.value.generic_param_list(),
         impl_syntax.value.where_clause(),
     );
+    let self_ty = expr_collector.lower_type_ref_opt_disallow_impl_trait(
+        impl_syntax.value.self_ty(),
+        &mut collector.lower_elided_lifetime_in_impl_header(),
+    );
+    let trait_ = impl_syntax.value.trait_().and_then(|it| match &it {
+        ast::Type::PathType(path_type) => {
+            let path = expr_collector.lower_path_type(
+                path_type,
+                &mut ExprCollector::impl_trait_allocator,
+                &mut collector.lower_elided_lifetime_in_impl_header(),
+            )?;
+            Some(TraitRef { path: expr_collector.alloc_path(path, AstPtr::new(&it)) })
+        }
+        _ => None,
+    });
     let params = collector.finish();
     let (store, source_map) = expr_collector.store.finish();
     (store, source_map, self_ty, trait_, params)
@@ -339,7 +349,11 @@ pub(crate) fn lower_type_alias(
             bounds
                 .bounds()
                 .map(|bound| {
-                    expr_collector.lower_type_bound(bound, &mut ExprCollector::impl_trait_allocator)
+                    expr_collector.lower_type_bound(
+                        bound,
+                        &mut ExprCollector::impl_trait_allocator,
+                        &mut ExprCollector::elided_lifetime_error_allocator,
+                    )
                 })
                 .collect()
         })
@@ -351,10 +365,13 @@ pub(crate) fn lower_type_alias(
         alias.value.where_clause(),
     );
     let params = collector.finish();
-    let type_ref = alias
-        .value
-        .ty()
-        .map(|ty| expr_collector.lower_type_ref(ty, &mut ExprCollector::impl_trait_allocator));
+    let type_ref = alias.value.ty().map(|ty| {
+        expr_collector.lower_type_ref(
+            ty,
+            &mut ExprCollector::impl_trait_allocator,
+            &mut ExprCollector::elided_lifetime_error_allocator,
+        )
+    });
     if alias.value.ty().is_none() {
         let diagnostic_kind = match container {
             ItemContainerId::ModuleId(_) => Some(MissingBodyItemKind::TypeAlias),
@@ -394,64 +411,98 @@ pub(crate) fn lower_function(
     let mut params = vec![];
     let mut has_self_param = false;
     let mut has_variadic = false;
-    collector.collect_impl_trait(&mut expr_collector, |collector, mut impl_trait_lower_fn| {
-        collector.with_lifetime_bound_scope(LifetimeBoundScope::Argument, |collector| {
-            if let Some(param_list) = fn_.value.param_list() {
-                if let Some(param) = param_list.self_param() {
-                    let enabled = collector.check_cfg(&param);
-                    if enabled {
-                        has_self_param = true;
-                        params.push(match param.ty() {
-                            Some(ty) => collector.lower_type_ref(ty, &mut impl_trait_lower_fn),
-                            None => {
-                                let self_type = collector.alloc_type_ref_desugared(TypeRef::Path(
-                                    Name::new_symbol_root(sym::Self_).into(),
-                                ));
-                                let lifetime = param
-                                    .lifetime()
-                                    .map(|lifetime| collector.lower_lifetime_ref(lifetime));
-                                match param.kind() {
-                                    ast::SelfParamKind::Owned => self_type,
-                                    ast::SelfParamKind::Ref => collector.alloc_type_ref_desugared(
-                                        TypeRef::Reference(Box::new(RefType {
-                                            ty: self_type,
-                                            lifetime,
-                                            mutability: Mutability::Shared,
-                                        })),
-                                    ),
-                                    ast::SelfParamKind::MutRef => collector
-                                        .alloc_type_ref_desugared(TypeRef::Reference(Box::new(
-                                            RefType {
-                                                ty: self_type,
-                                                lifetime,
-                                                mutability: Mutability::Mut,
-                                            },
-                                        ))),
+    collector.collect_impl_trait(
+        &mut expr_collector,
+        |collector, mut impl_trait_lower_fn, mut lifetime_elision_fn| {
+            collector.with_lifetime_bound_scope(LifetimeBoundScope::Argument, |collector| {
+                if let Some(param_list) = fn_.value.param_list() {
+                    if let Some(param) = param_list.self_param() {
+                        let enabled = collector.check_cfg(&param);
+                        if enabled {
+                            has_self_param = true;
+                            params.push(match param.ty() {
+                                Some(ty) => collector.with_self_lt_elision(|this| {
+                                    this.lower_type_ref(
+                                        ty,
+                                        &mut impl_trait_lower_fn,
+                                        &mut lifetime_elision_fn,
+                                    )
+                                }),
+                                None => {
+                                    let self_type = collector.alloc_type_ref_desugared(
+                                        TypeRef::Path(Name::new_symbol_root(sym::Self_).into()),
+                                    );
+                                    let lifetime = collector.with_self_lt_elision(|this| {
+                                        param
+                                            .lifetime()
+                                            .map(|lifetime| {
+                                                this.lower_lifetime_ref(
+                                                    lifetime,
+                                                    lifetime_elision_fn,
+                                                )
+                                            })
+                                            .or_else(|| match param.kind() {
+                                                ast::SelfParamKind::Ref
+                                                | ast::SelfParamKind::MutRef => {
+                                                    Some(lifetime_elision_fn(this))
+                                                }
+                                                ast::SelfParamKind::Owned => None,
+                                            })
+                                    });
+                                    match param.kind() {
+                                        ast::SelfParamKind::Owned => self_type,
+                                        ast::SelfParamKind::Ref => collector
+                                            .alloc_type_ref_desugared(TypeRef::Reference(
+                                                Box::new(RefType {
+                                                    ty: self_type,
+                                                    lifetime,
+                                                    mutability: Mutability::Shared,
+                                                }),
+                                            )),
+                                        ast::SelfParamKind::MutRef => collector
+                                            .alloc_type_ref_desugared(TypeRef::Reference(
+                                                Box::new(RefType {
+                                                    ty: self_type,
+                                                    lifetime,
+                                                    mutability: Mutability::Mut,
+                                                }),
+                                            )),
+                                    }
                                 }
-                            }
-                        });
+                            });
+                        }
                     }
-                }
-                let p = param_list
-                    .params()
-                    .filter(|param| collector.check_cfg(param))
-                    .filter(|param| {
-                        let is_variadic = param.dotdotdot_token().is_some();
-                        has_variadic |= is_variadic;
-                        !is_variadic
+                    let p = param_list
+                        .params()
+                        .filter(|param| collector.check_cfg(param))
+                        .filter(|param| {
+                            let is_variadic = param.dotdotdot_token().is_some();
+                            has_variadic |= is_variadic;
+                            !is_variadic
+                        })
+                        .map(|param| param.ty())
+                        // FIXME
+                        .collect::<Vec<_>>();
+                    collector.with_param_lt_elision(|this| {
+                        for p in p {
+                            params.push(this.lower_type_ref_opt(
+                                p,
+                                &mut impl_trait_lower_fn,
+                                &mut lifetime_elision_fn,
+                            ));
+                        }
                     })
-                    .map(|param| param.ty())
-                    // FIXME
-                    .collect::<Vec<_>>();
-                for p in p {
-                    params.push(collector.lower_type_ref_opt(p, &mut impl_trait_lower_fn));
                 }
-            }
-        })
-    });
+            })
+        },
+    );
     let return_type = fn_.value.ret_type().map(|ret_type| {
         expr_collector.with_lifetime_bound_scope(LifetimeBoundScope::Return, |this| {
-            this.lower_type_ref_opt(ret_type.ty(), &mut ExprCollector::impl_trait_allocator)
+            this.lower_type_ref_opt(
+                ret_type.ty(),
+                &mut ExprCollector::impl_trait_allocator,
+                &mut ExprCollector::elided_lifetime_placeholder_allocator,
+            )
         })
     });
     collector.update_to_late_bound_lifetimes(&expr_collector.named_lifetime_store);
@@ -523,7 +574,10 @@ pub struct ExprCollector<'db> {
 
     is_lowering_coroutine: bool,
 
-    for_type_binder: Option<ThinVec<Name>>,
+    elision_context: Option<ElidedSource>,
+    elision_binder_source: ElisionBinderSource,
+
+    for_type_binder: Option<(ThinVec<Name>, ForBinderSource)>,
 
     /// Legacy (`macro_rules!`) macros can have multiple definitions and shadow each other,
     /// and we need to find the current definition. So we track the number of definitions we saw.
@@ -624,6 +678,19 @@ impl BindingList {
     }
 }
 
+#[derive(Debug)]
+enum ForBinderSource {
+    FnPtrType,
+    ForType,
+    ForBound,
+}
+
+#[derive(Debug)]
+enum ElisionBinderSource {
+    Parent,
+    ForBinder,
+}
+
 #[derive(Debug, Default)]
 pub struct NamedLifetimeStore {
     lifetime_bound_scope: Option<LifetimeBoundScope>,
@@ -697,6 +764,8 @@ impl<'db> ExprCollector<'db> {
             name_generator_index: 0,
             named_lifetime_store: NamedLifetimeStore::default(),
             for_type_binder: None,
+            elision_context: None,
+            elision_binder_source: ElisionBinderSource::Parent,
         };
         result.store.inference_roots = Some(SmallVec::new());
         result
@@ -721,11 +790,13 @@ impl<'db> ExprCollector<'db> {
     pub(in crate::expr_store) fn lower_lifetime_ref(
         &mut self,
         lifetime: ast::Lifetime,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> LifetimeRefId {
         // FIXME: Keyword check?
         let lifetime_ref = match lifetime.text() {
             "" | "'" => LifetimeRef::Error,
             "'static" => LifetimeRef::Static,
+            "'_" if self.elision_context.is_some() => return lifetime_elision_fn(self),
             "'_" => LifetimeRef::Placeholder,
             text => LifetimeRef::Named(Name::new_lifetime(text)),
         };
@@ -735,9 +806,10 @@ impl<'db> ExprCollector<'db> {
     pub(in crate::expr_store) fn lower_lifetime_ref_opt(
         &mut self,
         lifetime: Option<ast::Lifetime>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> LifetimeRefId {
         match lifetime {
-            Some(lifetime) => self.lower_lifetime_ref(lifetime),
+            Some(lifetime) => self.lower_lifetime_ref(lifetime, lifetime_elision_fn),
             None => self.alloc_lifetime_ref_desugared(LifetimeRef::Placeholder),
         }
     }
@@ -747,47 +819,84 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         node: ast::Type,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> TypeRefId {
         let ty = match &node {
             ast::Type::ParenType(inner) => {
-                return self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn);
+                return self.lower_type_ref_opt(
+                    inner.ty(),
+                    impl_trait_lower_fn,
+                    lifetime_elision_fn,
+                );
             }
             ast::Type::TupleType(inner) => TypeRef::Tuple(ThinVec::from_iter(Vec::from_iter(
-                inner.fields().map(|it| self.lower_type_ref(it, impl_trait_lower_fn)),
+                inner
+                    .fields()
+                    .map(|it| self.lower_type_ref(it, impl_trait_lower_fn, lifetime_elision_fn)),
             ))),
             ast::Type::NeverType(..) => TypeRef::Never,
             ast::Type::PathType(inner) => inner
                 .path()
-                .and_then(|it| self.lower_path(it, impl_trait_lower_fn))
+                .and_then(|it| self.lower_path(it, impl_trait_lower_fn, lifetime_elision_fn))
                 .map(TypeRef::Path)
                 .unwrap_or(TypeRef::Error),
             ast::Type::PtrType(inner) => {
-                let inner_ty = self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn);
+                let inner_ty =
+                    self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn, lifetime_elision_fn);
                 let mutability = Mutability::from_mutable(inner.mut_token().is_some());
                 TypeRef::RawPtr(inner_ty, mutability)
             }
             ast::Type::ArrayType(inner) => {
                 let len = self.lower_const_arg_opt(inner.const_arg());
                 TypeRef::Array(ArrayType {
-                    ty: self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn),
+                    ty: self.lower_type_ref_opt(
+                        inner.ty(),
+                        impl_trait_lower_fn,
+                        lifetime_elision_fn,
+                    ),
                     len,
                 })
             }
-            ast::Type::SliceType(inner) => {
-                TypeRef::Slice(self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn))
-            }
+            ast::Type::SliceType(inner) => TypeRef::Slice(self.lower_type_ref_opt(
+                inner.ty(),
+                impl_trait_lower_fn,
+                lifetime_elision_fn,
+            )),
             ast::Type::RefType(inner) => {
-                let inner_ty = self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn);
-                let lifetime = inner.lifetime().map(|lt| self.lower_lifetime_ref(lt));
+                let inner_ty =
+                    self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn, lifetime_elision_fn);
+                let lifetime = if let Some(lt) = inner.lifetime() {
+                    Some(self.lower_lifetime_ref(lt, lifetime_elision_fn))
+                } else {
+                    Some(lifetime_elision_fn(self))
+                };
                 let mutability = Mutability::from_mutable(inner.mut_token().is_some());
                 TypeRef::Reference(Box::new(RefType { ty: inner_ty, lifetime, mutability }))
             }
             ast::Type::InferType(_inner) => TypeRef::Placeholder,
             ast::Type::FnPtrType(inner) => {
+                let old_binder = match self.for_type_binder {
+                    None | Some((_, ForBinderSource::FnPtrType | ForBinderSource::ForBound)) => {
+                        self.for_type_binder.replace((ThinVec::new(), ForBinderSource::FnPtrType))
+                    }
+                    Some((_, ForBinderSource::ForType)) => None,
+                };
+                let old_elision_binder_source =
+                    mem::replace(&mut self.elision_binder_source, ElisionBinderSource::ForBinder);
+
+                let mut for_binder_elision_fn =
+                    |ec: &mut ExprCollector<'_>| ec.lower_elided_lifetime_for_binder();
+
                 let ret_ty = inner
                     .ret_type()
                     .and_then(|rt| rt.ty())
-                    .map(|it| self.lower_type_ref(it, impl_trait_lower_fn))
+                    .map(|it| {
+                        self.lower_type_ref(
+                            it,
+                            impl_trait_lower_fn,
+                            &mut Self::elided_lifetime_placeholder_allocator,
+                        )
+                    })
                     .unwrap_or_else(|| self.alloc_type_ref_desugared(TypeRef::unit()));
                 let mut is_varargs = false;
                 let mut params = if let Some(pl) = inner.param_list() {
@@ -798,7 +907,11 @@ impl<'db> ExprCollector<'db> {
                     pl.params()
                         .filter(|it| it.dotdotdot_token().is_none())
                         .map(|it| {
-                            let type_ref = self.lower_type_ref_opt(it.ty(), impl_trait_lower_fn);
+                            let type_ref = self.lower_type_ref_opt(
+                                it.ty(),
+                                impl_trait_lower_fn,
+                                &mut for_binder_elision_fn,
+                            );
                             let name = match it.pat() {
                                 Some(ast::Pat::IdentPat(it)) => Some(
                                     it.name().map(|nr| nr.as_name()).unwrap_or_else(Name::missing),
@@ -820,7 +933,10 @@ impl<'db> ExprCollector<'db> {
                 let abi = inner.abi().map(lower_abi).unwrap_or(ExternAbi::Rust);
                 params.push((None, ret_ty));
 
-                let binder = self.for_type_binder.take().map(|b| b.into());
+                let binder = self.for_type_binder.take().map(|(b, _)| b.into());
+
+                self.for_type_binder = old_binder;
+                self.elision_binder_source = old_elision_binder_source;
                 TypeRef::Fn(Box::new(FnType {
                     is_varargs,
                     is_unsafe: inner.unsafe_token().is_some(),
@@ -832,9 +948,9 @@ impl<'db> ExprCollector<'db> {
             // for types are close enough for our purposes to the inner type for now...
             ast::Type::ForType(inner) => {
                 let binder = self.lower_for_binder_opt(inner.for_binder());
-                let old_for_binder = self.for_type_binder.replace(binder);
-                let ty = self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn);
-                self.for_type_binder = old_for_binder;
+                let ty = self.with_for_binder(binder, ForBinderSource::ForType, |ec| {
+                    ec.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn, lifetime_elision_fn)
+                });
                 return ty;
             }
             ast::Type::ImplTraitType(inner) => {
@@ -842,7 +958,8 @@ impl<'db> ExprCollector<'db> {
                     // Disallow nested impl traits
                     TypeRef::Error
                 } else {
-                    return self.with_outer_impl_trait_scope(true, |this| {
+                    let old_elision_context = self.elision_context.take();
+                    let result = self.with_outer_impl_trait_scope(true, |this| {
                         let is_argument_scope = this.is_argument_lt_bound_scope();
                         let type_bounds = this.with_lifetime_bound_scope(
                             LifetimeBoundScope::ImplTrait { is_argument_scope },
@@ -850,18 +967,23 @@ impl<'db> ExprCollector<'db> {
                                 this.type_bounds_from_ast(
                                     inner.type_bound_list(),
                                     impl_trait_lower_fn,
+                                    lifetime_elision_fn,
                                 )
                             },
                         );
                         impl_trait_lower_fn(this, AstPtr::new(&node), type_bounds)
                     });
+                    self.elision_context = old_elision_context;
+                    return result;
                 }
             }
-            ast::Type::DynTraitType(inner) => TypeRef::DynTrait(
-                self.type_bounds_from_ast(inner.type_bound_list(), impl_trait_lower_fn),
-            ),
+            ast::Type::DynTraitType(inner) => TypeRef::DynTrait(self.type_bounds_from_ast(
+                inner.type_bound_list(),
+                impl_trait_lower_fn,
+                lifetime_elision_fn,
+            )),
             ast::Type::PatternType(inner) => TypeRef::PatternType(
-                self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn),
+                self.lower_type_ref_opt(inner.ty(), impl_trait_lower_fn, lifetime_elision_fn),
                 self.collect_ty_pat_opt(inner.pat()),
             ),
             ast::Type::MacroType(mt) => match mt.macro_call() {
@@ -869,7 +991,7 @@ impl<'db> ExprCollector<'db> {
                     let macro_ptr = AstPtr::new(&mcall);
                     let src = self.expander.in_file(AstPtr::new(&node));
                     let id = self.collect_macro_call(mcall, macro_ptr, true, |this, expansion| {
-                        this.lower_type_ref_opt(expansion, impl_trait_lower_fn)
+                        this.lower_type_ref_opt(expansion, impl_trait_lower_fn, lifetime_elision_fn)
                     });
                     self.store.types_map.insert(src, id);
                     return id;
@@ -880,17 +1002,22 @@ impl<'db> ExprCollector<'db> {
         self.alloc_type_ref(ty, AstPtr::new(&node))
     }
 
-    pub(crate) fn lower_type_ref_disallow_impl_trait(&mut self, node: ast::Type) -> TypeRefId {
-        self.lower_type_ref(node, &mut Self::impl_trait_error_allocator)
+    pub(crate) fn lower_type_ref_disallow_impl_trait(
+        &mut self,
+        node: ast::Type,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
+    ) -> TypeRefId {
+        self.lower_type_ref(node, &mut Self::impl_trait_error_allocator, lifetime_elision_fn)
     }
 
     pub(crate) fn lower_type_ref_opt(
         &mut self,
         node: Option<ast::Type>,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> TypeRefId {
         match node {
-            Some(node) => self.lower_type_ref(node, impl_trait_lower_fn),
+            Some(node) => self.lower_type_ref(node, impl_trait_lower_fn, lifetime_elision_fn),
             None => self.alloc_error_type(),
         }
     }
@@ -898,8 +1025,9 @@ impl<'db> ExprCollector<'db> {
     pub(crate) fn lower_type_ref_opt_disallow_impl_trait(
         &mut self,
         node: Option<ast::Type>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> TypeRefId {
-        self.lower_type_ref_opt(node, &mut Self::impl_trait_error_allocator)
+        self.lower_type_ref_opt(node, &mut Self::impl_trait_error_allocator, lifetime_elision_fn)
     }
 
     fn alloc_type_ref(&mut self, type_ref: TypeRef, node: TypePtr) -> TypeRefId {
@@ -908,6 +1036,13 @@ impl<'db> ExprCollector<'db> {
         self.store.types_map_back.insert(id, ptr);
         self.store.types_map.insert(ptr, id);
         id
+    }
+
+    fn push_elided_lifetime_in_for_binder(&mut self, name: Name) -> usize {
+        let (binder, _) = self.for_type_binder.as_mut().unwrap(); // Should not call this method without a for binder
+        let idx = binder.len();
+        binder.push(name);
+        idx
     }
 
     fn alloc_lifetime_ref(
@@ -942,8 +1077,9 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         ast: ast::Path,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> Option<Path> {
-        super::lower::path::lower_path(self, ast, impl_trait_lower_fn)
+        super::lower::path::lower_path(self, ast, impl_trait_lower_fn, lifetime_elision_fn)
     }
 
     fn with_outer_impl_trait_scope<R>(
@@ -955,6 +1091,71 @@ impl<'db> ExprCollector<'db> {
         let result = f(self);
         self.outer_impl_trait = old;
         result
+    }
+
+    fn with_type_bound_source<R>(
+        &mut self,
+        source: ElisionBinderSource,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let old = mem::replace(&mut self.elision_binder_source, source);
+        let result = f(self);
+        self.elision_binder_source = old;
+        result
+    }
+
+    fn with_self_lt_elision<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.with_elision_context(ElidedSource::Self_, f)
+    }
+
+    fn with_param_lt_elision<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        self.with_elision_context(ElidedSource::Param, f)
+    }
+
+    fn with_elision_context<R>(
+        &mut self,
+        elision_context: ElidedSource,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let old = self.elision_context.replace(elision_context);
+        let result = f(self);
+        self.elision_context = old;
+        result
+    }
+
+    fn with_for_binder<R>(
+        &mut self,
+        binder: Option<ThinVec<Name>>,
+        source: ForBinderSource,
+        f: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let old = match binder {
+            Some(binder) => self.for_type_binder.replace((binder, source)),
+            None => return f(self),
+        };
+        let result = f(self);
+        self.for_type_binder = old;
+        result
+    }
+
+    fn lower_elided_lifetime_for_binder(&mut self) -> LifetimeRefId {
+        let name = Name::anon_lifetime();
+        let local_id = self.push_elided_lifetime_in_for_binder(name);
+        let param_id = HrtbLifetimeParamId(local_id);
+        let lifetime_ref = LifetimeRef::HrtbParam(param_id);
+        self.alloc_lifetime_ref_desugared(lifetime_ref)
+    }
+
+    pub fn elided_lifetime_error_allocator(ec: &mut ExprCollector<'_>) -> LifetimeRefId {
+        ec.alloc_lifetime_ref_desugared(LifetimeRef::Error)
+    }
+
+    pub fn elided_lifetime_placeholder_allocator(ec: &mut ExprCollector<'_>) -> LifetimeRefId {
+        ec.alloc_lifetime_ref_desugared(LifetimeRef::Placeholder)
+    }
+
+    pub fn elided_lifetime_static_allocator(ec: &mut ExprCollector<'_>) -> LifetimeRefId {
+        ec.alloc_lifetime_ref_desugared(LifetimeRef::Static)
     }
 
     pub fn impl_trait_error_allocator(
@@ -984,18 +1185,21 @@ impl<'db> ExprCollector<'db> {
         args: Option<ast::ParenthesizedArgList>,
         ret_type: Option<ast::RetType>,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> Option<GenericArgs> {
         let params = args?;
         let mut param_types = Vec::new();
         for param in params.type_args() {
-            let type_ref = self.lower_type_ref_opt(param.ty(), impl_trait_lower_fn);
+            let type_ref =
+                self.lower_type_ref_opt(param.ty(), impl_trait_lower_fn, lifetime_elision_fn);
             param_types.push(type_ref);
         }
         let args = Box::new([GenericArg::Type(
             self.alloc_type_ref_desugared(TypeRef::Tuple(ThinVec::from_iter(param_types))),
         )]);
         let bindings = if let Some(ret_type) = ret_type {
-            let type_ref = self.lower_type_ref_opt(ret_type.ty(), impl_trait_lower_fn);
+            let type_ref =
+                self.lower_type_ref_opt(ret_type.ty(), impl_trait_lower_fn, lifetime_elision_fn);
             Box::new([AssociatedTypeBinding {
                 name: Name::new_symbol_root(sym::Output),
                 args: None,
@@ -1024,6 +1228,7 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         node: ast::GenericArgList,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> Option<GenericArgs> {
         // This needs to be kept in sync with `hir_generic_arg_to_ast()`.
         let mut args = Vec::new();
@@ -1031,7 +1236,11 @@ impl<'db> ExprCollector<'db> {
         for generic_arg in node.generic_args() {
             match generic_arg {
                 ast::GenericArg::TypeArg(type_arg) => {
-                    let type_ref = self.lower_type_ref_opt(type_arg.ty(), impl_trait_lower_fn);
+                    let type_ref = self.lower_type_ref_opt(
+                        type_arg.ty(),
+                        impl_trait_lower_fn,
+                        lifetime_elision_fn,
+                    );
                     args.push(GenericArg::Type(type_ref));
                 }
                 ast::GenericArg::AssocTypeArg(assoc_type_arg) => {
@@ -1046,18 +1255,30 @@ impl<'db> ExprCollector<'db> {
                             let name = name_ref.as_name();
                             let args = assoc_type_arg
                                 .generic_arg_list()
-                                .and_then(|args| this.lower_generic_args(args, impl_trait_lower_fn))
+                                .and_then(|args| {
+                                    this.lower_generic_args(
+                                        args,
+                                        impl_trait_lower_fn,
+                                        lifetime_elision_fn,
+                                    )
+                                })
                                 .or_else(|| {
                                     assoc_type_arg
                                         .return_type_syntax()
                                         .map(|_| GenericArgs::return_type_notation())
                                 });
-                            let type_ref = assoc_type_arg
-                                .ty()
-                                .map(|it| this.lower_type_ref(it, impl_trait_lower_fn));
+                            let type_ref = assoc_type_arg.ty().map(|it| {
+                                this.lower_type_ref(it, impl_trait_lower_fn, lifetime_elision_fn)
+                            });
                             let bounds = if let Some(l) = assoc_type_arg.type_bound_list() {
                                 l.bounds()
-                                    .map(|it| this.lower_type_bound(it, impl_trait_lower_fn))
+                                    .map(|it| {
+                                        this.lower_type_bound(
+                                            it,
+                                            impl_trait_lower_fn,
+                                            lifetime_elision_fn,
+                                        )
+                                    })
                                     .collect()
                             } else {
                                 Box::default()
@@ -1068,7 +1289,7 @@ impl<'db> ExprCollector<'db> {
                 }
                 ast::GenericArg::LifetimeArg(lifetime_arg) => {
                     if let Some(lifetime) = lifetime_arg.lifetime() {
-                        let lifetime_ref = self.lower_lifetime_ref(lifetime);
+                        let lifetime_ref = self.lower_lifetime_ref(lifetime, lifetime_elision_fn);
                         args.push(GenericArg::Lifetime(lifetime_ref))
                     }
                 }
@@ -1315,10 +1536,13 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         type_bounds_opt: Option<ast::TypeBoundList>,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> ThinVec<TypeBound> {
         if let Some(type_bounds) = type_bounds_opt {
             ThinVec::from_iter(Vec::from_iter(
-                type_bounds.bounds().map(|it| self.lower_type_bound(it, impl_trait_lower_fn)),
+                type_bounds
+                    .bounds()
+                    .map(|it| self.lower_type_bound(it, impl_trait_lower_fn, lifetime_elision_fn)),
             ))
         } else {
             ThinVec::from_iter([])
@@ -1329,8 +1553,9 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         path_type: &ast::PathType,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> Option<Path> {
-        let path = self.lower_path(path_type.path()?, impl_trait_lower_fn)?;
+        let path = self.lower_path(path_type.path()?, impl_trait_lower_fn, lifetime_elision_fn)?;
         Some(path)
     }
 
@@ -1338,44 +1563,50 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         node: ast::TypeBound,
         impl_trait_lower_fn: ImplTraitLowerFn<'_>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
     ) -> TypeBound {
         let Some(kind) = node.kind() else { return TypeBound::Error };
         match kind {
             ast::TypeBoundKind::PathType(binder, path_type) => {
-                let binder = self.lower_for_binder_opt(binder);
+                let binder = self.lower_for_binder_opt(binder).unwrap_or_default();
                 let m = match node.question_mark_token() {
                     Some(_) => TraitBoundModifier::Maybe,
                     None => TraitBoundModifier::None,
                 };
-                self.lower_path_type(&path_type, impl_trait_lower_fn)
-                    .map(|p| {
-                        let path = self.alloc_path(p, AstPtr::new(&path_type).upcast());
-                        if binder.is_empty() {
-                            TypeBound::Path(path, m)
-                        } else {
-                            TypeBound::ForLifetime(binder, path)
-                        }
-                    })
-                    .unwrap_or(TypeBound::Error)
+                self.with_for_binder(Some(binder), ForBinderSource::ForBound, |ec| {
+                    ec.lower_path_type(&path_type, impl_trait_lower_fn, lifetime_elision_fn)
+                        .map(|p| {
+                            let path = ec.alloc_path(p, AstPtr::new(&path_type).upcast());
+                            let binder = ec.for_type_binder.take();
+                            if let Some((binder, _)) = binder
+                                && !binder.is_empty()
+                            {
+                                TypeBound::ForLifetime(binder, path)
+                            } else {
+                                TypeBound::Path(path, m)
+                            }
+                        })
+                        .unwrap_or(TypeBound::Error)
+                })
             }
             ast::TypeBoundKind::Use(gal) => TypeBound::Use(
                 gal.use_bound_generic_args()
                     .map(|p| match p {
                         ast::UseBoundGenericArg::Lifetime(l) => {
-                            UseArgRef::Lifetime(self.lower_lifetime_ref(l))
+                            UseArgRef::Lifetime(self.lower_lifetime_ref(l, lifetime_elision_fn))
                         }
                         ast::UseBoundGenericArg::NameRef(n) => UseArgRef::Name(n.as_name()),
                     })
                     .collect(),
             ),
             ast::TypeBoundKind::Lifetime(lifetime) => {
-                TypeBound::Lifetime(self.lower_lifetime_ref(lifetime))
+                TypeBound::Lifetime(self.lower_lifetime_ref(lifetime, lifetime_elision_fn))
             }
         }
     }
 
-    fn lower_for_binder_opt(&mut self, binder: Option<ForBinder>) -> ThinVec<Name> {
-        binder.map(|b| self.lower_for_binder(b)).unwrap_or_default()
+    fn lower_for_binder_opt(&mut self, binder: Option<ForBinder>) -> Option<ThinVec<Name>> {
+        binder.map(|b| self.lower_for_binder(b))
     }
 
     fn lower_for_binder(&mut self, binder: ForBinder) -> ThinVec<Name> {
@@ -1569,7 +1800,7 @@ impl<'db> ExprCollector<'db> {
                 let generic_args = e
                     .generic_arg_list()
                     .and_then(|it| {
-                        self.lower_generic_args(it, &mut Self::impl_trait_error_allocator)
+                        self.lower_generic_args(it, &mut Self::impl_trait_error_allocator, &mut Self::elided_lifetime_error_allocator)
                     })
                     .map(Box::new);
                 self.alloc_expr(
@@ -1661,7 +1892,7 @@ impl<'db> ExprCollector<'db> {
             ast::Expr::RecordExpr(e) => {
                 let path = e
                     .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator, &mut Self::elided_lifetime_placeholder_allocator));
                 let Some(path) = path else {
                     return Some(self.missing_expr());
                 };
@@ -1719,7 +1950,7 @@ impl<'db> ExprCollector<'db> {
             ast::Expr::TryExpr(e) => self.collect_try_operator(syntax_ptr, e),
             ast::Expr::CastExpr(e) => {
                 let expr = self.collect_expr_opt(e.expr());
-                let type_ref = self.lower_type_ref_opt_disallow_impl_trait(e.ty());
+                let type_ref = self.lower_type_ref_opt_disallow_impl_trait(e.ty(), &mut Self::elided_lifetime_placeholder_allocator);
                 self.alloc_expr(Expr::Cast { expr, type_ref }, syntax_ptr)
             }
             ast::Expr::RefExpr(e) => {
@@ -1757,7 +1988,8 @@ impl<'db> ExprCollector<'db> {
 
                             let pat = this.collect_pat_top(param.pat());
                             let type_ref =
-                                param.ty().map(|it| this.lower_type_ref_disallow_impl_trait(it));
+                                // FIXME: should closures elide if so how?
+                                param.ty().map(|it| this.lower_type_ref_disallow_impl_trait(it, &mut Self::elided_lifetime_placeholder_allocator));
                             args.push(pat);
                             arg_types.push(type_ref);
                         }
@@ -1765,7 +1997,7 @@ impl<'db> ExprCollector<'db> {
                     let ret_type = e
                         .ret_type()
                         .and_then(|r| r.ty())
-                        .map(|it| this.lower_type_ref_disallow_impl_trait(it));
+                        .map(|it| this.lower_type_ref_disallow_impl_trait(it, &mut Self::elided_lifetime_placeholder_allocator));
 
                     let prev_is_lowering_coroutine = mem::take(&mut this.is_lowering_coroutine);
                     let prev_try_block = this.current_try_block.take();
@@ -1926,7 +2158,7 @@ impl<'db> ExprCollector<'db> {
             ast::Expr::UnderscoreExpr(_) => self.alloc_expr(Expr::Underscore, syntax_ptr),
             ast::Expr::AsmExpr(e) => self.lower_inline_asm(e, syntax_ptr),
             ast::Expr::OffsetOfExpr(e) => {
-                let container = self.lower_type_ref_opt_disallow_impl_trait(e.ty());
+                let container = self.lower_type_ref_opt_disallow_impl_trait(e.ty(), &mut Self::elided_lifetime_placeholder_allocator);
                 let fields = e.fields().map(|it| it.as_name()).collect();
                 self.alloc_expr(Expr::OffsetOf(OffsetOf { container, fields }), syntax_ptr)
             }
@@ -2022,7 +2254,11 @@ impl<'db> ExprCollector<'db> {
 
     fn collect_expr_path(&mut self, e: ast::PathExpr) -> Option<(Path, HygieneId)> {
         e.path().and_then(|path| {
-            let path = self.lower_path(path, &mut Self::impl_trait_error_allocator)?;
+            let path = self.lower_path(
+                path,
+                &mut Self::impl_trait_error_allocator,
+                &mut Self::elided_lifetime_placeholder_allocator,
+            )?;
             // Need to enable `mod_path.len() < 1` for `self`.
             let may_be_variable = matches!(&path, Path::BarePath(mod_path) if mod_path.len() <= 1);
             let hygiene = if may_be_variable {
@@ -2130,9 +2366,13 @@ impl<'db> ExprCollector<'db> {
             }
             ast::Expr::CallExpr(e) => {
                 let path = collect_path(self, e.expr()?)?;
-                let path = path
-                    .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                let path = path.path().and_then(|path| {
+                    self.lower_path(
+                        path,
+                        &mut Self::impl_trait_error_allocator,
+                        &mut Self::elided_lifetime_placeholder_allocator,
+                    )
+                });
                 let Some(path) = path else {
                     return Some(self.missing_pat());
                 };
@@ -2163,9 +2403,13 @@ impl<'db> ExprCollector<'db> {
                 id
             }
             ast::Expr::RecordExpr(e) => {
-                let path = e
-                    .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                let path = e.path().and_then(|path| {
+                    self.lower_path(
+                        path,
+                        &mut Self::impl_trait_error_allocator,
+                        &mut Self::elided_lifetime_placeholder_allocator,
+                    )
+                });
                 let Some(path) = path else {
                     return Some(self.missing_pat());
                 };
@@ -2345,7 +2589,10 @@ impl<'db> ExprCollector<'db> {
             Some(ty) => {
                 // `{ let <name>: <ty> = <expr>; <name> }`
                 let name = self.generate_new_name();
-                let type_ref = self.lower_type_ref_disallow_impl_trait(ty);
+                let type_ref = self.lower_type_ref_disallow_impl_trait(
+                    ty,
+                    &mut Self::elided_lifetime_placeholder_allocator,
+                );
                 let binding = self.alloc_binding(
                     name.clone(),
                     BindingAnnotation::Unannotated,
@@ -2729,7 +2976,12 @@ impl<'db> ExprCollector<'db> {
                     return;
                 }
                 let pat = self.collect_pat_top(stmt.pat());
-                let type_ref = stmt.ty().map(|it| self.lower_type_ref_disallow_impl_trait(it));
+                let type_ref = stmt.ty().map(|it| {
+                    self.lower_type_ref_disallow_impl_trait(
+                        it,
+                        &mut Self::elided_lifetime_placeholder_allocator,
+                    )
+                });
                 let initializer = stmt.initializer().map(|e| self.collect_expr(e));
                 let else_branch = stmt
                     .let_else()
@@ -2969,9 +3221,13 @@ impl<'db> ExprCollector<'db> {
                 return pat;
             }
             ast::Pat::TupleStructPat(p) => {
-                let path = p
-                    .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                let path = p.path().and_then(|path| {
+                    self.lower_path(
+                        path,
+                        &mut Self::impl_trait_error_allocator,
+                        &mut Self::elided_lifetime_error_allocator,
+                    )
+                });
                 let Some(path) = path else {
                     return self.missing_pat();
                 };
@@ -2988,9 +3244,13 @@ impl<'db> ExprCollector<'db> {
                 Pat::Ref { pat, mutability }
             }
             ast::Pat::PathPat(p) => {
-                let path = p
-                    .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                let path = p.path().and_then(|path| {
+                    self.lower_path(
+                        path,
+                        &mut Self::impl_trait_error_allocator,
+                        &mut Self::elided_lifetime_error_allocator,
+                    )
+                });
                 path.map(Pat::Path).unwrap_or(Pat::Missing)
             }
             ast::Pat::OrPat(p) => 'b: {
@@ -3037,9 +3297,13 @@ impl<'db> ExprCollector<'db> {
             }
             ast::Pat::WildcardPat(_) => Pat::Wild,
             ast::Pat::RecordPat(p) => {
-                let path = p
-                    .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                let path = p.path().and_then(|path| {
+                    self.lower_path(
+                        path,
+                        &mut Self::impl_trait_error_allocator,
+                        &mut Self::elided_lifetime_error_allocator,
+                    )
+                });
                 let Some(path) = path else {
                     return self.missing_pat();
                 };
@@ -3120,7 +3384,11 @@ impl<'db> ExprCollector<'db> {
                             ast::Pat::PathPat(p) => p
                                 .path()
                                 .and_then(|path| {
-                                    self.lower_path(path, &mut Self::impl_trait_error_allocator)
+                                    self.lower_path(
+                                        path,
+                                        &mut Self::impl_trait_error_allocator,
+                                        &mut Self::elided_lifetime_error_allocator,
+                                    )
                                 })
                                 .map(|parsed| self.alloc_expr_from_pat(Expr::Path(parsed), ptr)),
                             // We only need to handle literal, ident (if bare) and path patterns here,
@@ -3284,9 +3552,13 @@ impl<'db> ExprCollector<'db> {
                 self.alloc_expr_from_pat(Expr::Literal(literal), ptr)
             }
             ast::Pat::PathPat(it) => {
-                let path = it
-                    .path()
-                    .and_then(|path| self.lower_path(path, &mut Self::impl_trait_error_allocator));
+                let path = it.path().and_then(|path| {
+                    self.lower_path(
+                        path,
+                        &mut Self::impl_trait_error_allocator,
+                        &mut Self::elided_lifetime_error_allocator,
+                    )
+                });
                 self.alloc_expr_from_pat(path.map(Expr::Path).unwrap_or(Expr::Missing), ptr)
             }
             ast::Pat::IdentPat(it) if it.is_simple_ident() => {
@@ -3683,19 +3955,11 @@ impl<'db> ExprCollector<'db> {
 
     fn get_constrained_lifetimes_if_type_alias<'a>(
         &mut self,
-        mod_path: &'a ModPath,
+        module_def_id: Option<ModuleDefId>,
         generic_args: Option<&'a GenericArgs>,
     ) -> Option<impl Iterator<Item = LifetimeRefId> + use<'a, 'db>> {
         let generic_args = generic_args?;
-        let r_path = self.def_map.resolve_path(
-            self.local_def_map,
-            self.db,
-            self.module,
-            mod_path,
-            BuiltinShadowMode::Module,
-            None,
-        );
-        let ModuleDefId::TypeAliasId(id) = r_path.0.take_types()? else { return None };
+        let ModuleDefId::TypeAliasId(id) = module_def_id? else { return None };
 
         let constrained_lt_indices = get_constrained_lifetimes(self.db, id);
         let res = constrained_lt_indices.iter().filter_map(|&idx| {
@@ -3761,6 +4025,55 @@ impl<'db> ExprCollector<'db> {
             _id: TypeAliasId,
         ) -> Box<[u32]> {
             Default::default()
+        }
+    }
+
+    pub(crate) fn collect_path_elided_liftetimes(
+        &mut self,
+        module_def_id: Option<ModuleDefId>,
+        args: Option<&GenericArgs>,
+        lifetime_elision_fn: LifetimeElisionFn<'_>,
+    ) -> Option<GenericArgs> {
+        let num_lifetime_args = args
+            .as_ref()
+            .map(|args| {
+                args.args.iter().filter(|arg| matches!(arg, GenericArg::Lifetime(..))).count()
+            })
+            .unwrap_or_default();
+
+        let def = module_def_id.and_then(|def| def.as_generic_def_id());
+
+        let num_lifetime_params =
+            def.map(|def| GenericParams::of(self.db, def).len_lifetimes()).unwrap_or_default();
+
+        let mut elided_args = Vec::new();
+        if num_lifetime_args == 0 {
+            // lifetime args does not exist in source
+            // call elided function for all lifetime params
+            for _ in 0..num_lifetime_params {
+                let lt_id = lifetime_elision_fn(self);
+                elided_args.push(GenericArg::Lifetime(lt_id));
+            }
+        }
+        if !elided_args.is_empty() {
+            if let Some(prev_generic_args) = args {
+                elided_args.extend_from_slice(prev_generic_args.args.as_ref());
+                Some(GenericArgs {
+                    args: elided_args.into_boxed_slice(),
+                    has_self_type: prev_generic_args.has_self_type,
+                    bindings: prev_generic_args.bindings.clone(),
+                    parenthesized: prev_generic_args.parenthesized,
+                })
+            } else {
+                Some(GenericArgs {
+                    args: elided_args.into_boxed_slice(),
+                    has_self_type: false,
+                    bindings: Box::default(),
+                    parenthesized: GenericArgsParentheses::No,
+                })
+            }
+        } else {
+            None
         }
     }
 }

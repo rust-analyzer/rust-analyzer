@@ -166,6 +166,7 @@ impl ExprCollector<'_> {
                                     self.lower_path(
                                         p,
                                         &mut ExprCollector::impl_trait_error_allocator,
+                                        &mut ExprCollector::elided_lifetime_error_allocator,
                                     )
                                 }) else {
                                     continue;
