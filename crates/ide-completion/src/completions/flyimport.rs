@@ -218,7 +218,7 @@ fn import_on_the_fly<'db>(
 
     ImportScope::find_insert_use_container(&position, &ctx.sema)?;
 
-    let ns_filter = |import: &LocatedImport| {
+    let ns_filter = |import: &LocatedImport<'_>| {
         match (kind, import.original_item) {
             // Aren't handled in flyimport
             (PathKind::Vis { .. } | PathKind::Use, _) => false,
@@ -309,7 +309,7 @@ fn import_on_the_fly_pat_<'db>(
 
     ImportScope::find_insert_use_container(&position, &ctx.sema)?;
 
-    let ns_filter = |import: &LocatedImport| match import.original_item {
+    let ns_filter = |import: &LocatedImport<'_>| match import.original_item {
         ItemInNs::Macros(mac) => mac.is_fn_like(ctx.db),
         ItemInNs::Types(_) => true,
         ItemInNs::Values(def) => matches!(def, hir::ModuleDef::Const(_)),
@@ -393,7 +393,7 @@ fn import_on_the_fly_method<'db>(
     Some(())
 }
 
-fn filter_excluded_flyimport(ctx: &CompletionContext<'_, '_>, import: &LocatedImport) -> bool {
+fn filter_excluded_flyimport(ctx: &CompletionContext<'_, '_>, import: &LocatedImport<'_>) -> bool {
     let def = import.item_to_import.into_module_def();
     let is_exclude_flyimport = ctx.exclude_flyimport.get(&def).copied();
 

@@ -127,10 +127,10 @@ pub(crate) fn complete_pattern(
     });
 }
 
-pub(crate) fn complete_pattern_path(
+pub(crate) fn complete_pattern_path<'db>(
     acc: &mut Completions,
-    ctx: &CompletionContext<'_, '_>,
-    path_ctx @ PathCompletionCtx { qualified, .. }: &PathCompletionCtx<'_>,
+    ctx: &CompletionContext<'_, 'db>,
+    path_ctx @ PathCompletionCtx { qualified, .. }: &PathCompletionCtx<'db>,
 ) {
     match qualified {
         Qualified::With { resolution: Some(resolution), super_chain_len, .. } => {

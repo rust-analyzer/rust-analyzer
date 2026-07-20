@@ -18,7 +18,7 @@ use crate::{
 /// * `InFile<SyntaxNode>` -- syntax node in a file
 /// * `InFile<ast::FnDef>` -- ast node in a file
 /// * `InFile<TextSize>` -- offset in a file
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, salsa::SalsaValue)]
 pub struct InFileWrapper<FileKind, T> {
     pub file_id: FileKind,
     pub value: T,

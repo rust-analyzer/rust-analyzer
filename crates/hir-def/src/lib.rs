@@ -358,7 +358,7 @@ pub struct BuiltinDeriveImplLoc {
     pub derive_index: u32,
 }
 
-#[salsa::interned(debug, unsafe(no_lifetime), revisions = usize::MAX)]
+#[salsa::interned(debug, revisions = usize::MAX)]
 #[derive(PartialOrd, Ord)]
 pub struct BuiltinDeriveImplId {
     #[returns(ref)]
@@ -568,7 +568,7 @@ impl<'db> ModuleIdLt<'db> {
         unsafe { std::mem::transmute(self) }
     }
 
-    pub fn def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap {
+    pub fn def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap<'db> {
         match self.block(db) {
             Some(block) => block_def_map(db, block),
             None => crate_def_map(db, self.krate(db)),
@@ -578,7 +578,7 @@ impl<'db> ModuleIdLt<'db> {
     pub(crate) fn local_def_map(
         self,
         db: &'db dyn SourceDatabase,
-    ) -> (&'db DefMap, &'db LocalDefMap) {
+    ) -> (&'db DefMap<'db>, &'db LocalDefMap) {
         match self.block(db) {
             Some(block) => (block_def_map(db, block), self.only_local_def_map(db)),
             None => {
@@ -592,7 +592,7 @@ impl<'db> ModuleIdLt<'db> {
         crate_local_def_map(db, self.krate(db)).local(db)
     }
 
-    pub fn crate_def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap {
+    pub fn crate_def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap<'db> {
         crate_def_map(db, self.krate(db))
     }
 
@@ -746,7 +746,9 @@ pub enum AdtId {
 impl_from!(StructId, UnionId, EnumId for AdtId);
 
 /// A macro
-#[derive(Debug, PartialOrd, Ord, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype)]
+#[derive(
+    Debug, PartialOrd, Ord, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype, salsa::SalsaValue,
+)]
 pub enum MacroId {
     Macro2Id(Macro2Id),
     MacroRulesId(MacroRulesId),
@@ -1246,7 +1248,7 @@ impl HasModule for BuiltinDeriveImplLoc {
     }
 }
 
-impl HasModule for BuiltinDeriveImplId {
+impl HasModule for BuiltinDeriveImplId<'_> {
     #[inline]
     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
         self.loc(db).module(db)

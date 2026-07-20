@@ -13,8 +13,8 @@ use crate::{FilePosition, NavigationTarget, RangeInfo, TryToNav};
 // | VS Code | **Go to Type Definition** |
 //
 // ![Go to Type Definition](https://user-images.githubusercontent.com/48062697/113020657-b560f500-917a-11eb-9007-0f809733a338.gif)
-pub(crate) fn goto_type_definition(
-    db: &RootDatabase,
+pub(crate) fn goto_type_definition<'db>(
+    db: &'db RootDatabase,
     FilePosition { file_id, offset }: FilePosition,
 ) -> Option<RangeInfo<Vec<NavigationTarget>>> {
     let sema = hir::Semantics::new(db);
@@ -29,7 +29,7 @@ pub(crate) fn goto_type_definition(
         })?;
 
     let mut res = Vec::new();
-    let mut push = |def: Definition<'_>| {
+    let mut push = |def: Definition<'db>| {
         if let Some(navs) = def.try_to_nav(&sema) {
             for nav in navs {
                 if !res.contains(&nav) {

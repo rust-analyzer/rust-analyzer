@@ -60,12 +60,12 @@ use crate::{
 const GLOB_RECURSION_LIMIT: usize = 100;
 const FIXED_POINT_LIMIT: usize = 8192;
 
-pub(super) fn collect_defs(
-    db: &dyn SourceDatabase,
-    def_map: DefMap,
+pub(super) fn collect_defs<'db>(
+    db: &'db dyn SourceDatabase,
+    def_map: DefMap<'db>,
     tree_id: TreeId,
-    crate_local_def_map: Option<&LocalDefMap>,
-) -> (DefMap, LocalDefMap) {
+    crate_local_def_map: Option<&'db LocalDefMap>,
+) -> (DefMap<'db>, LocalDefMap) {
     let krate = &def_map.krate.data(db);
     let cfg_options = def_map.krate.cfg_options(db);
 
@@ -231,7 +231,7 @@ struct DeferredBuiltinDerive {
 /// Walks the tree of module recursively
 struct DefCollector<'db> {
     db: &'db dyn SourceDatabase,
-    def_map: DefMap,
+    def_map: DefMap<'db>,
     local_def_map: LocalDefMap,
     /// Set only in case of blocks.
     crate_local_def_map: Option<&'db LocalDefMap>,
@@ -1336,7 +1336,7 @@ impl<'db> DefCollector<'db> {
                     MacroSubNs::Attr
                 }
             };
-            let resolver = |def_map: &DefMap, path: &_| {
+            let resolver = |def_map: &DefMap<'db>, path: &_| {
                 let resolved_res = def_map.resolve_path_fp_with_macro(
                     self.crate_local_def_map.unwrap_or(&self.local_def_map),
                     self.db,
@@ -1778,7 +1778,7 @@ impl<'db> DefCollector<'db> {
         .collect(item_tree.top_level_items(), container);
     }
 
-    fn finish(mut self) -> (DefMap, LocalDefMap) {
+    fn finish(mut self) -> (DefMap<'db>, LocalDefMap) {
         // Emit diagnostics for all remaining unexpanded macros.
         let _p = tracing::info_span!("DefCollector::finish").entered();
 
@@ -1890,7 +1890,7 @@ struct ModCollector<'a, 'db> {
     mod_dir: ModDir,
 }
 
-impl ModCollector<'_, '_> {
+impl<'db> ModCollector<'_, 'db> {
     fn collect_in_top_module(&mut self, items: &[ModItemId]) {
         self.collect(items, self.module_id.into())
     }
@@ -1910,7 +1910,7 @@ impl ModCollector<'_, '_> {
              deferred_derives: &mut FxHashMap<_, Vec<DeferredBuiltinDerive>>,
              ast_id: FileAstId<ast::Adt>,
              id: AdtId,
-             def_map: &mut DefMap| {
+             def_map: &mut DefMap<'db>| {
                 let ast_id = InFile::new(file_id, ast_id.upcast());
                 let Some(deferred_derives) = deferred_derives.remove(&ast_id.upcast()) else {
                     return;
@@ -1957,7 +1957,7 @@ impl ModCollector<'_, '_> {
                     None,
                 )
             };
-        let resolve_vis = |def_map: &DefMap, local_def_map: &LocalDefMap, visibility| {
+        let resolve_vis = |def_map: &DefMap<'db>, local_def_map: &LocalDefMap, visibility| {
             def_map
                 .resolve_visibility(local_def_map, db, module_id, visibility, false)
                 .unwrap_or(Visibility::Public)

@@ -307,27 +307,27 @@ pub struct CompleteInFlyimport(pub bool);
 /// An import (not necessary the only one) that corresponds a certain given [`PathImportCandidate`].
 /// (the structure is not entirely correct, since there can be situations requiring two imports, see FIXME below for the details)
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LocatedImport {
+pub struct LocatedImport<'db> {
     /// The path to use in the `use` statement for a given candidate to be imported.
     pub import_path: ModPath,
     /// An item that will be imported with the import path given.
-    pub item_to_import: ItemInNs,
+    pub item_to_import: ItemInNs<'db>,
     /// The path import candidate, resolved.
     ///
     /// Not necessarily matches the import:
     /// For any associated constant from the trait, we try to access as `some::path::SomeStruct::ASSOC_`
     /// the original item is the associated constant, but the import has to be a trait that
     /// defines this constant.
-    pub original_item: ItemInNs,
+    pub original_item: ItemInNs<'db>,
     /// The value of `#[rust_analyzer::completions(...)]`, if existing.
     pub complete_in_flyimport: CompleteInFlyimport,
 }
 
-impl LocatedImport {
+impl<'db> LocatedImport<'db> {
     pub fn new(
         import_path: ModPath,
-        item_to_import: ItemInNs,
-        original_item: ItemInNs,
+        item_to_import: ItemInNs<'db>,
+        original_item: ItemInNs<'db>,
         complete_in_flyimport: CompleteInFlyimport,
     ) -> Self {
         Self { import_path, item_to_import, original_item, complete_in_flyimport }
@@ -335,8 +335,8 @@ impl LocatedImport {
 
     pub fn new_no_completion(
         import_path: ModPath,
-        item_to_import: ItemInNs,
-        original_item: ItemInNs,
+        item_to_import: ItemInNs<'db>,
+        original_item: ItemInNs<'db>,
     ) -> Self {
         Self {
             import_path,
@@ -357,7 +357,7 @@ impl<'db> ImportAssets<'db> {
         sema: &Semantics<'db, RootDatabase>,
         cfg: ImportPathConfig,
         prefix_kind: PrefixKind,
-    ) -> impl Iterator<Item = LocatedImport> {
+    ) -> impl Iterator<Item = LocatedImport<'db>> {
         let _p = tracing::info_span!("ImportAssets::search_for_imports").entered();
         self.search_for(sema, Some(prefix_kind), cfg)
     }
@@ -367,7 +367,7 @@ impl<'db> ImportAssets<'db> {
         &self,
         sema: &Semantics<'db, RootDatabase>,
         cfg: ImportPathConfig,
-    ) -> impl Iterator<Item = LocatedImport> {
+    ) -> impl Iterator<Item = LocatedImport<'db>> {
         let _p = tracing::info_span!("ImportAssets::search_for_relative_paths").entered();
         self.search_for(sema, None, cfg)
     }
@@ -407,7 +407,7 @@ impl<'db> ImportAssets<'db> {
         sema: &Semantics<'db, RootDatabase>,
         prefixed: Option<PrefixKind>,
         cfg: ImportPathConfig,
-    ) -> impl Iterator<Item = LocatedImport> {
+    ) -> impl Iterator<Item = LocatedImport<'db>> {
         let _p = tracing::info_span!("ImportAssets::search_for").entered();
 
         let scope = match sema.scope(&self.candidate_node) {
@@ -473,14 +473,14 @@ impl<'db> ImportAssets<'db> {
     }
 }
 
-fn path_applicable_imports(
-    db: &RootDatabase,
-    scope: &SemanticsScope<'_>,
+fn path_applicable_imports<'db>(
+    db: &'db RootDatabase,
+    scope: &SemanticsScope<'db>,
     current_crate: Crate,
     path_candidate: &PathImportCandidate,
-    mod_path: impl Fn(ItemInNs) -> Option<ModPath> + Copy,
-    scope_filter: impl Fn(ItemInNs) -> bool + Copy,
-) -> FxIndexSet<LocatedImport> {
+    mod_path: impl Fn(ItemInNs<'db>) -> Option<ModPath> + Copy,
+    scope_filter: impl Fn(ItemInNs<'db>) -> bool + Copy,
+) -> FxIndexSet<LocatedImport<'db>> {
     let _p = tracing::info_span!("ImportAssets::path_applicable_imports").entered();
 
     let mut result = match &*path_candidate.qualifier {
@@ -552,7 +552,7 @@ fn path_applicable_imports(
 
 fn filter_by_definition_kind(
     db: &RootDatabase,
-    item: ItemInNs,
+    item: ItemInNs<'_>,
     allowed: &PathDefinitionKinds,
 ) -> bool {
     let item = item.into_module_def();
@@ -590,11 +590,11 @@ fn filter_by_definition_kind(
     }
 }
 
-fn filter_candidates_by_after_path(
-    db: &RootDatabase,
-    scope: &SemanticsScope<'_>,
+fn filter_candidates_by_after_path<'db>(
+    db: &'db RootDatabase,
+    scope: &SemanticsScope<'db>,
     path_candidate: &PathImportCandidate,
-    imports: &mut FxIndexSet<LocatedImport>,
+    imports: &mut FxIndexSet<LocatedImport<'db>>,
 ) {
     if imports.len() <= 1 {
         // Short-circuit, as even if it doesn't match fully we want it.
@@ -622,7 +622,7 @@ fn filter_candidates_by_after_path(
                 .collect::<SmallVec<[_; 3]>>()
         };
         items.into_iter().any(|item| {
-            let has_last_method = |ty: hir::Type<'_>| {
+            let has_last_method = |ty: hir::Type<'db>| {
                 ty.iterate_path_candidates(db, scope, &traits_in_scope, Some(last_after), |_| {
                     Some(())
                 })
@@ -657,16 +657,16 @@ fn filter_candidates_by_after_path(
 
 /// Validates and builds an import for `resolved_qualifier` if the `unresolved_qualifier` appended
 /// to it resolves and there is a validate `candidate` after that.
-fn validate_resolvable(
-    db: &RootDatabase,
-    scope: &SemanticsScope<'_>,
-    mod_path: impl Fn(ItemInNs) -> Option<ModPath>,
-    scope_filter: impl Fn(ItemInNs) -> bool,
+fn validate_resolvable<'db>(
+    db: &'db RootDatabase,
+    scope: &SemanticsScope<'db>,
+    mod_path: impl Fn(ItemInNs<'db>) -> Option<ModPath>,
+    scope_filter: impl Fn(ItemInNs<'db>) -> bool,
     candidate: &NameToImport,
-    resolved_qualifier: ItemInNs,
+    resolved_qualifier: ItemInNs<'db>,
     unresolved_qualifier: &[Name],
     complete_in_flyimport: CompleteInFlyimport,
-) -> SmallVec<[LocatedImport; 1]> {
+) -> SmallVec<[LocatedImport<'db>; 1]> {
     let _p = tracing::info_span!("ImportAssets::import_for_item").entered();
 
     let qualifier = (|| {
@@ -753,7 +753,7 @@ fn validate_resolvable(
     result
 }
 
-pub fn item_for_path_search(db: &RootDatabase, item: ItemInNs) -> Option<ItemInNs> {
+pub fn item_for_path_search<'db>(db: &RootDatabase, item: ItemInNs<'db>) -> Option<ItemInNs<'db>> {
     Some(match item {
         ItemInNs::Types(_) | ItemInNs::Values(_) => match item_as_assoc(db, item) {
             Some(assoc_item) => item_for_path_search_assoc(db, assoc_item)?,
@@ -763,7 +763,10 @@ pub fn item_for_path_search(db: &RootDatabase, item: ItemInNs) -> Option<ItemInN
     })
 }
 
-fn item_for_path_search_assoc(db: &RootDatabase, assoc_item: AssocItem) -> Option<ItemInNs> {
+fn item_for_path_search_assoc<'db>(
+    db: &RootDatabase,
+    assoc_item: AssocItem<'db>,
+) -> Option<ItemInNs<'db>> {
     Some(match assoc_item.container(db) {
         AssocItemContainer::Trait(trait_) => ItemInNs::from(ModuleDef::from(trait_)),
         AssocItemContainer::Impl(impl_) => {
@@ -778,9 +781,9 @@ fn trait_applicable_items<'db>(
     scope: &SemanticsScope<'db>,
     trait_candidate: &TraitImportCandidate<'db>,
     trait_assoc_item: bool,
-    mod_path: impl Fn(ItemInNs) -> Option<ModPath>,
+    mod_path: impl Fn(ItemInNs<'db>) -> Option<ModPath>,
     scope_filter: impl Fn(hir::Trait) -> bool,
-) -> FxIndexSet<LocatedImport> {
+) -> FxIndexSet<LocatedImport<'db>> {
     let _p = tracing::info_span!("ImportAssets::trait_applicable_items").entered();
 
     let inherent_traits = trait_candidate.receiver_ty.applicable_inherent_traits(db);
@@ -935,7 +938,7 @@ fn trait_applicable_items<'db>(
     located_imports
 }
 
-fn assoc_to_item(assoc: AssocItem) -> ItemInNs {
+fn assoc_to_item<'db>(assoc: AssocItem<'db>) -> ItemInNs<'db> {
     match assoc {
         AssocItem::Function(f) => ItemInNs::from(ModuleDef::from(f)),
         AssocItem::Const(c) => ItemInNs::from(ModuleDef::from(c)),
@@ -946,7 +949,7 @@ fn assoc_to_item(assoc: AssocItem) -> ItemInNs {
 #[tracing::instrument(skip_all)]
 fn get_mod_path(
     db: &RootDatabase,
-    item_to_search: ItemInNs,
+    item_to_search: ItemInNs<'_>,
     module_with_candidate: &Module,
     prefixed: Option<PrefixKind>,
     cfg: FindPathConfig,
@@ -1073,6 +1076,6 @@ fn path_import_candidate<'db>(
     })
 }
 
-fn item_as_assoc(db: &RootDatabase, item: ItemInNs) -> Option<AssocItem> {
+fn item_as_assoc<'db>(db: &RootDatabase, item: ItemInNs<'db>) -> Option<AssocItem<'db>> {
     item.into_module_def().as_assoc_item(db)
 }

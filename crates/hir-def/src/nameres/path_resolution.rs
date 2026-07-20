@@ -90,11 +90,11 @@ impl PerNs {
     }
 }
 
-impl DefMap {
+impl<'db> DefMap<'db> {
     pub(crate) fn resolve_visibility(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         // module to import to
         original_module: ModuleId,
         // pub(path)
@@ -154,7 +154,7 @@ impl DefMap {
     pub(super) fn resolve_path_fp_with_macro(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         mode: ResolveMode,
         // module to import to
         mut original_module: ModuleId,
@@ -242,7 +242,7 @@ impl DefMap {
     pub(super) fn resolve_path_fp_with_macro_single(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         mode: ResolveMode,
         original_module: ModuleId,
         path: &ModPath,
@@ -370,7 +370,7 @@ impl DefMap {
     pub(super) fn resolve_path_fp_in_all_preludes(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         mode: ResolveMode,
         original_module: ModuleId,
         path: &ModPath,
@@ -447,7 +447,7 @@ impl DefMap {
 
     fn resolve_remaining_segments<'a>(
         &self,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         mode: ResolveMode,
         mut segments: impl Iterator<Item = (usize, &'a Name)>,
         mut curr_per_ns: PerNs,
@@ -623,7 +623,7 @@ impl DefMap {
     fn resolve_name_in_module(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         module: ModuleId,
         name: &Name,
         shadow: BuiltinShadowMode,
@@ -684,7 +684,7 @@ impl DefMap {
     fn resolve_name_in_all_preludes(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         name: &Name,
     ) -> PerNs {
         // Resolve in:
@@ -742,7 +742,7 @@ impl DefMap {
         from_crate_root.or_else(from_extern_prelude)
     }
 
-    fn resolve_in_prelude(&self, db: &dyn SourceDatabase, name: &Name) -> PerNs {
+    fn resolve_in_prelude(&self, db: &'db dyn SourceDatabase, name: &Name) -> PerNs {
         if let Some((prelude, _use)) = self.prelude {
             let def_map = if prelude.krate(db) == self.krate { self } else { prelude.def_map(db) };
             def_map[prelude].scope.get(name)
@@ -754,11 +754,11 @@ impl DefMap {
 
 /// Given a block module, returns its nearest non-block module and the `DefMap` it belongs to.
 #[inline]
-fn adjust_to_nearest_non_block_module<'db>(
+fn adjust_to_nearest_non_block_module<'db, 'dm>(
     db: &'db dyn SourceDatabase,
-    mut def_map: &'db DefMap,
+    mut def_map: &'dm DefMap<'db>,
     mut local_id: ModuleId,
-) -> (&'db DefMap, ModuleId) {
+) -> (&'dm DefMap<'db>, ModuleId) {
     if def_map.root_module_id() != local_id {
         // if we aren't the root, we are either not a block module, or a non-block module inside a
         // block def map.

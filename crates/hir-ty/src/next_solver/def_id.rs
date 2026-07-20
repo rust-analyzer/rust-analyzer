@@ -35,7 +35,7 @@ pub enum SolverDefId<'db> {
     ConstId(ConstId),
     FunctionId(FunctionId),
     ImplId(ImplId),
-    BuiltinDeriveImplId(BuiltinDeriveImplId),
+    BuiltinDeriveImplId(BuiltinDeriveImplId<'db>),
     StaticId(StaticId),
     AnonConstId(AnonConstId<'db>),
     TraitId(TraitId),
@@ -128,7 +128,7 @@ impl_from!(
     ConstId,
     FunctionId,
     ImplId,
-    BuiltinDeriveImplId,
+    BuiltinDeriveImplId<'db>,
     StaticId,
     AnonConstId<'db>,
     TraitId,
@@ -644,26 +644,26 @@ impl<'db> inherent::DefId<DbInterner<'db>> for CallableIdWrapper {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AnyImplId {
+pub enum AnyImplId<'db> {
     ImplId(ImplId),
-    BuiltinDeriveImplId(BuiltinDeriveImplId),
+    BuiltinDeriveImplId(BuiltinDeriveImplId<'db>),
 }
 
-impl_from!(ImplId, BuiltinDeriveImplId for AnyImplId);
+impl_from!(impl<'db> ImplId, BuiltinDeriveImplId<'db> for AnyImplId<'db>);
 
-impl<'db> From<AnyImplId> for SolverDefId<'db> {
+impl<'db> From<AnyImplId<'db>> for SolverDefId<'db> {
     #[inline]
-    fn from(value: AnyImplId) -> SolverDefId<'db> {
+    fn from(value: AnyImplId<'db>) -> SolverDefId<'db> {
         match value {
             AnyImplId::ImplId(it) => it.into(),
             AnyImplId::BuiltinDeriveImplId(it) => it.into(),
         }
     }
 }
-impl TryFrom<SolverDefId<'_>> for AnyImplId {
+impl<'db> TryFrom<SolverDefId<'db>> for AnyImplId<'db> {
     type Error = ();
     #[inline]
-    fn try_from(value: SolverDefId<'_>) -> Result<Self, Self::Error> {
+    fn try_from(value: SolverDefId<'db>) -> Result<Self, Self::Error> {
         match value {
             SolverDefId::ImplId(it) => Ok(it.into()),
             SolverDefId::BuiltinDeriveImplId(it) => Ok(it.into()),
@@ -671,7 +671,7 @@ impl TryFrom<SolverDefId<'_>> for AnyImplId {
         }
     }
 }
-impl<'db> inherent::DefId<DbInterner<'db>> for AnyImplId {
+impl<'db> inherent::DefId<DbInterner<'db>> for AnyImplId<'db> {
     fn as_local(self) -> Option<SolverDefId<'db>> {
         Some(self.into())
     }

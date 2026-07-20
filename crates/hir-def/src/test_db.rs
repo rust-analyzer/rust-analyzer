@@ -196,7 +196,7 @@ impl TestDB {
     }
 
     /// Finds the smallest/innermost module in `def_map` containing `position`.
-    fn mod_at_position(&self, def_map: &DefMap, position: FilePosition) -> ModuleId {
+    fn mod_at_position(&self, def_map: &DefMap<'_>, position: FilePosition) -> ModuleId {
         let mut size = None;
         let mut res = def_map.root;
         for (module, data) in def_map.modules() {
@@ -243,7 +243,11 @@ impl TestDB {
         res
     }
 
-    fn block_at_position(&self, def_map: &DefMap, position: FilePosition) -> Option<&DefMap> {
+    fn block_at_position<'db>(
+        &'db self,
+        def_map: &DefMap<'_>,
+        position: FilePosition,
+    ) -> Option<&'db DefMap<'db>> {
         // Find the smallest (innermost) function in `def_map` containing the cursor.
         let mut size = None;
         let mut fn_def = None;

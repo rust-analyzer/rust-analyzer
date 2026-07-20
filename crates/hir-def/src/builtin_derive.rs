@@ -117,7 +117,7 @@ impl BuiltinDeriveImplMethod {
     pub fn trait_method(
         self,
         db: &dyn SourceDatabase,
-        impl_: BuiltinDeriveImplId,
+        impl_: BuiltinDeriveImplId<'_>,
     ) -> Option<FunctionId> {
         let loc = impl_.loc(db);
         let lang_items = crate::lang_item::lang_items(db, loc.krate(db));

@@ -319,7 +319,7 @@ impl CallInfo {
 
 fn get_fn_params<'db>(
     db: &'db dyn HirDatabase,
-    function: hir::Function,
+    function: hir::Function<'db>,
     param_list: &ast::ParamList,
     make: &SyntaxFactory,
 ) -> Option<Vec<(ast::Pat, Option<ast::Type>, hir::Param<'db>)>> {
@@ -349,7 +349,7 @@ fn get_fn_params<'db>(
 fn inline<'db>(
     sema: &Semantics<'db, RootDatabase>,
     function_def_file_id: EditionedFileId,
-    function: hir::Function,
+    function: hir::Function<'db>,
     fn_body: &ast::BlockExpr,
     params: &[(ast::Pat, Option<ast::Type>, hir::Param<'db>)],
     CallInfo { node, arguments, generic_arg_list, krate }: &CallInfo,

@@ -31,7 +31,7 @@ use crate::{Crate, HasCrate, Module, ModuleDef, Semantics};
 #[derive(Clone, PartialEq, Eq, Hash, SalsaValue)]
 pub struct FileSymbol<'db> {
     pub name: Symbol,
-    pub def: ModuleDef,
+    pub def: ModuleDef<'db>,
     pub loc: DeclarationLocation,
     pub container_name: Option<Symbol>,
     /// Whether this symbol is a doc alias for the original symbol.

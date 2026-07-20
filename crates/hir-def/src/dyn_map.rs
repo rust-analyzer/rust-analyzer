@@ -86,11 +86,11 @@ pub mod keys {
         pub const ATTR_MACRO_CALL<ast::Item, MacroCallId>;
         pub const DERIVE_MACRO_CALL<
             ast::Meta,
-            (
+            for<'db> (
                 AttrId,
                 /* derive() */ MacroCallId,
                 /* actual derive macros */
-                Box<[Option<Either<MacroCallId, BuiltinDeriveImplId>>]>,
+                Box<[Option<Either<MacroCallId, BuiltinDeriveImplId<'db>>>]>,
             ),
         >;
     }

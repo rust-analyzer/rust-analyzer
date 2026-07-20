@@ -227,7 +227,7 @@ impl_has_attrs![
     (ExternCrateDecl, ExternCrateId),
 ];
 
-impl HasAttrs for Function {
+impl HasAttrs for Function<'_> {
     fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
         match self.id {
             crate::AnyFunctionId::FunctionId(id) => AttrsOwner::AttrDef(id.into()),
@@ -236,7 +236,7 @@ impl HasAttrs for Function {
     }
 }
 
-impl HasAttrs for Impl {
+impl HasAttrs for Impl<'_> {
     fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
         match self.id {
             hir_ide::next_solver::AnyImplId::ImplId(id) => AttrsOwner::AttrDef(id.into()),
@@ -277,7 +277,7 @@ impl HasAttrs for GenericParam {
     }
 }
 
-impl HasAttrs for AssocItem {
+impl HasAttrs for AssocItem<'_> {
     #[inline]
     fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
         match self {
@@ -303,23 +303,23 @@ impl HasAttrs for Field {
 }
 
 /// Resolves the item `link` points to in the scope of `def`.
-pub fn resolve_doc_path_on(
-    db: &dyn HirDatabase,
+pub fn resolve_doc_path_on<'db>(
+    db: &'db dyn HirDatabase,
     def: impl HasAttrs + Copy,
     link: &str,
     ns: Option<Namespace>,
     is_inner_doc: IsInnerDoc,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     resolve_doc_path_on_(db, link, def.attr_id(db), ns, is_inner_doc)
 }
 
-fn resolve_doc_path_on_(
-    db: &dyn HirDatabase,
+fn resolve_doc_path_on_<'db>(
+    db: &'db dyn HirDatabase,
     link: &str,
     attr_id: AttrsOwner,
     ns: Option<Namespace>,
     is_inner_doc: IsInnerDoc,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     let resolver = match attr_id {
         AttrsOwner::AttrDef(AttrDefId::ModuleId(it)) => {
             if is_inner_doc.yes() {
@@ -369,13 +369,13 @@ fn resolve_doc_path_on_(
     }
 }
 
-fn resolve_assoc_or_field(
-    db: &dyn HirDatabase,
-    resolver: Resolver<'_>,
+fn resolve_assoc_or_field<'db>(
+    db: &'db dyn HirDatabase,
+    resolver: Resolver<'db>,
     path: ModPath,
     name: Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     let path = Path::from_known_path_with_no_generic(path);
     let base_def = resolver.resolve_path_in_type_ns_fully(db, &path)?;
 
@@ -472,7 +472,7 @@ fn resolve_assoc_item<'db>(
     ty: &Type<'db>,
     name: &Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     ty.iterate_assoc_items(db, move |assoc_item| {
         if assoc_item.name(db)? != *name {
             return None;
@@ -483,11 +483,11 @@ fn resolve_assoc_item<'db>(
 
 fn resolve_impl_trait_item<'db>(
     db: &'db dyn HirDatabase,
-    resolver: Resolver<'_>,
+    resolver: Resolver<'db>,
     ty: &Type<'db>,
     name: &Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'static>> {
     let krate = ty.krate(db);
     let param_env = ty.param_env(db);
     let traits_in_scope = resolver.traits_in_scope(db);
@@ -528,17 +528,17 @@ fn resolve_field(
     def: Variant,
     name: Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'static>> {
     if let Some(Namespace::Types | Namespace::Macros) = ns {
         return None;
     }
     def.fields(db).into_iter().find(|f| f.name(db) == name).map(DocLinkDef::Field)
 }
 
-fn as_module_def_if_namespace_matches(
-    assoc_item: AssocItem,
+fn as_module_def_if_namespace_matches<'db>(
+    assoc_item: AssocItem<'db>,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     let (def, expected_ns) = match assoc_item {
         AssocItem::Function(it) => (ModuleDef::Function(it), Namespace::Values),
         AssocItem::Const(it) => (ModuleDef::Const(it), Namespace::Values),

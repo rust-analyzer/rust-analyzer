@@ -122,7 +122,7 @@ fn snippet(
     cap: SnippetCap,
     label: &str,
     snippet: &str,
-) -> Builder {
+) -> Builder<'static> {
     let mut item =
         CompletionItem::new(CompletionItemKind::Snippet, ctx.source_range(), label, ctx.edition);
     item.insert_snippet(cap, snippet);

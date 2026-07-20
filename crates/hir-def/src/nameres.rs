@@ -69,6 +69,7 @@ use hir_expand::{
 use intern::{Symbol, sym};
 use itertools::Itertools;
 use rustc_hash::FxHashMap;
+use salsa::SalsaValue;
 use span::{Edition, FileAstId, FileId, ROOT_ERASED_FILE_AST_ID};
 use stdx::format_to;
 use syntax::{AstNode, SmolStr, SyntaxNode, ToSmolStr, ast};
@@ -170,8 +171,8 @@ impl LocalDefMap {
 /// computed by the `crate_def_map` query. Additionally, every block expression introduces the
 /// opportunity to write arbitrary item and module hierarchies, and thus gets its own `DefMap` that
 /// is computed by the `block_def_map` query.
-#[derive(Debug, PartialEq, Eq)]
-pub struct DefMap {
+#[derive(Debug, PartialEq, Eq, SalsaValue)]
+pub struct DefMap<'db> {
     /// The crate this `DefMap` belongs to.
     krate: Crate,
     /// When this is a block def map, this will hold the block id of the block and module that
@@ -179,7 +180,7 @@ pub struct DefMap {
     block: Option<BlockInfo>,
     pub root: ModuleId,
     /// The modules and their data declared in this crate.
-    pub modules: ModulesMap,
+    pub modules: ModulesMap<'db>,
     /// The prelude module for this crate. This either comes from an import
     /// marked with the `prelude_import` attribute, or (in the normal case) from
     /// a dependency (`std` or `core`).
@@ -197,7 +198,7 @@ pub struct DefMap {
     // FIXME: Figure out a better way for the IDE layer to resolve these?
     derive_helpers_in_scope: ThinFxHashMap<
         AstId<ast::Item>,
-        Vec<(Name, MacroId, Either<MacroCallId, BuiltinDeriveImplId>)>,
+        Vec<(Name, MacroId, Either<MacroCallId, BuiltinDeriveImplId<'db>>)>,
     >,
     /// A mapping from [`hir_expand::MacroDefId`] to [`crate::MacroId`].
     pub macro_def_to_macro_id: ThinFxHashMap<ErasedAstId, MacroId>,
@@ -276,18 +277,18 @@ struct BlockInfo {
     parent: ModuleId,
 }
 
-impl std::ops::Index<ModuleIdLt<'_>> for DefMap {
-    type Output = ModuleData;
+impl<'db> std::ops::Index<ModuleIdLt<'_>> for DefMap<'db> {
+    type Output = ModuleData<'db>;
 
-    fn index(&self, id: ModuleIdLt<'_>) -> &ModuleData {
+    fn index(&self, id: ModuleIdLt<'_>) -> &ModuleData<'db> {
         self.modules
             .get(&unsafe { id.to_static() })
             .unwrap_or_else(|| panic!("ModuleId not found in ModulesMap {:#?}: {id:#?}", self.root))
     }
 }
 
-impl std::ops::IndexMut<ModuleId> for DefMap {
-    fn index_mut(&mut self, id: ModuleId) -> &mut ModuleData {
+impl<'db> std::ops::IndexMut<ModuleId> for DefMap<'db> {
+    fn index_mut(&mut self, id: ModuleId) -> &mut ModuleData<'db> {
         &mut self.modules[id]
     }
 }
@@ -366,8 +367,8 @@ impl ModuleOrigin {
     }
 }
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct ModuleData {
+#[derive(Debug, PartialEq, Eq, SalsaValue)]
+pub struct ModuleData<'db> {
     /// Where does this module come from?
     pub origin: ModuleOrigin,
     /// Declared visibility of this module.
@@ -377,11 +378,11 @@ pub struct ModuleData {
     /// [`None`] for block modules because they are always its `DefMap`'s root.
     pub parent: Option<ModuleId>,
     pub children: ThinFxHashMap<Name, ModuleId>,
-    pub scope: ItemScope,
+    pub scope: ItemScope<'db>,
 }
 
 #[inline]
-pub fn crate_def_map(db: &dyn SourceDatabase, crate_id: Crate) -> &DefMap {
+pub fn crate_def_map(db: &dyn SourceDatabase, crate_id: Crate) -> &DefMap<'_> {
     crate_local_def_map(db, crate_id).def_map(db)
 }
 
@@ -389,7 +390,7 @@ pub fn crate_def_map(db: &dyn SourceDatabase, crate_id: Crate) -> &DefMap {
 pub(crate) struct DefMapPair<'db> {
     #[tracked]
     #[returns(ref)]
-    pub(crate) def_map: DefMap,
+    pub(crate) def_map: DefMap<'db>,
     #[returns(ref)]
     pub(crate) local: LocalDefMap,
 }
@@ -429,7 +430,7 @@ pub(crate) fn crate_local_def_map(db: &dyn SourceDatabase, crate_id: Crate) -> D
 }
 
 #[salsa::tracked(returns(ref))]
-pub fn block_def_map<'db>(db: &'db dyn SourceDatabase, block_id: BlockIdLt<'db>) -> DefMap {
+pub fn block_def_map<'db>(db: &'db dyn SourceDatabase, block_id: BlockIdLt<'db>) -> DefMap<'db> {
     let block_id = unsafe { block_id.to_static() };
     let ast_id = block_id.ast_id(db);
     let module = unsafe { block_id.module(db).to_static() };
@@ -457,7 +458,7 @@ pub fn block_def_map<'db>(db: &'db dyn SourceDatabase, block_id: BlockIdLt<'db>)
     def_map
 }
 
-impl DefMap {
+impl<'db> DefMap<'db> {
     pub fn edition(&self) -> Edition {
         self.data.edition
     }
@@ -466,9 +467,9 @@ impl DefMap {
         db: &dyn SourceDatabase,
         krate: Crate,
         crate_data: Arc<DefMapCrateData>,
-        module_data: ModuleData,
+        module_data: ModuleData<'db>,
         block: Option<BlockInfo>,
-    ) -> DefMap {
+    ) -> DefMap<'db> {
         let mut modules = ModulesMap::new();
         let root = unsafe {
             ModuleIdLt::new(
@@ -522,7 +523,7 @@ impl DefMap {
     }
 }
 
-impl DefMap {
+impl<'db> DefMap<'db> {
     /// Returns all modules in the crate that are associated with the given file.
     pub fn modules_for_file<'a>(
         &'a self,
@@ -537,7 +538,7 @@ impl DefMap {
             .map(|(id, _)| id)
     }
 
-    pub fn modules(&self) -> impl Iterator<Item = (ModuleId, &ModuleData)> + '_ {
+    pub fn modules(&self) -> impl Iterator<Item = (ModuleId, &ModuleData<'db>)> + '_ {
         self.modules.iter()
     }
 
@@ -561,7 +562,7 @@ impl DefMap {
     pub fn derive_helpers_in_scope(
         &self,
         id: AstId<ast::Adt>,
-    ) -> Option<&[(Name, MacroId, Either<MacroCallId, BuiltinDeriveImplId>)]> {
+    ) -> Option<&[(Name, MacroId, Either<MacroCallId, BuiltinDeriveImplId<'db>>)]> {
         self.derive_helpers_in_scope.get(&id.map(|it| it.upcast())).map(Deref::deref)
     }
 
@@ -639,7 +640,7 @@ impl DefMap {
 
     // FIXME: this can use some more human-readable format (ideally, an IR
     // even), as this should be a great debugging aid.
-    pub fn dump(&self, db: &dyn SourceDatabase) -> String {
+    pub fn dump(&self, db: &'db dyn SourceDatabase) -> String {
         let mut buf = String::new();
         let mut current_map = self;
         while let Some(block) = current_map.block {
@@ -650,10 +651,10 @@ impl DefMap {
         go(&mut buf, db, current_map, "crate", current_map.root);
         return buf;
 
-        fn go(
+        fn go<'db>(
             buf: &mut String,
             db: &dyn SourceDatabase,
-            map: &DefMap,
+            map: &DefMap<'db>,
             path: &str,
             module: ModuleId,
         ) {
@@ -671,7 +672,7 @@ impl DefMap {
     }
 }
 
-impl DefMap {
+impl<'db> DefMap<'db> {
     pub(crate) fn block_id(&self) -> Option<BlockId> {
         self.block.map(|block| block.block)
     }
@@ -689,7 +690,7 @@ impl DefMap {
     pub(crate) fn resolve_path(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         original_module: ModuleId,
         path: &ModPath,
         shadow: BuiltinShadowMode,
@@ -712,7 +713,7 @@ impl DefMap {
     pub(crate) fn resolve_path_locally(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         original_module: ModuleId,
         path: &ModPath,
         shadow: BuiltinShadowMode,
@@ -733,11 +734,11 @@ impl DefMap {
     ///
     /// If `f` returns `Some(val)`, iteration is stopped and `Some(val)` is returned. If `f` returns
     /// `None`, iteration continues.
-    pub(crate) fn with_ancestor_maps<'db, T>(
+    pub(crate) fn with_ancestor_maps<T>(
         &self,
         db: &'db dyn SourceDatabase,
         local_mod: ModuleIdLt<'db>,
-        f: &mut dyn FnMut(&DefMap, ModuleIdLt<'db>) -> Option<T>,
+        f: &mut dyn FnMut(&DefMap<'db>, ModuleIdLt<'db>) -> Option<T>,
     ) -> Option<T> {
         if let Some(it) = f(self, local_mod) {
             return Some(it);
@@ -755,7 +756,7 @@ impl DefMap {
     }
 }
 
-impl ModuleData {
+impl<'db> ModuleData<'db> {
     pub(crate) fn new(
         origin: ModuleOrigin,
         visibility: Visibility,
@@ -891,51 +892,51 @@ fn sub_namespace_match(
 }
 
 /// A newtype wrapper around `ThinFxHashMap<ModuleId, ModuleData>` that implements `IndexMut`.
-#[derive(Debug, PartialEq, Eq)]
-pub struct ModulesMap {
-    inner: ThinFxHashMap<ModuleId, ModuleData>,
+#[derive(Debug, PartialEq, Eq, SalsaValue)]
+pub struct ModulesMap<'db> {
+    inner: ThinFxHashMap<ModuleId, ModuleData<'db>>,
 }
 
-impl ModulesMap {
+impl<'db> ModulesMap<'db> {
     fn new() -> Self {
         Self { inner: ThinFxHashMap::new() }
     }
 
-    fn iter(&self) -> impl Iterator<Item = (ModuleId, &ModuleData)> + '_ {
+    fn iter(&self) -> impl Iterator<Item = (ModuleId, &ModuleData<'db>)> + '_ {
         self.inner.iter().map(|(&k, v)| (k, v))
     }
 
-    fn iter_mut(&mut self) -> impl Iterator<Item = (ModuleId, &mut ModuleData)> + '_ {
+    fn iter_mut(&mut self) -> impl Iterator<Item = (ModuleId, &mut ModuleData<'db>)> + '_ {
         self.inner.iter_mut().map(|(&k, v)| (k, v))
     }
 }
 
-impl Deref for ModulesMap {
-    type Target = ThinFxHashMap<ModuleId, ModuleData>;
+impl<'db> Deref for ModulesMap<'db> {
+    type Target = ThinFxHashMap<ModuleId, ModuleData<'db>>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl DerefMut for ModulesMap {
+impl<'db> DerefMut for ModulesMap<'db> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl Index<ModuleIdLt<'_>> for ModulesMap {
-    type Output = ModuleData;
+impl<'db> Index<ModuleIdLt<'_>> for ModulesMap<'db> {
+    type Output = ModuleData<'db>;
 
-    fn index(&self, id: ModuleIdLt<'_>) -> &ModuleData {
+    fn index(&self, id: ModuleIdLt<'_>) -> &ModuleData<'db> {
         self.inner
             .get(&unsafe { id.to_static() })
             .unwrap_or_else(|| panic!("ModuleId not found in ModulesMap: {id:#?}"))
     }
 }
 
-impl IndexMut<ModuleId> for ModulesMap {
-    fn index_mut(&mut self, id: ModuleId) -> &mut ModuleData {
+impl<'db> IndexMut<ModuleId> for ModulesMap<'db> {
+    fn index_mut(&mut self, id: ModuleId) -> &mut ModuleData<'db> {
         self.inner
             .get_mut(&id)
             .unwrap_or_else(|| panic!("ModuleId not found in ModulesMap: {id:#?}"))

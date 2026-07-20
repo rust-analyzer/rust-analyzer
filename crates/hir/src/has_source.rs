@@ -158,7 +158,7 @@ impl HasSource for EnumVariant {
         Some(self.id.lookup(db).source(db))
     }
 }
-impl HasSource for Function {
+impl HasSource for Function<'_> {
     type Ast = ast::Fn;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         match self.id {
@@ -225,7 +225,7 @@ impl HasSource for Macro {
         }
     }
 }
-impl HasSource for Impl {
+impl HasSource for Impl<'_> {
     type Ast = ast::Impl;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         match self.id {
@@ -313,7 +313,7 @@ impl HasSource for Param<'_> {
     }
 }
 
-impl HasSource for SelfParam {
+impl HasSource for SelfParam<'_> {
     type Ast = ast::SelfParam;
 
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {

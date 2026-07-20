@@ -146,7 +146,7 @@ impl<'db> ChildBySource<'db> for ModuleId {
     }
 }
 
-impl<'db> ChildBySource<'db> for ItemScope {
+impl<'db> ChildBySource<'db> for ItemScope<'db> {
     fn child_by_source_to(
         &self,
         db: &'db dyn SourceDatabase,

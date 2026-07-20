@@ -115,18 +115,18 @@ pub fn callable_for_node<'db>(
     Some((callable, active_param))
 }
 
-pub fn generic_def_for_node(
-    sema: &Semantics<'_, RootDatabase>,
+pub fn generic_def_for_node<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     generic_arg_list: &ast::GenericArgList,
     token: &SyntaxToken,
-) -> Option<(hir::GenericDef, usize, bool, Option<hir::EnumVariant>)> {
+) -> Option<(hir::GenericDef<'db>, usize, bool, Option<hir::EnumVariant>)> {
     let parent = generic_arg_list.syntax().parent()?;
     let mut variant = None;
     let def = match_ast! {
         match parent {
             ast::PathSegment(ps) => {
                 let res = sema.resolve_path(&ps.parent_path())?;
-                let generic_def: hir::GenericDef = match res {
+                let generic_def: hir::GenericDef<'_> = match res {
                     hir::PathResolution::Def(hir::ModuleDef::Adt(it)) => it.into(),
                     hir::PathResolution::Def(hir::ModuleDef::Function(it)) => it.into(),
                     hir::PathResolution::Def(hir::ModuleDef::Trait(it)) => it.into(),

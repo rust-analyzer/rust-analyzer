@@ -414,7 +414,8 @@ impl<'db> SourceToDefCtx<'db, '_> {
         &mut self,
         item: InFile<&ast::Adt>,
         src: InFile<ast::Meta>,
-    ) -> Option<(AttrId, MacroCallId, &[Option<Either<MacroCallId, BuiltinDeriveImplId>>])> {
+    ) -> Option<(AttrId, MacroCallId, &[Option<Either<MacroCallId, BuiltinDeriveImplId<'db>>>])>
+    {
         let map = self.dyn_map(item)?;
         map[keys::DERIVE_MACRO_CALL]
             .get(&AstPtr::new(&src.value))
@@ -431,7 +432,11 @@ impl<'db> SourceToDefCtx<'db, '_> {
         adt: InFile<&ast::Adt>,
     ) -> Option<
         impl Iterator<
-            Item = (AttrId, MacroCallId, &'slf [Option<Either<MacroCallId, BuiltinDeriveImplId>>]),
+            Item = (
+                AttrId,
+                MacroCallId,
+                &'slf [Option<Either<MacroCallId, BuiltinDeriveImplId<'db>>>],
+            ),
         > + use<'slf, 'db>,
     > {
         self.dyn_map(adt).as_ref().map(|&map| {

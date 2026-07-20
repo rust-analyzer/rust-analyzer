@@ -42,8 +42,6 @@ from_id![
     (hir_def::TraitId, crate::Trait),
     (hir_def::StaticId, crate::Static),
     (hir_def::ConstId, crate::Const),
-    (crate::AnyFunctionId, crate::Function),
-    (hir_ide::next_solver::AnyImplId, crate::Impl),
     (hir_def::TypeOrConstParamId, crate::TypeOrConstParam),
     (hir_def::TypeParamId, crate::TypeParam),
     (hir_def::ConstParamId, crate::ConstParam),
@@ -53,6 +51,26 @@ from_id![
     (hir_def::ExternCrateId, crate::ExternCrateDecl),
     (hir_def::ExternBlockId, crate::ExternBlock),
 ];
+impl<'db> From<crate::AnyFunctionId<'db>> for crate::Function<'db> {
+    fn from(id: crate::AnyFunctionId<'db>) -> Self {
+        Self { id }
+    }
+}
+impl<'db> From<crate::Function<'db>> for crate::AnyFunctionId<'db> {
+    fn from(ty: crate::Function<'db>) -> Self {
+        ty.id
+    }
+}
+impl<'db> From<hir_ide::next_solver::AnyImplId<'db>> for crate::Impl<'db> {
+    fn from(id: hir_ide::next_solver::AnyImplId<'db>) -> Self {
+        Self { id }
+    }
+}
+impl<'db> From<crate::Impl<'db>> for hir_ide::next_solver::AnyImplId<'db> {
+    fn from(ty: crate::Impl<'db>) -> Self {
+        ty.id
+    }
+}
 
 impl_from!(AdtId { StructId => Struct, UnionId => Union, EnumId => Enum } for Adt);
 impl_from!(Adt { Struct => StructId, Union => UnionId, Enum => EnumId } for AdtId);
@@ -78,6 +96,7 @@ impl_from!(
 );
 
 impl_from!(
+    impl<'db>
     ModuleDefId {
         ModuleId => Module,
         FunctionId => Function,
@@ -90,12 +109,12 @@ impl_from!(
         BuiltinType => BuiltinType,
         MacroId => Macro,
     }
-    for ModuleDef
+    for ModuleDef<'db>
 );
 
-impl TryFrom<ModuleDef> for ModuleDefId {
+impl TryFrom<ModuleDef<'_>> for ModuleDefId {
     type Error = ();
-    fn try_from(id: ModuleDef) -> Result<Self, Self::Error> {
+    fn try_from(id: ModuleDef<'_>) -> Result<Self, Self::Error> {
         Ok(match id {
             ModuleDef::Module(it) => ModuleDefId::ModuleId(it.into()),
             ModuleDef::Function(it) => match it.id {
@@ -114,9 +133,9 @@ impl TryFrom<ModuleDef> for ModuleDefId {
     }
 }
 
-impl TryFrom<DefWithBody> for DefWithBodyId {
+impl TryFrom<DefWithBody<'_>> for DefWithBodyId {
     type Error = ();
-    fn try_from(def: DefWithBody) -> Result<Self, ()> {
+    fn try_from(def: DefWithBody<'_>) -> Result<Self, ()> {
         Ok(match def {
             DefWithBody::Function(it) => match it.id {
                 AnyFunctionId::FunctionId(it) => it.into(),
@@ -130,28 +149,31 @@ impl TryFrom<DefWithBody> for DefWithBodyId {
 }
 
 impl_from!(
+    impl<'db>
     DefWithBodyId {
         FunctionId => Function,
         StaticId => Static,
         ConstId => Const,
         VariantId => EnumVariant,
     }
-    for DefWithBody
+    for DefWithBody<'db>
 );
 impl_from!(
+    impl<'db>
     AssocItemId { FunctionId => Function, TypeAliasId => TypeAlias, ConstId => Const }
-    for AssocItem
+    for AssocItem<'db>
 );
 
-impl TryFrom<GenericDef> for GenericDefId {
+impl TryFrom<GenericDef<'_>> for GenericDefId {
     type Error = ();
 
-    fn try_from(def: GenericDef) -> Result<Self, Self::Error> {
+    fn try_from(def: GenericDef<'_>) -> Result<Self, Self::Error> {
         def.id().ok_or(())
     }
 }
 
 impl_from!(
+    impl<'db>
     GenericDefId {
         FunctionId => Function,
         AdtId => Adt,
@@ -161,7 +183,7 @@ impl_from!(
         ConstId => Const,
         StaticId => Static,
     }
-    for GenericDef
+    for GenericDef<'db>
 );
 
 impl From<Adt> for GenericDefId {
@@ -191,9 +213,9 @@ impl From<FieldId> for Field {
     }
 }
 
-impl TryFrom<AssocItem> for GenericDefId {
+impl TryFrom<AssocItem<'_>> for GenericDefId {
     type Error = ();
-    fn try_from(item: AssocItem) -> Result<Self, Self::Error> {
+    fn try_from(item: AssocItem<'_>) -> Result<Self, Self::Error> {
         Ok(match item {
             AssocItem::Function(f) => match f.id {
                 AnyFunctionId::FunctionId(it) => it.into(),
@@ -217,11 +239,11 @@ impl From<(ExpressionStoreOwnerId, LabelId)> for Label {
     }
 }
 
-impl_from!(ItemInNsId { Types => Types, Values => Values, Macros => Macros } for ItemInNs);
+impl_from!(impl<'db> ItemInNsId { Types => Types, Values => Values, Macros => Macros } for ItemInNs<'db>);
 
-impl TryFrom<ItemInNs> for hir_def::item_scope::ItemInNs {
+impl TryFrom<ItemInNs<'_>> for hir_def::item_scope::ItemInNs {
     type Error = ();
-    fn try_from(it: ItemInNs) -> Result<Self, Self::Error> {
+    fn try_from(it: ItemInNs<'_>) -> Result<Self, Self::Error> {
         Ok(match it {
             ItemInNs::Types(it) => Self::Types(it.try_into()?),
             ItemInNs::Values(it) => Self::Values(it.try_into()?),
@@ -242,28 +264,28 @@ impl From<BuiltinType> for hir_def::builtin_type::BuiltinType {
     }
 }
 
-impl From<hir_def::ImplId> for crate::Impl {
+impl<'db> From<hir_def::ImplId> for crate::Impl<'db> {
     fn from(value: hir_def::ImplId) -> Self {
         crate::Impl { id: AnyImplId::ImplId(value) }
     }
 }
 
-impl From<BuiltinDeriveImplId> for crate::Impl {
-    fn from(value: BuiltinDeriveImplId) -> Self {
+impl<'db> From<BuiltinDeriveImplId<'db>> for crate::Impl<'db> {
+    fn from(value: BuiltinDeriveImplId<'db>) -> Self {
         crate::Impl { id: AnyImplId::BuiltinDeriveImplId(value) }
     }
 }
 
-impl From<hir_def::FunctionId> for crate::Function {
+impl<'db> From<hir_def::FunctionId> for crate::Function<'db> {
     fn from(value: hir_def::FunctionId) -> Self {
         crate::Function { id: AnyFunctionId::FunctionId(value) }
     }
 }
 
-impl TryFrom<ExpressionStoreOwner> for ExpressionStoreOwnerId {
+impl<'db> TryFrom<ExpressionStoreOwner<'db>> for ExpressionStoreOwnerId {
     type Error = ();
 
-    fn try_from(v: ExpressionStoreOwner) -> Result<Self, Self::Error> {
+    fn try_from(v: ExpressionStoreOwner<'db>) -> Result<Self, Self::Error> {
         match v {
             ExpressionStoreOwner::Signature(generic_def_id) => {
                 Ok(Self::Signature(generic_def_id.try_into()?))
@@ -278,10 +300,10 @@ impl TryFrom<ExpressionStoreOwner> for ExpressionStoreOwnerId {
     }
 }
 
-impl TryFrom<Function> for FunctionId {
+impl TryFrom<Function<'_>> for FunctionId {
     type Error = ();
 
-    fn try_from(v: Function) -> Result<Self, Self::Error> {
+    fn try_from(v: Function<'_>) -> Result<Self, Self::Error> {
         match v.id {
             AnyFunctionId::FunctionId(id) => Ok(id),
             _ => Err(()),
@@ -289,10 +311,10 @@ impl TryFrom<Function> for FunctionId {
     }
 }
 
-impl TryFrom<Impl> for ImplId {
+impl TryFrom<Impl<'_>> for ImplId {
     type Error = ();
 
-    fn try_from(v: Impl) -> Result<Self, Self::Error> {
+    fn try_from(v: Impl<'_>) -> Result<Self, Self::Error> {
         match v.id {
             AnyImplId::ImplId(id) => Ok(id),
             _ => Err(()),

@@ -26,9 +26,9 @@ pub enum Visibility {
 }
 
 impl Visibility {
-    pub fn resolve(
-        db: &dyn SourceDatabase,
-        resolver: &crate::resolver::Resolver<'_>,
+    pub fn resolve<'db>(
+        db: &'db dyn SourceDatabase,
+        resolver: &crate::resolver::Resolver<'db>,
         raw_vis: &RawVisibility,
     ) -> Self {
         // we fall back to public visibility (i.e. fail open) if the path can't be resolved
@@ -65,7 +65,7 @@ impl Visibility {
     pub(crate) fn is_visible_from_def_map<'db>(
         self,
         db: &'db dyn SourceDatabase,
-        def_map: &DefMap,
+        def_map: &DefMap<'db>,
         from_module: ModuleIdLt<'db>,
     ) -> bool {
         if cfg!(debug_assertions) {
@@ -94,7 +94,7 @@ impl Visibility {
 
     fn is_visible_from_def_map_<'db>(
         db: &'db dyn SourceDatabase,
-        def_map: &DefMap,
+        def_map: &DefMap<'db>,
         mut to_module: ModuleIdLt<'db>,
         mut from_module: ModuleIdLt<'db>,
     ) -> bool {
@@ -149,7 +149,7 @@ impl Visibility {
         self,
         db: &dyn SourceDatabase,
         other: Visibility,
-        def_map: &DefMap,
+        def_map: &DefMap<'_>,
     ) -> Option<Visibility> {
         match (self, other) {
             (_, Visibility::Public) | (Visibility::Public, _) => Some(Visibility::Public),
@@ -215,7 +215,7 @@ impl Visibility {
         self,
         db: &dyn SourceDatabase,
         other: Visibility,
-        def_map: &DefMap,
+        def_map: &DefMap<'_>,
     ) -> Option<Visibility> {
         match (self, other) {
             (vis, Visibility::Public) | (Visibility::Public, vis) => Some(vis),

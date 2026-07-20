@@ -260,7 +260,7 @@ pub fn identity_when_valid(_attr: TokenStream, item: TokenStream) -> TokenStream
 
 fn resolve_macro_call_id(
     db: &dyn SourceDatabase,
-    def_map: &DefMap,
+    def_map: &DefMap<'_>,
     ast_id: AstId<ast::MacroCall>,
     ast_ptr: InFile<AstPtr<ast::MacroCall>>,
 ) -> Option<MacroCallId> {

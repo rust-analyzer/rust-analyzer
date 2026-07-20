@@ -18,7 +18,7 @@ use syntax::{ast, format_smolstr};
 /// crate is in edition 2024 and wrote `r#gen`, and the opposite holds as well.
 ///
 /// `k#` of forced keywords is *not* stripped, because `Name` is supposed to be used for names and not keywords.
-#[derive(Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, PartialEq, Eq, Hash, salsa::SalsaValue)]
 pub struct Name {
     symbol: Symbol,
     // If you are making this carry actual hygiene, beware that the special handling for variables and labels

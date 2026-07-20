@@ -142,7 +142,7 @@ impl FamousDefs<'_, '_> {
         self.find_macro("core:macros:builtin:derive")
     }
 
-    pub fn core_mem_drop(&self) -> Option<Function> {
+    pub fn core_mem_drop(&self) -> Option<Function<'_>> {
         self.find_function("core:mem:drop")
     }
 
@@ -200,7 +200,7 @@ impl FamousDefs<'_, '_> {
         }
     }
 
-    fn find_function(&self, path: &str) -> Option<Function> {
+    fn find_function(&self, path: &str) -> Option<Function<'_>> {
         match self.find_def(path)? {
             hir::ScopeDef::ModuleDef(hir::ModuleDef::Function(it)) => Some(it),
             _ => None,

@@ -947,7 +947,7 @@ fn params_and_where_preds_in_scope(
     (generic_params, where_clauses)
 }
 
-fn containing_body(ctx: &AssistContext<'_, '_>) -> Option<hir::DefWithBody> {
+fn containing_body<'db>(ctx: &AssistContext<'_, 'db>) -> Option<hir::DefWithBody<'db>> {
     let item: ast::Item = ctx.find_node_at_offset()?;
     let def = match item {
         ast::Item::Fn(it) => ctx.sema.to_def(&it)?.into(),

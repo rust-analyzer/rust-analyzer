@@ -811,7 +811,7 @@ fn label_of_ty<'db>(
                 });
 
                 let module_def_location = |label_builder: &mut InlayHintLabelBuilder<'_, '_>,
-                                           def: ModuleDef,
+                                           def: ModuleDef<'_>,
                                            name| {
                     let def = def.try_into();
                     if let Ok(def) = def {

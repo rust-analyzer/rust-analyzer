@@ -16,10 +16,10 @@ use crate::{
 };
 
 /// Complete dot accesses, i.e. fields or methods.
-pub(crate) fn complete_dot(
+pub(crate) fn complete_dot<'db>(
     acc: &mut Completions,
-    ctx: &CompletionContext<'_, '_>,
-    dot_access: &DotAccess<'_>,
+    ctx: &CompletionContext<'_, 'db>,
+    dot_access: &DotAccess<'db>,
 ) {
     let receiver_ty = match dot_access {
         DotAccess { receiver_ty: Some(receiver_ty), .. } => &receiver_ty.original,
@@ -127,11 +127,11 @@ pub(crate) fn complete_dot(
     }
 }
 
-pub(crate) fn complete_undotted_self(
+pub(crate) fn complete_undotted_self<'db>(
     acc: &mut Completions,
-    ctx: &CompletionContext<'_, '_>,
+    ctx: &CompletionContext<'_, 'db>,
     path_ctx: &PathCompletionCtx<'_>,
-    expr_ctx: &PathExprCtx<'_>,
+    expr_ctx: &PathExprCtx<'db>,
 ) {
     if !ctx.config.enable_self_on_the_fly {
         return;
@@ -212,11 +212,11 @@ fn complete_fields(
     }
 }
 
-fn complete_methods(
-    ctx: &CompletionContext<'_, '_>,
-    receiver: &hir::Type<'_>,
+fn complete_methods<'db>(
+    ctx: &CompletionContext<'_, 'db>,
+    receiver: &hir::Type<'db>,
     traits_in_scope: &FxHashSet<hir::TraitId>,
-    f: impl FnMut(hir::Function),
+    f: impl FnMut(hir::Function<'db>),
 ) {
     struct Callback<'a, 'db, F> {
         ctx: &'a CompletionContext<'a, 'db>,
@@ -224,19 +224,19 @@ fn complete_methods(
         // We deliberately deduplicate by function ID and not name, because while inherent methods cannot be
         // duplicated, trait methods can. And it is still useful to show all of them (even when there
         // is also an inherent method, especially considering that it may be private, and filtered later).
-        seen_methods: FxHashSet<Function>,
+        seen_methods: FxHashSet<Function<'db>>,
         // However, duplicate inherent methods is usually meaningless
         // https://github.com/rust-lang/rust-analyzer/issues/20773#issuecomment-4302781553
-        seen_inherent_methods: FxHashMap<Name, Function>,
+        seen_inherent_methods: FxHashMap<Name, Function<'db>>,
     }
 
-    impl<F> MethodCandidateCallback for Callback<'_, '_, F>
+    impl<'db, F> MethodCandidateCallback<'db> for Callback<'_, 'db, F>
     where
-        F: FnMut(hir::Function),
+        F: FnMut(hir::Function<'db>),
     {
         // We don't want to exclude inherent trait methods - that is, methods of traits available from
         // `where` clauses or `dyn Trait`.
-        fn on_inherent_method(&mut self, func: hir::Function) -> ControlFlow<()> {
+        fn on_inherent_method(&mut self, func: hir::Function<'db>) -> ControlFlow<()> {
             if func.self_param(self.ctx.db).is_some() && self.seen_methods.insert(func) {
                 let same_name = self.seen_inherent_methods.entry(func.name(self.ctx.db));
                 let do_complete = match &same_name {
@@ -257,7 +257,7 @@ fn complete_methods(
             ControlFlow::Continue(())
         }
 
-        fn on_trait_method(&mut self, func: hir::Function) -> ControlFlow<()> {
+        fn on_trait_method(&mut self, func: hir::Function<'db>) -> ControlFlow<()> {
             // This needs to come before the `seen_methods` test, so that if we see the same method twice,
             // once as inherent and once not, we will include it.
             if let ItemContainer::Trait(trait_) = func.container(self.ctx.db)

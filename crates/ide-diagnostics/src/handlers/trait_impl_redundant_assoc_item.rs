@@ -17,7 +17,7 @@ use crate::{Diagnostic, DiagnosticCode, DiagnosticsContext};
 // Diagnoses redundant trait items in a trait impl.
 pub(crate) fn trait_impl_redundant_assoc_item(
     ctx: &DiagnosticsContext<'_, '_>,
-    d: &hir::TraitImplRedundantAssocItems,
+    d: &hir::TraitImplRedundantAssocItems<'_>,
 ) -> Diagnostic {
     let db = ctx.sema.db;
     let name = d.assoc_item.0.clone();
@@ -75,7 +75,7 @@ pub(crate) fn trait_impl_redundant_assoc_item(
 /// add assoc item into the trait def body
 fn quickfix_for_redundant_assoc_item(
     ctx: &DiagnosticsContext<'_, '_>,
-    d: &hir::TraitImplRedundantAssocItems,
+    d: &hir::TraitImplRedundantAssocItems<'_>,
     redundant_item_def: String,
     range: TextRange,
 ) -> Option<Vec<Assist>> {

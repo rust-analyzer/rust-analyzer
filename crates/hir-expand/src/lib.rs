@@ -1572,7 +1572,7 @@ impl From<MacroCallId> for span::MacroCallId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype, salsa::SalsaValue)]
 pub enum HirFileId {
     FileId(EditionedFileId),
     MacroFile(MacroCallId),

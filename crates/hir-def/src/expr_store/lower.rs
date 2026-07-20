@@ -509,7 +509,7 @@ pub struct ExprCollector<'db> {
     db: &'db dyn SourceDatabase,
     cfg_options: &'db CfgOptions,
     expander: Expander<'db>,
-    def_map: &'db DefMap,
+    def_map: &'db DefMap<'db>,
     local_def_map: &'db LocalDefMap,
     module: ModuleId,
     lowering_mode: LoweringMode,

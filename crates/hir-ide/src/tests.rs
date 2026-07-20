@@ -512,7 +512,7 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
 
 pub(crate) fn visit_module(
     db: &TestDB,
-    crate_def_map: &DefMap,
+    crate_def_map: &DefMap<'_>,
     module_id: ModuleId,
     cb: &mut dyn FnMut(ModuleDefId),
 ) {
@@ -540,8 +540,8 @@ pub(crate) fn visit_module(
 
     fn visit_scope(
         db: &TestDB,
-        crate_def_map: &DefMap,
-        scope: &ItemScope,
+        crate_def_map: &DefMap<'_>,
+        scope: &ItemScope<'_>,
         cb: &mut dyn FnMut(ModuleDefId),
     ) {
         for decl in scope.declarations() {

@@ -54,7 +54,7 @@ type DefaultedParam = Either<hir::TypeParam, hir::ConstParam>;
 /// }
 /// ```
 pub struct PathTransform<'a, 'db> {
-    generic_def: Option<hir::GenericDef>,
+    generic_def: Option<hir::GenericDef<'db>>,
     substs: AstSubsts,
     target_scope: &'a SemanticsScope<'db>,
     source_scope: &'a SemanticsScope<'db>,
@@ -78,7 +78,7 @@ impl<'a, 'db> PathTransform<'a, 'db> {
     pub fn function_call(
         target_scope: &'a SemanticsScope<'db>,
         source_scope: &'a SemanticsScope<'db>,
-        function: hir::Function,
+        function: hir::Function<'db>,
         generic_arg_list: ast::GenericArgList,
     ) -> PathTransform<'a, 'db> {
         PathTransform {
@@ -92,7 +92,7 @@ impl<'a, 'db> PathTransform<'a, 'db> {
     pub fn impl_transformation(
         target_scope: &'a SemanticsScope<'db>,
         source_scope: &'a SemanticsScope<'db>,
-        impl_: hir::Impl,
+        impl_: hir::Impl<'db>,
         generic_arg_list: ast::GenericArgList,
     ) -> PathTransform<'a, 'db> {
         PathTransform {

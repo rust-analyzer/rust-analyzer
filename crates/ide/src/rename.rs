@@ -408,10 +408,10 @@ fn find_definitions<'db>(
     }
 }
 
-fn transform_assoc_fn_into_method_call(
-    sema: &Semantics<'_, RootDatabase>,
+fn transform_assoc_fn_into_method_call<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     source_change: &mut SourceChange,
-    f: hir::Function,
+    f: hir::Function<'db>,
 ) {
     let calls = Definition::Function(f).usages(sema).all();
     for (_file_id, calls) in calls {
@@ -624,10 +624,10 @@ fn method_to_assoc_fn_call_self_adjust(
     result
 }
 
-fn transform_method_call_into_assoc_fn(
-    sema: &Semantics<'_, RootDatabase>,
+fn transform_method_call_into_assoc_fn<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     source_change: &mut SourceChange,
-    f: hir::Function,
+    f: hir::Function<'db>,
     find_path_config: FindPathConfig,
 ) {
     let calls = Definition::Function(f).usages(sema).all();
@@ -753,7 +753,7 @@ fn transform_method_call_into_assoc_fn(
 fn rename_self_to_param<'db>(
     sema: &Semantics<'db, RootDatabase>,
     local: hir::Local<'db>,
-    self_param: hir::SelfParam,
+    self_param: hir::SelfParam<'_>,
     new_name: &Name,
     identifier_kind: IdentifierKind,
     find_path_config: FindPathConfig,
