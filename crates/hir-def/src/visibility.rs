@@ -125,24 +125,18 @@ impl Visibility {
 
         // from_module needs to be a descendant of to_module
         let mut def_map = def_map;
-        let mut parent_arc;
         loop {
             if from_module == to_module {
                 return true;
             }
-            match def_map[from_module].parent {
-                Some(parent) => from_module = parent,
-                None => {
-                    match def_map.parent() {
-                        Some(module) => {
-                            parent_arc = module.def_map(db);
-                            def_map = parent_arc;
-                            from_module = module;
-                        }
-                        // Reached the root module, nothing left to check.
-                        None => return false,
-                    }
-                }
+            if let Some(parent) = def_map[from_module].parent {
+                from_module = parent
+            } else if let Some(module) = def_map.parent() {
+                def_map = module.def_map(db);
+                from_module = module;
+            } else {
+                // Reached the root module, nothing left to check.
+                return false;
             }
         }
     }

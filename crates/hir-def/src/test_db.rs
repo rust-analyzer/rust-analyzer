@@ -307,8 +307,8 @@ impl TestDB {
             let mut containing_blocks =
                 scopes.scope_chain(Some(scope)).filter_map(|scope| scopes.block(scope));
 
-            if let Some(block) = containing_blocks.next().map(|block| block_def_map(self, block)) {
-                return Some(block);
+            if let Some(block) = containing_blocks.next() {
+                return Some(block_def_map(self, block));
             }
         }
 

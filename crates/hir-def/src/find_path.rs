@@ -547,9 +547,7 @@ impl Choice {
             Ordering::Less => return,
             Ordering::Equal => {
                 other.path_text_len += name.as_str().len();
-                if let Ordering::Less | Ordering::Equal =
-                    current.path_text_len.cmp(&other.path_text_len)
-                {
+                if other.path_text_len >= current.path_text_len {
                     return;
                 }
             }

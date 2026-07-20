@@ -755,7 +755,7 @@ impl<'db> NameRefClass<'db> {
                 sema.resolve_record_field_with_substitution(&record_field)
         {
             let res = match local {
-                None => NameRefClass::Definition(Definition::Field(field), Some(adt_subst)),
+                None => NameRefClass::Definition(field.into(), Some(adt_subst)),
                 Some(local) => {
                     NameRefClass::FieldShorthand { field_ref: field, local_ref: local, adt_subst }
                 }
@@ -770,7 +770,7 @@ impl<'db> NameRefClass<'db> {
                 // Only use this to resolve to macro calls for last segments as qualifiers resolve
                 // to modules below.
                 if let Some(macro_def) = sema.resolve_macro_call(&macro_call) {
-                    return Some(NameRefClass::Definition(Definition::Macro(macro_def), None));
+                    return Some(NameRefClass::Definition(macro_def.into(), None));
                 }
             }
             return sema
@@ -794,18 +794,18 @@ impl<'db> NameRefClass<'db> {
                         .map(|(def, subst)| {
                             match def {
                                 Either::Left(Either::Left(def)) => NameRefClass::Definition(def.into(), subst),
-                                Either::Left(Either::Right(def)) => NameRefClass::Definition(Definition::TupleField(def), subst),
+                                Either::Left(Either::Right(def)) => NameRefClass::Definition(def.into(), subst),
                                 Either::Right(def) => NameRefClass::Definition(def.into(), subst),
                             }
                         })
                 },
                 ast::RecordPatField(record_pat_field) => {
                     sema.resolve_record_pat_field_with_subst(&record_pat_field)
-                        .map(|(field, _, subst)| NameRefClass::Definition(Definition::Field(field), Some(subst)))
+                        .map(|(field, _, subst)| NameRefClass::Definition(field.into(), Some(subst)))
                 },
                 ast::RecordExprField(record_expr_field) => {
                     sema.resolve_record_field_with_substitution(&record_expr_field)
-                        .map(|(field, _, _, subst)| NameRefClass::Definition(Definition::Field(field), Some(subst)))
+                        .map(|(field, _, _, subst)| NameRefClass::Definition(field.into(), Some(subst)))
                 },
                 ast::AssocTypeArg(_) => {
                     // `Trait<Assoc = Ty>`
@@ -823,7 +823,7 @@ impl<'db> NameRefClass<'db> {
                             .find(|alias| alias.name(sema.db).as_str() == name_ref.text().trim_start_matches("r#"))
                         {
                             // No substitution, this can only occur in type position.
-                            return Some(NameRefClass::Definition(Definition::TypeAlias(ty), None));
+                            return Some(NameRefClass::Definition(ty.into(), None));
                         }
                     None
                 },
@@ -838,7 +838,7 @@ impl<'db> NameRefClass<'db> {
                     let extern_crate = sema.to_def(&extern_crate_ast)?;
                     let krate = extern_crate.resolved_crate(sema.db)?;
                     Some(if extern_crate_ast.rename().is_some() {
-                        NameRefClass::Definition(Definition::Crate(krate), None)
+                        NameRefClass::Definition(krate.into(), None)
                     } else {
                         NameRefClass::ExternCrateShorthand { krate, decl: extern_crate }
                     })
@@ -896,6 +896,7 @@ impl_from!(
     Field,
     TupleField<'db>,
     Module,
+    Crate,
     Function,
     Adt,
     EnumVariant,

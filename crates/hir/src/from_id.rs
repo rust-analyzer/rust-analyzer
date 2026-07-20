@@ -4,8 +4,8 @@
 //! are splitting the hir.
 
 use hir_def::{
-    AdtId, AssocItemId, BuiltinDeriveImplId, DefWithBodyId, EnumVariantId, ExpressionStoreOwnerId,
-    FieldId, FunctionId, GenericDefId, GenericParamId, ImplId, ModuleDefId, VariantId,
+    AdtId, AssocItemId, BuiltinDeriveImplId, DefWithBodyId, ExpressionStoreOwnerId, FieldId,
+    FunctionId, GenericDefId, GenericParamId, ImplId, ModuleDefId, VariantId,
     hir::{BindingId, LabelId},
     item_scope::ItemInNs as ItemInNsId,
 };
@@ -13,8 +13,8 @@ use hir_ide::next_solver::AnyImplId;
 use stdx::impl_from;
 
 use crate::{
-    Adt, AnyFunctionId, AssocItem, BuiltinType, DefWithBody, EnumVariant, ExpressionStoreOwner,
-    Field, Function, GenericDef, GenericParam, Impl, ItemInNs, Label, Local, ModuleDef, Variant,
+    Adt, AnyFunctionId, AssocItem, BuiltinType, DefWithBody, ExpressionStoreOwner, Field, Function,
+    GenericDef, GenericParam, Impl, ItemInNs, Label, Local, ModuleDef, Variant,
 };
 
 macro_rules! from_id {
@@ -49,6 +49,7 @@ from_id![
     (hir_def::ConstParamId, crate::ConstParam),
     (hir_def::LifetimeParamId, crate::LifetimeParam),
     (hir_def::MacroId, crate::Macro),
+    (hir_def::EnumVariantId, crate::EnumVariant),
     (hir_def::ExternCrateId, crate::ExternCrateDecl),
     (hir_def::ExternBlockId, crate::ExternBlock),
 ];
@@ -75,18 +76,6 @@ impl_from!(
     }
     for GenericParamId
 );
-
-impl From<EnumVariantId> for EnumVariant {
-    fn from(id: EnumVariantId) -> Self {
-        EnumVariant { id }
-    }
-}
-
-impl From<EnumVariant> for EnumVariantId {
-    fn from(def: EnumVariant) -> Self {
-        def.id
-    }
-}
 
 impl_from!(
     ModuleDefId {

@@ -1606,11 +1606,7 @@ impl<'db> AnyDiagnostic<'db> {
             }
             InferenceDiagnostic::ExpectedArrayOrSlicePat { pat, found } => {
                 let pat = pat_syntax(*pat)?.map(Into::into);
-                ExpectedArrayOrSlicePat {
-                    pat,
-                    found: Type { owner: type_owner, ty: EarlyBinder::bind(found.as_ref()) },
-                }
-                .into()
+                ExpectedArrayOrSlicePat { pat, found: new_ty(found.as_ref()) }.into()
             }
             &InferenceDiagnostic::InvalidRangePatType { pat } => {
                 let pat = pat_syntax(pat)?.map(Into::into);
@@ -1854,8 +1850,8 @@ impl<'db> AnyDiagnostic<'db> {
                 let expr_or_pat = expr_or_pat_syntax(node.unpack())?;
                 TypeMismatch {
                     expr_or_pat,
-                    expected: Type { owner: type_owner, ty: EarlyBinder::bind(expected.as_ref()) },
-                    actual: Type { owner: type_owner, ty: EarlyBinder::bind(found.as_ref()) },
+                    expected: new_ty(expected.as_ref()),
+                    actual: new_ty(found.as_ref()),
                 }
                 .into()
             }

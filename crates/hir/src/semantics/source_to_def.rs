@@ -541,9 +541,10 @@ impl<'db> SourceToDefCtx<'db, '_> {
     }
 
     pub(super) fn proc_macro_to_def(&mut self, src: InFile<&ast::Fn>) -> Option<MacroId> {
-        self.dyn_map(src).and_then(|it| {
-            it[keys::PROC_MACRO].get(&AstPtr::new(src.value)).copied().map(MacroId::from)
-        })
+        self.dyn_map(src)?[keys::PROC_MACRO]
+            .get(&AstPtr::new(src.value))
+            .copied()
+            .map(MacroId::from)
     }
 
     pub(super) fn find_container(&mut self, src: InFile<&SyntaxNode>) -> Option<ChildContainer> {
