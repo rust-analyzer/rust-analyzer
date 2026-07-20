@@ -65,7 +65,7 @@ impl Visibility {
     pub(crate) fn is_visible_from_def_map<'db>(
         self,
         db: &'db dyn SourceDatabase,
-        def_map: &'db DefMap,
+        def_map: &DefMap,
         from_module: ModuleIdLt<'db>,
     ) -> bool {
         if cfg!(debug_assertions) {
@@ -94,7 +94,7 @@ impl Visibility {
 
     fn is_visible_from_def_map_<'db>(
         db: &'db dyn SourceDatabase,
-        def_map: &'db DefMap,
+        def_map: &DefMap,
         mut to_module: ModuleIdLt<'db>,
         mut from_module: ModuleIdLt<'db>,
     ) -> bool {

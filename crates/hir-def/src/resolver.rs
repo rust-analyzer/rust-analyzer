@@ -1050,7 +1050,7 @@ pub enum ScopeDef {
 }
 
 impl<'db> Scope<'db> {
-    fn process_names(&self, acc: &mut ScopeNames, db: &'db dyn SourceDatabase) {
+    fn process_names(&self, acc: &mut ScopeNames, db: &dyn SourceDatabase) {
         match self {
             Scope::BlockScope(m) => {
                 m.def_map[m.module_id].scope.entries().for_each(|(name, def)| {
@@ -1185,7 +1185,7 @@ impl<'db> Resolver<'db> {
 impl<'db> ModuleItemMap<'db> {
     fn resolve_path_in_value_ns(
         &self,
-        db: &'db dyn SourceDatabase,
+        db: &dyn SourceDatabase,
         path: &ModPath,
     ) -> Option<(ResolveValueResult, ResolvePathResultPrefixInfo, Visibility)> {
         let (module_def, unresolved_idx, prefix_info) = self.def_map.resolve_path_locally(

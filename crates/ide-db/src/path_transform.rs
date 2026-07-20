@@ -53,20 +53,20 @@ type DefaultedParam = Either<hir::TypeParam, hir::ConstParam>;
 ///   }
 /// }
 /// ```
-pub struct PathTransform<'a> {
+pub struct PathTransform<'a, 'db> {
     generic_def: Option<hir::GenericDef>,
     substs: AstSubsts,
-    target_scope: &'a SemanticsScope<'a>,
-    source_scope: &'a SemanticsScope<'a>,
+    target_scope: &'a SemanticsScope<'db>,
+    source_scope: &'a SemanticsScope<'db>,
 }
 
-impl<'a> PathTransform<'a> {
+impl<'a, 'db> PathTransform<'a, 'db> {
     pub fn trait_impl(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
         trait_: hir::Trait,
         impl_: ast::Impl,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -76,11 +76,11 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn function_call(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
         function: hir::Function,
         generic_arg_list: ast::GenericArgList,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -90,11 +90,11 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn impl_transformation(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
         impl_: hir::Impl,
         generic_arg_list: ast::GenericArgList,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -104,11 +104,11 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn adt_transformation(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
         adt: hir::Adt,
         generic_arg_list: ast::GenericArgList,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -118,9 +118,9 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn generic_transformation(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
-    ) -> PathTransform<'a> {
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -162,7 +162,7 @@ impl<'a> PathTransform<'a> {
         N::cast(self.prettify_target_node(node.syntax().clone())).unwrap()
     }
 
-    fn build_ctx(&self) -> Ctx<'a> {
+    fn build_ctx(&self) -> Ctx<'a, 'db> {
         let db = self.source_scope.db;
         let target_module = self.target_scope.module();
         let source_module = self.source_scope.module();
@@ -251,12 +251,12 @@ impl<'a> PathTransform<'a> {
     }
 }
 
-struct Ctx<'a> {
+struct Ctx<'a, 'db> {
     type_substs: FxHashMap<hir::TypeParam, ast::Type>,
     const_substs: FxHashMap<hir::ConstParam, SyntaxNode>,
     lifetime_substs: FxHashMap<LifetimeName, ast::Lifetime>,
     target_module: hir::Module,
-    source_scope: &'a SemanticsScope<'a>,
+    source_scope: &'a SemanticsScope<'db>,
     same_self_type: bool,
     target_edition: Edition,
 }
@@ -272,7 +272,7 @@ fn preorder_rev(item: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> {
     x.into_iter().rev()
 }
 
-impl Ctx<'_> {
+impl Ctx<'_, '_> {
     fn apply(&self, item: &SyntaxNode) -> SyntaxNode {
         // `transform_path` may update a node's parent and that would break the
         // tree traversal. Thus all paths in the tree are collected into a vec

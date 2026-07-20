@@ -175,7 +175,7 @@ pub enum WherePredicateEvaluation {
 pub fn where_predicate_must_hold<'db>(
     db: &'db dyn HirDatabase,
     resolver: &Resolver<'db>,
-    store: &'db ExpressionStore,
+    store: &ExpressionStore,
     def: ExpressionStoreOwnerId,
     generic_def: GenericDefId,
     env: ParamEnvAndCrate<'db>,

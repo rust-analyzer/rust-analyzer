@@ -808,11 +808,11 @@ impl<'db> TraitImpls<'db> {
         })
     }
 
-    pub fn for_trait_and_self_ty(
-        &'db self,
+    pub fn for_trait_and_self_ty<'a>(
+        &'a self,
         trait_: TraitId,
         self_ty: &SimplifiedType<'db>,
-    ) -> (&'db [ImplId], &'db [BuiltinDeriveImplId]) {
+    ) -> (&'a [ImplId], &'a [BuiltinDeriveImplId]) {
         self.map
             .get(&trait_)
             .and_then(|map| map.non_blanket_impls.get(self_ty))

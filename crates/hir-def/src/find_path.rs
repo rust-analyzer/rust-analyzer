@@ -175,7 +175,7 @@ fn find_path_inner(ctx: &FindPathCtx<'_>, item: ItemInNs, max_len: usize) -> Opt
 
 #[tracing::instrument(skip_all)]
 fn find_path_for_module<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     module_id: ModuleIdLt<'db>,
     maybe_extern: bool,
@@ -345,7 +345,7 @@ fn is_kw_kind_relative_to_from(
 
 #[tracing::instrument(skip_all)]
 fn calculate_best_path<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -385,7 +385,7 @@ fn calculate_best_path<'db>(
 }
 
 fn find_in_sysroot<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -439,7 +439,7 @@ fn find_in_sysroot<'db>(
 }
 
 fn find_in_dep<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -476,7 +476,7 @@ fn find_in_dep<'db>(
 }
 
 fn calculate_best_path_local<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -573,7 +573,7 @@ fn path_kind_len(kind: PathKind) -> usize {
 
 /// Finds locations in `from.krate` from which `item` can be imported by `from`.
 fn find_local_import_locations<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     item: ItemInNs,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     mut cb: impl FnMut(&mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>, &Name, ModuleIdLt<'db>),

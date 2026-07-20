@@ -198,7 +198,7 @@ pub(crate) enum BuiltinShadowMode {
 /// Legacy macros can only be accessed through special methods like `get_legacy_macros`.
 /// Other methods will only resolve values, types and module scoped macros only.
 impl ItemScope {
-    pub fn entries(&self) -> impl Iterator<Item = (&Name, PerNs)> + '_ {
+    pub fn entries(&self) -> impl Iterator<Item = (&Name, PerNs)> {
         // FIXME: shadowing
         self.types
             .keys()
@@ -210,21 +210,19 @@ impl ItemScope {
             .map(move |name| (name, self.get(name)))
     }
 
-    pub fn values(&self) -> impl Iterator<Item = (&Name, Item<ModuleDefId, ImportOrGlob>)> + '_ {
+    pub fn values(&self) -> impl Iterator<Item = (&Name, Item<ModuleDefId, ImportOrGlob>)> {
         self.values.iter().map(|(n, &i)| (n, i))
     }
 
-    pub fn types(
-        &self,
-    ) -> impl Iterator<Item = (&Name, Item<ModuleDefId, ImportOrExternCrate>)> + '_ {
+    pub fn types(&self) -> impl Iterator<Item = (&Name, Item<ModuleDefId, ImportOrExternCrate>)> {
         self.types.iter().map(|(n, &i)| (n, i))
     }
 
-    pub fn macros(&self) -> impl Iterator<Item = (&Name, Item<MacroId, ImportOrExternCrate>)> + '_ {
+    pub fn macros(&self) -> impl Iterator<Item = (&Name, Item<MacroId, ImportOrExternCrate>)> {
         self.macros.iter().map(|(n, &i)| (n, i))
     }
 
-    pub fn imports(&self) -> impl Iterator<Item = ImportId> + '_ {
+    pub fn imports(&self) -> impl Iterator<Item = ImportId> {
         self.use_imports_types
             .keys()
             .copied()
@@ -287,39 +285,39 @@ impl ItemScope {
         res
     }
 
-    pub fn declarations(&self) -> impl Iterator<Item = ModuleDefId> + '_ {
+    pub fn declarations(&self) -> impl Iterator<Item = ModuleDefId> {
         self.declarations.iter().copied()
     }
 
-    pub fn extern_crate_decls(&self) -> impl ExactSizeIterator<Item = ExternCrateId> + '_ {
+    pub fn extern_crate_decls(&self) -> impl ExactSizeIterator<Item = ExternCrateId> {
         self.extern_crate_decls.iter().copied()
     }
 
-    pub fn extern_blocks(&self) -> impl Iterator<Item = ExternBlockId> + '_ {
+    pub fn extern_blocks(&self) -> impl Iterator<Item = ExternBlockId> {
         self.extern_blocks.iter().copied()
     }
 
-    pub fn use_decls(&self) -> impl ExactSizeIterator<Item = UseId> + '_ {
+    pub fn use_decls(&self) -> impl ExactSizeIterator<Item = UseId> {
         self.use_decls.iter().copied()
     }
 
-    pub fn impls(&self) -> impl ExactSizeIterator<Item = ImplId> + '_ {
+    pub fn impls(&self) -> impl ExactSizeIterator<Item = ImplId> {
         self.impls.iter().map(|&(id, _)| id)
     }
 
-    pub fn trait_impls(&self) -> impl Iterator<Item = ImplId> + '_ {
+    pub fn trait_impls(&self) -> impl Iterator<Item = ImplId> {
         self.impls.iter().filter(|&&(_, is_trait_impl)| is_trait_impl).map(|&(id, _)| id)
     }
 
-    pub fn inherent_impls(&self) -> impl Iterator<Item = ImplId> + '_ {
+    pub fn inherent_impls(&self) -> impl Iterator<Item = ImplId> {
         self.impls.iter().filter(|&&(_, is_trait_impl)| !is_trait_impl).map(|&(id, _)| id)
     }
 
-    pub fn builtin_derive_impls(&self) -> impl ExactSizeIterator<Item = BuiltinDeriveImplId> + '_ {
+    pub fn builtin_derive_impls(&self) -> impl ExactSizeIterator<Item = BuiltinDeriveImplId> {
         self.builtin_derive_impls.iter().copied()
     }
 
-    pub fn all_macro_calls(&self) -> impl Iterator<Item = MacroCallId> + '_ {
+    pub fn all_macro_calls(&self) -> impl Iterator<Item = MacroCallId> {
         self.macro_invocations.values().copied().chain(self.attr_macros.values().copied()).chain(
             self.derive_macros.values().flat_map(|it| {
                 it.iter().flat_map(|it| {
@@ -329,19 +327,19 @@ impl ItemScope {
         )
     }
 
-    pub(crate) fn modules_in_scope(&self) -> impl Iterator<Item = (ModuleId, Visibility)> + '_ {
+    pub(crate) fn modules_in_scope(&self) -> impl Iterator<Item = (ModuleId, Visibility)> {
         self.types.values().filter_map(|ns| match ns.def {
             ModuleDefId::ModuleId(module) => Some((module, ns.vis)),
             _ => None,
         })
     }
 
-    pub fn unnamed_consts(&self) -> impl Iterator<Item = ConstId> + '_ {
+    pub fn unnamed_consts(&self) -> impl Iterator<Item = ConstId> {
         self.unnamed_consts.iter().copied()
     }
 
     /// Iterate over all legacy textual scoped macros visible at the end of the module
-    pub fn legacy_macros(&self) -> impl Iterator<Item = (&Name, &[MacroId])> + '_ {
+    pub fn legacy_macros(&self) -> impl Iterator<Item = (&Name, &[MacroId])> {
         self.legacy_macros.iter().map(|(name, def)| (name, &**def))
     }
 
@@ -420,7 +418,7 @@ impl ItemScope {
         }
     }
 
-    pub(crate) fn traits(&self) -> impl Iterator<Item = TraitId> + '_ {
+    pub(crate) fn traits(&self) -> impl Iterator<Item = TraitId> {
         self.types
             .values()
             .filter_map(|def| match def.def {
@@ -430,7 +428,7 @@ impl ItemScope {
             .chain(self.unnamed_trait_imports.iter().map(|&(t, _)| t))
     }
 
-    pub(crate) fn resolutions(&self) -> impl Iterator<Item = (Option<Name>, PerNs)> + '_ {
+    pub(crate) fn resolutions(&self) -> impl Iterator<Item = (Option<Name>, PerNs)> {
         self.entries().map(|(name, res)| (Some(name.clone()), res)).chain(
             self.unnamed_trait_imports.iter().map(|(tr, trait_)| {
                 (
