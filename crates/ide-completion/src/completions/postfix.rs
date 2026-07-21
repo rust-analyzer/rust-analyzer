@@ -926,7 +926,7 @@ fn main() {
 "#,
             expect![[r#"
                 me and(…)    fn(self, Option<U>) -> Option<U>
-                me as_ref()     const fn(&self) -> Option<&T>
+                me as_ref()  const fn(&'_ self) -> Option<&T>
                 me ok_or(…) const fn(self, E) -> Result<T, E>
                 me unwrap()               const fn(self) -> T
                 me unwrap_or(…)              fn(self, T) -> T

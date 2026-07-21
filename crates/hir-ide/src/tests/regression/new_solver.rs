@@ -140,7 +140,7 @@ fn test() -> i32 {
             155..170 '{     loop {} }': *const T
             161..168 'loop {}': !
             166..168 '{}': ()
-            195..199 'self': &'? Self
+            195..199 'self': &'_ Self
             208..231 '{     ...     }': i32
             218..225 'loop {}': !
             223..225 '{}': ()
@@ -578,7 +578,7 @@ fn test_at_most() {
         expect![[r#"
             48..49 '0': usize
             182..186 'self': Between<M, 0, T>
-            188..192 '_sep': &'? str
+            188..192 '_sep': &'_ str
             200..206 '_other': Between<M, 0, T>
             222..242 '{     ...     }': Between<M, 0, T>
             232..236 'self': Between<M, 0, T>
@@ -772,9 +772,9 @@ where
 }
 "#,
         expect![[r#"
-            168..172 'self': &'? F
+            168..172 'self': &'_ F
             205..227 '{     ...     }': <F as AsyncFnMut<()>>::CallRefFuture<'?>
-            215..219 'self': &'? F
+            215..219 'self': &'_ F
             215..221 'self()': <F as AsyncFnMut<()>>::CallRefFuture<'?>
         "#]],
     );
@@ -905,11 +905,11 @@ fn main() {
 }
 "#,
         expect![[r#"
-            164..168 'self': &'? mut Foo<T>
+            164..168 'self': &'_ mut Foo<T>
             192..224 '{     ...     }': Option<T>
-            202..206 'self': &'? mut Foo<T>
+            202..206 'self': &'_ mut Foo<T>
             202..218 'self.n...spec()': Option<T>
-            380..384 'self': &'? mut Foo<T>
+            380..384 'self': &'_ mut Foo<T>
             408..428 '{     ...     }': Option<T>
             418..422 'None': Option<T>
             501..505 'iter': I

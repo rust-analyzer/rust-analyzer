@@ -921,7 +921,7 @@ fn bar() {
 }
 "#,
             expect![[r#"
-                fn do_it(&self)
+                fn do_it<'_>(&'_ self)
             "#]],
         );
     }
@@ -939,8 +939,8 @@ impl S {
 fn main() { S.foo($0); }
 "#,
             expect![[r#"
-                fn foo(&self, x: i32)
-                              ^^^^^^
+                fn foo<'_>(&'_ self, x: i32)
+                                     ^^^^^^
             "#]],
         );
     }
@@ -958,8 +958,8 @@ impl<T> S<T> {
 fn main() { S(1u32).foo($0); }
 "#,
             expect![[r#"
-                fn foo(&self, x: u32)
-                              ^^^^^^
+                fn foo<'_>(&'_ self, x: u32)
+                                     ^^^^^^
             "#]],
         );
     }
@@ -977,8 +977,8 @@ impl S {
 fn main() { S::foo($0); }
 "#,
             expect![[r#"
-                fn foo(self: &S, x: i32)
-                       ^^^^^^^^  ------
+                fn foo<'_>(self: &S, x: i32)
+                           ^^^^^^^^  ------
             "#]],
         );
     }
@@ -1116,8 +1116,8 @@ fn foo(mut r: impl WriteHandler<()>) {
 
                 By default this method stops actor's `Context`.
                 ------
-                fn finished(&mut self, ctx: &mut <impl WriteHandler<()> as Actor>::Context)
-                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                fn finished<'_, '_>(&'_ mut self, ctx: &mut <impl WriteHandler<()> as Actor>::Context)
+                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             "#]],
         );
     }
@@ -1202,8 +1202,8 @@ fn main() {
 }
 "#,
             expect![[r#"
-                fn bar(&self, _: u32)
-                              ^^^^^^
+                fn bar<'_>(&'_ self, _: u32)
+                                     ^^^^^^
             "#]],
         );
     }
@@ -1809,8 +1809,8 @@ fn f() {
 }
         "#,
             expect![[r#"
-                fn f<T>
-                     ^
+                fn f<'_, T>
+                     ^^  -
             "#]],
         );
     }
@@ -1829,8 +1829,8 @@ fn sup() {
 }
 "#,
             expect![[r#"
-                fn test<V>(&mut self, val: V)
-                                      ^^^^^^
+                fn test<'_, V>(&'_ mut self, val: V)
+                                             ^^^^^^
             "#]],
         );
     }
@@ -2035,8 +2035,8 @@ fn f() {
 }
 "#,
             expect![[r#"
-                fn foo(self: &Self, other: Self)
-                       ^^^^^^^^^^^  -----------
+                fn foo<'_>(self: &Self, other: Self)
+                           ^^^^^^^^^^^  -----------
             "#]],
         );
     }

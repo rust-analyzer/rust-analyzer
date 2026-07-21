@@ -1151,12 +1151,12 @@ fn dyn_trait_super_trait_not_in_scope() {
         }
         "#,
         expect![[r#"
-            51..55 'self': &'? Self
+            51..55 'self': &'_ Self
             64..69 '{ 0 }': u32
             66..67 '0': u32
-            176..177 'd': &'? (dyn Trait + 'static)
+            176..177 'd': &'_ (dyn Trait + 'static)
             191..207 '{     ...o(); }': ()
-            197..198 'd': &'? (dyn Trait + 'static)
+            197..198 'd': &'_ (dyn Trait + 'static)
             197..204 'd.foo()': u32
         "#]],
     );
@@ -1183,7 +1183,7 @@ fn test() {
 }
 "#,
         expect![[r#"
-            75..79 'self': &'? S
+            75..79 'self': &'_ S
             89..109 '{     ...     }': bool
             99..103 'true': bool
             123..167 '{     ...o(); }': ()

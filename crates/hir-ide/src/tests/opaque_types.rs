@@ -204,7 +204,7 @@ impl Miku {
             61..72 '{ loop {} }': Vec<T>
             63..70 'loop {}': !
             68..70 '{}': ()
-            133..137 'self': &'? Miku
+            133..137 'self': &'_ Miku
             152..220 '{     ...     }': Miku
             162..214 'Miku {...     }': Miku
             193..201 'Vec::new': fn new<{unknown}>() -> Vec<{unknown}>

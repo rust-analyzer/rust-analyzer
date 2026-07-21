@@ -190,13 +190,13 @@ struct TestBox<U,T:Getter<U>+Setter<U>> { //~ ERROR [U: *, T: +]
 }
 "#,
         expect![[r#"
-                get[Self: contravariant, T: covariant]
-                get[Self: contravariant, T: contravariant]
-                TestStruct[U: covariant, T: covariant]
-                TestEnum[U: bivariant, T: covariant]
-                TestContraStruct[U: bivariant, T: covariant]
-                TestBox[U: bivariant, T: covariant]
-            "#]],
+            get[Self: contravariant, T: covariant, '_: invariant]
+            get[Self: contravariant, T: contravariant, '_: invariant]
+            TestStruct[U: covariant, T: covariant]
+            TestEnum[U: bivariant, T: covariant]
+            TestContraStruct[U: bivariant, T: covariant]
+            TestBox[U: bivariant, T: covariant]
+        "#]],
     );
 }
 
@@ -226,12 +226,12 @@ fn pick<'b, G>(get: &'b G, if_odd: &'b i32) -> i32
 {}
 "#,
         expect![[r#"
-                get[Self: contravariant, T: covariant]
-                Cloner[T: covariant]
-                get[T: invariant]
-                get['a: invariant, G: contravariant]
-                pick['b: contravariant, G: contravariant]
-            "#]],
+            get[Self: contravariant, T: covariant, '_: invariant]
+            Cloner[T: covariant]
+            get[T: invariant, '_: invariant]
+            get['a: invariant, G: contravariant, '_: invariant]
+            pick['b: contravariant, G: contravariant]
+        "#]],
     );
 }
 
@@ -250,10 +250,10 @@ struct TOption<'a> { //~ ERROR ['a: +]
 }
 "#,
         expect![[r#"
-                Option[T: covariant]
-                foo[Self: contravariant]
-                TOption['a: covariant]
-            "#]],
+            Option[T: covariant]
+            foo[Self: contravariant, '_: invariant]
+            TOption['a: covariant]
+        "#]],
     );
 }
 
@@ -295,14 +295,14 @@ struct TestObject<A, R> { //~ ERROR [A: o, R: o]
 }
 "#,
         expect![[r#"
-                TestImm[A: covariant, B: covariant]
-                TestMut[A: covariant, B: invariant]
-                TestIndirect[A: covariant, B: invariant]
-                TestIndirect2[A: invariant, B: invariant]
-                get[Self: contravariant, A: covariant]
-                set[Self: invariant, A: contravariant]
-                TestObject[A: invariant, R: invariant]
-            "#]],
+            TestImm[A: covariant, B: covariant]
+            TestMut[A: covariant, B: invariant]
+            TestIndirect[A: covariant, B: invariant]
+            TestIndirect2[A: invariant, B: invariant]
+            get[Self: contravariant, A: covariant, '_: invariant]
+            set[Self: invariant, A: contravariant, '_: invariant]
+            TestObject[A: invariant, R: invariant]
+        "#]],
     );
 }
 
@@ -315,10 +315,10 @@ enum SomeEnum<'a> { Nothing } //~ ERROR parameter `'a` is never used
 trait SomeTrait<'a> { fn foo(&self); } // OK on traits.
 "#,
         expect![[r#"
-                SomeStruct['a: bivariant]
-                SomeEnum['a: bivariant]
-                foo[Self: contravariant, 'a: invariant]
-            "#]],
+            SomeStruct['a: bivariant]
+            SomeEnum['a: bivariant]
+            foo[Self: contravariant, 'a: invariant, '_: invariant]
+        "#]],
     );
 }
 

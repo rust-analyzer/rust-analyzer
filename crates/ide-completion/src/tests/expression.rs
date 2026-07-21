@@ -2535,7 +2535,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()     fn(&self)
+            me foo()  fn(&'_ self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -2562,7 +2562,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()     fn(&self)
+            me foo()  fn(&'_ self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -2593,7 +2593,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()     fn(&self)
+            me foo()  fn(&'_ self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -2620,7 +2620,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()     fn(&self)
+            me foo()  fn(&'_ self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -2647,7 +2647,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()     fn(&self)
+            me foo()  fn(&'_ self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -2674,7 +2674,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()     fn(&self)
+            me foo()  fn(&'_ self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -2788,20 +2788,20 @@ fn foo() {
 }
         "#,
         expect![[r#"
-            me inherent() fn(&self)
-            sn box   Box::new(expr)
-            sn call  function(expr)
-            sn const       const {}
-            sn dbg       dbg!(expr)
-            sn dbgr     dbg!(&expr)
-            sn deref          *expr
-            sn let              let
-            sn letm         let mut
-            sn match  match expr {}
-            sn ref            &expr
-            sn refm       &mut expr
-            sn return   return expr
-            sn unsafe     unsafe {}
+            me inherent() fn(&'_ self)
+            sn box      Box::new(expr)
+            sn call     function(expr)
+            sn const          const {}
+            sn dbg          dbg!(expr)
+            sn dbgr        dbg!(&expr)
+            sn deref             *expr
+            sn let                 let
+            sn letm            let mut
+            sn match     match expr {}
+            sn ref               &expr
+            sn refm          &mut expr
+            sn return      return expr
+            sn unsafe        unsafe {}
         "#]],
     );
 }
@@ -2827,22 +2827,22 @@ fn foo(v: &dyn ExcludedTrait) {
 }
         "#,
         expect![[r#"
-            me bar() (as ExcludedTrait) fn(&self)
-            me baz() (as ExcludedTrait) fn(&self)
-            me foo() (as ExcludedTrait) fn(&self)
-            sn box                 Box::new(expr)
-            sn call                function(expr)
-            sn const                     const {}
-            sn dbg                     dbg!(expr)
-            sn dbgr                   dbg!(&expr)
-            sn deref                        *expr
-            sn let                            let
-            sn letm                       let mut
-            sn match                match expr {}
-            sn ref                          &expr
-            sn refm                     &mut expr
-            sn return                 return expr
-            sn unsafe                   unsafe {}
+            me bar() (as ExcludedTrait) fn(&'_ self)
+            me baz() (as ExcludedTrait) fn(&'_ self)
+            me foo() (as ExcludedTrait) fn(&'_ self)
+            sn box                    Box::new(expr)
+            sn call                   function(expr)
+            sn const                        const {}
+            sn dbg                        dbg!(expr)
+            sn dbgr                      dbg!(&expr)
+            sn deref                           *expr
+            sn let                               let
+            sn letm                          let mut
+            sn match                   match expr {}
+            sn ref                             &expr
+            sn refm                        &mut expr
+            sn return                    return expr
+            sn unsafe                      unsafe {}
         "#]],
     );
     check_with_config(
@@ -2864,22 +2864,22 @@ fn foo(v: impl ExcludedTrait) {
 }
         "#,
         expect![[r#"
-            me bar() (as ExcludedTrait) fn(&self)
-            me baz() (as ExcludedTrait) fn(&self)
-            me foo() (as ExcludedTrait) fn(&self)
-            sn box                 Box::new(expr)
-            sn call                function(expr)
-            sn const                     const {}
-            sn dbg                     dbg!(expr)
-            sn dbgr                   dbg!(&expr)
-            sn deref                        *expr
-            sn let                            let
-            sn letm                       let mut
-            sn match                match expr {}
-            sn ref                          &expr
-            sn refm                     &mut expr
-            sn return                 return expr
-            sn unsafe                   unsafe {}
+            me bar() (as ExcludedTrait) fn(&'_ self)
+            me baz() (as ExcludedTrait) fn(&'_ self)
+            me foo() (as ExcludedTrait) fn(&'_ self)
+            sn box                    Box::new(expr)
+            sn call                   function(expr)
+            sn const                        const {}
+            sn dbg                        dbg!(expr)
+            sn dbgr                      dbg!(&expr)
+            sn deref                           *expr
+            sn let                               let
+            sn letm                          let mut
+            sn match                   match expr {}
+            sn ref                             &expr
+            sn refm                        &mut expr
+            sn return                    return expr
+            sn unsafe                      unsafe {}
         "#]],
     );
     check_with_config(
@@ -2901,22 +2901,22 @@ fn foo<T: ExcludedTrait>(v: T) {
 }
         "#,
         expect![[r#"
-            me bar() (as ExcludedTrait) fn(&self)
-            me baz() (as ExcludedTrait) fn(&self)
-            me foo() (as ExcludedTrait) fn(&self)
-            sn box                 Box::new(expr)
-            sn call                function(expr)
-            sn const                     const {}
-            sn dbg                     dbg!(expr)
-            sn dbgr                   dbg!(&expr)
-            sn deref                        *expr
-            sn let                            let
-            sn letm                       let mut
-            sn match                match expr {}
-            sn ref                          &expr
-            sn refm                     &mut expr
-            sn return                 return expr
-            sn unsafe                   unsafe {}
+            me bar() (as ExcludedTrait) fn(&'_ self)
+            me baz() (as ExcludedTrait) fn(&'_ self)
+            me foo() (as ExcludedTrait) fn(&'_ self)
+            sn box                    Box::new(expr)
+            sn call                   function(expr)
+            sn const                        const {}
+            sn dbg                        dbg!(expr)
+            sn dbgr                      dbg!(&expr)
+            sn deref                           *expr
+            sn let                               let
+            sn letm                          let mut
+            sn match                   match expr {}
+            sn ref                             &expr
+            sn refm                        &mut expr
+            sn return                    return expr
+            sn unsafe                      unsafe {}
         "#]],
     );
 }
@@ -2949,20 +2949,20 @@ fn foo() {
 }
         "#,
         expect![[r#"
-            me inherent() fn(&self)
-            sn box   Box::new(expr)
-            sn call  function(expr)
-            sn const       const {}
-            sn dbg       dbg!(expr)
-            sn dbgr     dbg!(&expr)
-            sn deref          *expr
-            sn let              let
-            sn letm         let mut
-            sn match  match expr {}
-            sn ref            &expr
-            sn refm       &mut expr
-            sn return   return expr
-            sn unsafe     unsafe {}
+            me inherent() fn(&'_ self)
+            sn box      Box::new(expr)
+            sn call     function(expr)
+            sn const          const {}
+            sn dbg          dbg!(expr)
+            sn dbgr        dbg!(&expr)
+            sn deref             *expr
+            sn let                 let
+            sn letm            let mut
+            sn match     match expr {}
+            sn ref               &expr
+            sn refm          &mut expr
+            sn return      return expr
+            sn unsafe        unsafe {}
         "#]],
     );
 }
@@ -2998,20 +2998,20 @@ fn foo() {
 }
         "#,
         expect![[r#"
-            me inherent() fn(&self)
-            sn box   Box::new(expr)
-            sn call  function(expr)
-            sn const       const {}
-            sn dbg       dbg!(expr)
-            sn dbgr     dbg!(&expr)
-            sn deref          *expr
-            sn let              let
-            sn letm         let mut
-            sn match  match expr {}
-            sn ref            &expr
-            sn refm       &mut expr
-            sn return   return expr
-            sn unsafe     unsafe {}
+            me inherent() fn(&'_ self)
+            sn box      Box::new(expr)
+            sn call     function(expr)
+            sn const          const {}
+            sn dbg          dbg!(expr)
+            sn dbgr        dbg!(&expr)
+            sn deref             *expr
+            sn let                 let
+            sn letm            let mut
+            sn match     match expr {}
+            sn ref               &expr
+            sn refm          &mut expr
+            sn return      return expr
+            sn unsafe        unsafe {}
         "#]],
     );
 }
@@ -3190,7 +3190,7 @@ fn foo() {
 }
         "#,
         expect![[r#"
-            me inherent(…) fn(&self)
+            me inherent(…) fn(&'_ self)
         "#]],
     );
 }
@@ -3221,10 +3221,10 @@ fn foo() {
 }
         "#,
         expect![[r#"
-                me bar(…) (as ExcludedTrait) fn(&self)
-                me baz(…) (as ExcludedTrait) fn(&self)
-                me foo(…) (as ExcludedTrait) fn(&self)
-            "#]],
+            me bar(…) (as ExcludedTrait) fn(&'_ self)
+            me baz(…) (as ExcludedTrait) fn(&'_ self)
+            me foo(…) (as ExcludedTrait) fn(&'_ self)
+        "#]],
     );
     check_with_config(
         CompletionConfig {
@@ -3250,10 +3250,10 @@ fn foo() {
 }
         "#,
         expect![[r#"
-                me bar(…) (as ExcludedTrait) fn(&self)
-                me baz(…) (as ExcludedTrait) fn(&self)
-                me foo(…) (as ExcludedTrait) fn(&self)
-            "#]],
+            me bar(…) (as ExcludedTrait) fn(&'_ self)
+            me baz(…) (as ExcludedTrait) fn(&'_ self)
+            me foo(…) (as ExcludedTrait) fn(&'_ self)
+        "#]],
     );
 }
 
@@ -3278,9 +3278,9 @@ fn foo() {
 }
         "#,
         expect![[r#"
-            me bar(…) (as ExcludedTrait) fn(&self)
-            me baz(…) (as ExcludedTrait) fn(&self)
-            me foo(…) (as ExcludedTrait) fn(&self)
+            me bar(…) (as ExcludedTrait) fn(&'_ self)
+            me baz(…) (as ExcludedTrait) fn(&'_ self)
+            me foo(…) (as ExcludedTrait) fn(&'_ self)
         "#]],
     );
     check_with_config(
@@ -3302,9 +3302,9 @@ fn foo<T: ExcludedTrait>() {
 }
         "#,
         expect![[r#"
-            me bar(…) (as ExcludedTrait) fn(&self)
-            me baz(…) (as ExcludedTrait) fn(&self)
-            me foo(…) (as ExcludedTrait) fn(&self)
+            me bar(…) (as ExcludedTrait) fn(&'_ self)
+            me baz(…) (as ExcludedTrait) fn(&'_ self)
+            me foo(…) (as ExcludedTrait) fn(&'_ self)
         "#]],
     );
 }
@@ -3895,21 +3895,21 @@ fn field_in_previous_line_of_ambiguous_expr() {
             (2, 3)
         }"#,
         expect![[r#"
-            fd field           i32
-            me method()  fn(&self)
-            sn box  Box::new(expr)
-            sn call function(expr)
-            sn const      const {}
-            sn dbg      dbg!(expr)
-            sn dbgr    dbg!(&expr)
-            sn deref         *expr
-            sn let             let
-            sn letm        let mut
-            sn match match expr {}
-            sn ref           &expr
-            sn refm      &mut expr
-            sn return  return expr
-            sn unsafe    unsafe {}
+            fd field             i32
+            me method() fn(&'_ self)
+            sn box    Box::new(expr)
+            sn call   function(expr)
+            sn const        const {}
+            sn dbg        dbg!(expr)
+            sn dbgr      dbg!(&expr)
+            sn deref           *expr
+            sn let               let
+            sn letm          let mut
+            sn match   match expr {}
+            sn ref             &expr
+            sn refm        &mut expr
+            sn return    return expr
+            sn unsafe      unsafe {}
         "#]],
     );
 
@@ -3925,21 +3925,21 @@ fn field_in_previous_line_of_ambiguous_expr() {
             (2, 3)
         }"#,
         expect![[r#"
-            fd field           i32
-            me method()  fn(&self)
-            sn box  Box::new(expr)
-            sn call function(expr)
-            sn const      const {}
-            sn dbg      dbg!(expr)
-            sn dbgr    dbg!(&expr)
-            sn deref         *expr
-            sn let             let
-            sn letm        let mut
-            sn match match expr {}
-            sn ref           &expr
-            sn refm      &mut expr
-            sn return  return expr
-            sn unsafe    unsafe {}
+            fd field             i32
+            me method() fn(&'_ self)
+            sn box    Box::new(expr)
+            sn call   function(expr)
+            sn const        const {}
+            sn dbg        dbg!(expr)
+            sn dbgr      dbg!(&expr)
+            sn deref           *expr
+            sn let               let
+            sn letm          let mut
+            sn match   match expr {}
+            sn ref             &expr
+            sn refm        &mut expr
+            sn return    return expr
+            sn unsafe      unsafe {}
         "#]],
     );
 }
@@ -3958,21 +3958,21 @@ fn fn_field_in_previous_line_of_ambiguous_expr() {
             (2, 3)
         }"#,
         expect![[r#"
-            fd field          fn()
-            me method()  fn(&self)
-            sn box  Box::new(expr)
-            sn call function(expr)
-            sn const      const {}
-            sn dbg      dbg!(expr)
-            sn dbgr    dbg!(&expr)
-            sn deref         *expr
-            sn let             let
-            sn letm        let mut
-            sn match match expr {}
-            sn ref           &expr
-            sn refm      &mut expr
-            sn return  return expr
-            sn unsafe    unsafe {}
+            fd field            fn()
+            me method() fn(&'_ self)
+            sn box    Box::new(expr)
+            sn call   function(expr)
+            sn const        const {}
+            sn dbg        dbg!(expr)
+            sn dbgr      dbg!(&expr)
+            sn deref           *expr
+            sn let               let
+            sn letm          let mut
+            sn match   match expr {}
+            sn ref             &expr
+            sn refm        &mut expr
+            sn return    return expr
+            sn unsafe      unsafe {}
         "#]],
     );
 
@@ -4081,20 +4081,20 @@ fn main() {
 }
     "#,
         expect![[r#"
-            me method() (as Trait) fn(&self)
-            sn box            Box::new(expr)
-            sn call           function(expr)
-            sn const                const {}
-            sn dbg                dbg!(expr)
-            sn dbgr              dbg!(&expr)
-            sn deref                   *expr
-            sn let                       let
-            sn letm                  let mut
-            sn match           match expr {}
-            sn ref                     &expr
-            sn refm                &mut expr
-            sn return            return expr
-            sn unsafe              unsafe {}
+            me method() (as Trait) fn(&'_ self)
+            sn box               Box::new(expr)
+            sn call              function(expr)
+            sn const                   const {}
+            sn dbg                   dbg!(expr)
+            sn dbgr                 dbg!(&expr)
+            sn deref                      *expr
+            sn let                          let
+            sn letm                     let mut
+            sn match              match expr {}
+            sn ref                        &expr
+            sn refm                   &mut expr
+            sn return               return expr
+            sn unsafe                 unsafe {}
         "#]],
     );
 }
@@ -4116,20 +4116,20 @@ fn baz(v: impl Bar) {
 }
     "#,
         expect![[r#"
-            me foo() (as Foo) fn(&self)
-            sn box       Box::new(expr)
-            sn call      function(expr)
-            sn const           const {}
-            sn dbg           dbg!(expr)
-            sn dbgr         dbg!(&expr)
-            sn deref              *expr
-            sn let                  let
-            sn letm             let mut
-            sn match      match expr {}
-            sn ref                &expr
-            sn refm           &mut expr
-            sn return       return expr
-            sn unsafe         unsafe {}
+            me foo() (as Foo) fn(&'_ self)
+            sn box          Box::new(expr)
+            sn call         function(expr)
+            sn const              const {}
+            sn dbg              dbg!(expr)
+            sn dbgr            dbg!(&expr)
+            sn deref                 *expr
+            sn let                     let
+            sn letm                let mut
+            sn match         match expr {}
+            sn ref                   &expr
+            sn refm              &mut expr
+            sn return          return expr
+            sn unsafe            unsafe {}
         "#]],
     );
 }

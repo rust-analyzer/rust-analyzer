@@ -287,11 +287,6 @@ pub(super) fn free_function<'a, 'lt, 'db, DB: HirDatabase>(
                     .map(|it| it.as_type_param(db))
                     .collect::<Option<Vec<TypeParam>>>()?;
 
-                // Ignore lifetimes as we do not check them
-                if !generics.lifetime_params(db).is_empty() {
-                    return None;
-                }
-
                 // Only account for stable type parameters for now, unstable params can be default
                 // tho, for example in `Box<T, #[unstable] A: Allocator>`
                 if type_params.iter().any(|it| it.is_unstable(db) && it.default(db).is_none()) {
@@ -425,16 +420,8 @@ pub(super) fn impl_method<'a, 'lt, 'db, DB: HirDatabase>(
             _ => None,
         })
         .filter(|_| should_continue())
-        .filter_map(move |(imp, ty, it)| {
+        .filter_map(move |(_, ty, it)| {
             let fn_generics = GenericDef::from(it);
-            let imp_generics = GenericDef::from(imp);
-
-            // Ignore all functions that have something to do with lifetimes as we don't check them
-            if !fn_generics.lifetime_params(db).is_empty()
-                || !imp_generics.lifetime_params(db).is_empty()
-            {
-                return None;
-            }
 
             // Ignore functions without self param
             if !it.has_self_param(db) {

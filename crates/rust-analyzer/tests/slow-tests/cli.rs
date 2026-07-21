@@ -98,7 +98,7 @@ mod tests {
         {"id":56,"type":"edge","label":"textDocument/references","inV":55,"outV":11}
         {"id":57,"type":"edge","label":"item","document":1,"property":"definitions","inVs":[10],"outV":55}
         {"id":58,"type":"edge","label":"item","document":1,"property":"references","inVs":[13,23],"outV":55}
-        {"id":59,"type":"vertex","label":"hoverResult","result":{"contents":{"kind":"markdown","value":"\n```rust\nfoo\n```\n\n```rust\nconst REQ_001: &str = \"encoded_data\"\n```"}}}
+        {"id":59,"type":"vertex","label":"hoverResult","result":{"contents":{"kind":"markdown","value":"\n```rust\nfoo\n```\n\n```rust\nconst REQ_001: &'static str = \"encoded_data\"\n```"}}}
         {"id":60,"type":"edge","label":"textDocument/hover","inV":59,"outV":16}
         {"id":61,"type":"vertex","label":"moniker","scheme":"rust-analyzer","identifier":"foo::lib::REQ_001","unique":"scheme","kind":"export"}
         {"id":62,"type":"edge","label":"packageInformation","inV":31,"outV":61}
@@ -120,7 +120,7 @@ mod tests {
         {"id":78,"type":"vertex","label":"referenceResult"}
         {"id":79,"type":"edge","label":"textDocument/references","inV":78,"outV":19}
         {"id":80,"type":"edge","label":"item","document":1,"property":"definitions","inVs":[18],"outV":78}
-        {"id":81,"type":"vertex","label":"hoverResult","result":{"contents":{"kind":"markdown","value":"\n```rust\nfoo::tests\n```\n\n```rust\nconst REQ_002: &str = \"encoded_data\"\n```"}}}
+        {"id":81,"type":"vertex","label":"hoverResult","result":{"contents":{"kind":"markdown","value":"\n```rust\nfoo::tests\n```\n\n```rust\nconst REQ_002: &'static str = \"encoded_data\"\n```"}}}
         {"id":82,"type":"edge","label":"textDocument/hover","inV":81,"outV":26}
         {"id":83,"type":"vertex","label":"moniker","scheme":"rust-analyzer","identifier":"foo::lib::tests::REQ_002","unique":"scheme","kind":"export"}
         {"id":84,"type":"edge","label":"packageInformation","inV":31,"outV":83}

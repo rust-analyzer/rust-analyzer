@@ -297,14 +297,14 @@ trait Sub: Super {
 fn foo<T: Sub>() { T::$0 }
 "#,
         expect![[r#"
-            ct C2 (as Sub)         const C2: ()
-            ct CONST (as Super) const CONST: u8
-            fn func() (as Super)           fn()
-            fn subfunc() (as Sub)          fn()
-            me method(…) (as Super)   fn(&self)
-            me submethod(…) (as Sub)  fn(&self)
-            ta SubTy (as Sub)        type SubTy
-            ta Ty (as Super)            type Ty
+            ct C2 (as Sub)           const C2: ()
+            ct CONST (as Super)   const CONST: u8
+            fn func() (as Super)             fn()
+            fn subfunc() (as Sub)            fn()
+            me method(…) (as Super)  fn(&'_ self)
+            me submethod(…) (as Sub) fn(&'_ self)
+            ta SubTy (as Sub)          type SubTy
+            ta Ty (as Super)              type Ty
         "#]],
     );
 }
@@ -341,8 +341,8 @@ impl<T> Sub for Wrap<T> {
             ct CONST  = 0 (as Super) const CONST: u8
             fn func() (as Super)                fn()
             fn subfunc() (as Sub)               fn()
-            me method(…) (as Super)        fn(&self)
-            me submethod(…) (as Sub)       fn(&self)
+            me method(…) (as Super)     fn(&'_ self)
+            me submethod(…) (as Sub)    fn(&'_ self)
             ta SubTy (as Sub)             type SubTy
             ta Ty (as Super)                 type Ty
         "#]],
@@ -981,8 +981,8 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me by_macro() (as MyTrait)     fn(&self)
-            me not_by_macro() (as MyTrait) fn(&self)
+            me by_macro() (as MyTrait)     fn(&'_ self)
+            me not_by_macro() (as MyTrait) fn(&'_ self)
         "#]],
     )
 }
@@ -1021,8 +1021,8 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me by_macro() (as MyTrait)     fn(&self)
-            me not_by_macro() (as MyTrait) fn(&self)
+            me by_macro() (as MyTrait)     fn(&'_ self)
+            me not_by_macro() (as MyTrait) fn(&'_ self)
         "#]],
     )
 }
@@ -1367,21 +1367,21 @@ fn here_we_go() {
 }
 "#,
         expect![[r#"
-            fd bar                            u8
-            me baz() (alias qux) fn(&self) -> u8
-            sn box                Box::new(expr)
-            sn call               function(expr)
-            sn const                    const {}
-            sn dbg                    dbg!(expr)
-            sn dbgr                  dbg!(&expr)
-            sn deref                       *expr
-            sn let                           let
-            sn letm                      let mut
-            sn match               match expr {}
-            sn ref                         &expr
-            sn refm                    &mut expr
-            sn return                return expr
-            sn unsafe                  unsafe {}
+            fd bar                               u8
+            me baz() (alias qux) fn(&'_ self) -> u8
+            sn box                   Box::new(expr)
+            sn call                  function(expr)
+            sn const                       const {}
+            sn dbg                       dbg!(expr)
+            sn dbgr                     dbg!(&expr)
+            sn deref                          *expr
+            sn let                              let
+            sn letm                         let mut
+            sn match                  match expr {}
+            sn ref                            &expr
+            sn refm                       &mut expr
+            sn return                   return expr
+            sn unsafe                     unsafe {}
         "#]],
     );
 }
@@ -1627,8 +1627,8 @@ impl Foo {
 fn main() { Foo.m$0 }
 "#,
         CompletionItemKind::SymbolKind(SymbolKind::Method),
-        expect!("fn(&self, bool, bool, bool, bool)"),
-        expect!("pub fn method(&self, first: bool, second: bool, third: bool, fourth: bool)"),
+        expect!("fn(&'_ self, bool, bool, bool, bool)"),
+        expect!("pub fn method<'_>(&'_ self, first: bool, second: bool, third: bool, fourth: bool)"),
     );
 }
 

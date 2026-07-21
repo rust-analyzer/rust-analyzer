@@ -306,8 +306,8 @@ impl S {
 fn foo(s: S) { s.$0 }
 "#,
             expect![[r#"
-                fd foo         u32
-                me bar() fn(&self)
+                fd foo            u32
+                me bar() fn(&'_ self)
             "#]],
         );
     }
@@ -344,7 +344,7 @@ impl S {
 }
 "#,
             expect![[r#"
-                me bar() fn(&self)
+                me bar() fn(&'_ self)
             "#]],
         );
     }
@@ -376,7 +376,7 @@ impl A {
 "#,
             expect![[r#"
                 fd the_field (u32, i32)
-                me foo()      fn(&self)
+                me foo()   fn(&'_ self)
             "#]],
         )
     }
@@ -485,7 +485,7 @@ mod m {
 fn foo(a: lib::A) { a.$0 }
 "#,
             expect![[r#"
-                me pub_method() fn(&self)
+                me pub_method() fn(&'_ self)
             "#]],
         );
         check_no_kw(
@@ -503,7 +503,7 @@ mod m {
 fn foo(a: lib::A) { a.$0 }
 "#,
             expect![[r#"
-                me pub_method() fn(&self)
+                me pub_method() fn(&'_ self)
             "#]],
         );
     }
@@ -583,9 +583,9 @@ mod m {
 fn foo(a: lib::A) { a.$0 }
 "#,
             expect![[r#"
-                me crate_method()   fn(&self)
-                me private_method() fn(&self)
-                me pub_method()     fn(&self)
+                me crate_method()   fn(&'_ self)
+                me private_method() fn(&'_ self)
+                me pub_method()     fn(&'_ self)
             "#]],
         );
         check_with_private_editable(
@@ -603,7 +603,7 @@ mod m {
 fn foo(a: lib::A) { a.$0 }
 "#,
             expect![[r#"
-                me pub_method() fn(&self)
+                me pub_method() fn(&'_ self)
             "#]],
         );
     }
@@ -631,7 +631,7 @@ fn foo(a: A) {
 }
 "#,
             expect![[r#"
-                me pub_module_method() fn(&self)
+                me pub_module_method() fn(&'_ self)
             "#]],
         );
     }
@@ -657,8 +657,8 @@ impl A {
 }
             "#,
             expect![[r#"
-                fd pub_field          u32
-                me pub_method() fn(&self)
+                fd pub_field             u32
+                me pub_method() fn(&'_ self)
             "#]],
         )
     }
@@ -691,8 +691,8 @@ impl A<i32> {
 fn foo(a: A<u32>) { a.$0 }
 "#,
             expect![[r#"
-                fd 0                  u32
-                me the_method() fn(&self)
+                fd 0                     u32
+                me the_method() fn(&'_ self)
             "#]],
         )
     }
@@ -707,7 +707,7 @@ impl Trait for A {}
 fn foo(a: A) { a.$0 }
 "#,
             expect![[r#"
-                me the_method() (as Trait) fn(&self)
+                me the_method() (as Trait) fn(&'_ self)
             "#]],
         );
         check_edit(
@@ -737,7 +737,7 @@ impl<T> Trait for T {}
 fn foo(a: &A) { a.$0 }
 ",
             expect![[r#"
-                me the_method() (as Trait) fn(&self)
+                me the_method() (as Trait) fn(&'_ self)
             "#]],
         );
     }
@@ -755,7 +755,7 @@ impl Trait for A {}
 fn foo(a: A) { a.$0 }
 ",
             expect![[r#"
-                me the_method() (as Trait) fn(&self)
+                me the_method() (as Trait) fn(&'_ self)
             "#]],
         );
     }
@@ -825,7 +825,7 @@ impl T {
 }
 "#,
             expect![[r#"
-                me blah() fn(&self)
+                me blah() fn(&'_ self)
             "#]],
         );
     }
@@ -846,9 +846,9 @@ fn test(a: A) {
 }
 "#,
             expect![[r#"
-                fd another                                                          u32
-                fd field                                                             u8
-                me deref() (use core::ops::Deref) fn(&self) -> &<Self as Deref>::Target
+                fd another                                                             u32
+                fd field                                                                u8
+                me deref() (use core::ops::Deref) fn(&'_ self) -> &<Self as Deref>::Target
             "#]],
         );
     }
@@ -869,9 +869,9 @@ fn test(a: A) {
 }
 "#,
             expect![[r#"
-                fd 0                                                                 u8
-                fd 1                                                                u32
-                me deref() (use core::ops::Deref) fn(&self) -> &<Self as Deref>::Target
+                fd 0                                                                    u8
+                fd 1                                                                   u32
+                me deref() (use core::ops::Deref) fn(&'_ self) -> &<Self as Deref>::Target
             "#]],
         );
     }
@@ -891,9 +891,9 @@ fn test(a: A) {
 }
 "#,
             expect![[r#"
-                fd 0                                                                 u8
-                fd 1                                                                u32
-                me deref() (use core::ops::Deref) fn(&self) -> &<Self as Deref>::Target
+                fd 0                                                                    u8
+                fd 1                                                                   u32
+                me deref() (use core::ops::Deref) fn(&'_ self) -> &<Self as Deref>::Target
             "#]],
         );
     }
@@ -919,9 +919,9 @@ fn test(a: A) {
 }
 "#,
             expect![[r#"
-                me deref() (use core::ops::Deref) fn(&self) -> &<Self as Deref>::Target
-                me foo()                                                fn(&self) -> u8
-                me foo() (as Foo)                                      fn(&self) -> u32
+                me deref() (use core::ops::Deref) fn(&'_ self) -> &<Self as Deref>::Target
+                me foo()                                                fn(&'_ self) -> u8
+                me foo() (as Foo)                                      fn(&'_ self) -> u32
             "#]],
         );
 
@@ -971,9 +971,9 @@ fn test(a: A) {
 }
 "#,
             expect![[r#"
-                me deref() (use core::ops::Deref) fn(&self) -> &<Self as Deref>::Target
-                me foo()                                               fn(&self) -> u16
-                me foo() (as Foo)                                      fn(&self) -> u32
+                me deref() (use core::ops::Deref) fn(&'_ self) -> &<Self as Deref>::Target
+                me foo()                                               fn(&'_ self) -> u16
+                me foo() (as Foo)                                      fn(&'_ self) -> u32
             "#]],
         );
     }
@@ -1082,7 +1082,7 @@ fn foo() {
 }
 "#,
             expect![[r#"
-                me the_method() fn(&self)
+                me the_method() fn(&'_ self)
             "#]],
         );
     }
@@ -1097,7 +1097,7 @@ macro_rules! make_s { () => { S }; }
 fn main() { make_s!().f$0; }
 "#,
             expect![[r#"
-                me foo() fn(&self)
+                me foo() fn(&'_ self)
             "#]],
         )
     }
@@ -1125,7 +1125,7 @@ mod foo {
 }
         "#,
             expect![[r#"
-                me private() fn(&self)
+                me private() fn(&'_ self)
             "#]],
         );
     }
@@ -1152,7 +1152,7 @@ impl S {
 }
         "#,
             expect![[r#"
-                me foo() fn(&self) -> &[u8]
+                me foo() fn(&'_ self) -> &[u8]
             "#]],
         );
     }
@@ -1165,12 +1165,12 @@ struct Foo { field: i32 }
 
 impl Foo { fn foo(&self) { $0 } }"#,
             expect![[r#"
-                fd self.field       i32
-                me self.foo() fn(&self)
-                lc self            &Foo
-                sp Self             Foo
-                st Foo              Foo
-                bt u32              u32
+                fd self.field          i32
+                me self.foo() fn(&'_ self)
+                lc self               &Foo
+                sp Self                Foo
+                st Foo                 Foo
+                bt u32                 u32
             "#]],
         );
         check_no_kw(
@@ -1179,12 +1179,12 @@ struct Foo(i32);
 
 impl Foo { fn foo(&mut self) { $0 } }"#,
             expect![[r#"
-                fd self.0               i32
-                me self.foo() fn(&mut self)
-                lc self            &mut Foo
-                sp Self                 Foo
-                st Foo                  Foo
-                bt u32                  u32
+                fd self.0                  i32
+                me self.foo() fn(&'_ mut self)
+                lc self               &mut Foo
+                sp Self                    Foo
+                st Foo                     Foo
+                bt u32                     u32
             "#]],
         );
     }
@@ -1198,17 +1198,17 @@ struct Foo { field: i32 }
 
 impl Foo { fn foo(&mut self) { let _: fn(&mut Self) = |this| { $0 } } }"#,
             expect![[r#"
-                fd this.field           i32
-                me this.foo() fn(&mut self)
-                lc self            &mut Foo
-                lc this            &mut Foo
+                fd this.field              i32
+                me this.foo() fn(&'_ mut self)
+                lc self               &mut Foo
+                lc this               &mut Foo
                 md core::
-                sp Self                 Foo
-                st Foo                  Foo
+                sp Self                    Foo
+                st Foo                     Foo
                 tt Fn
                 tt FnMut
                 tt FnOnce
-                bt u32                  u32
+                bt u32                     u32
             "#]],
         );
     }
@@ -1222,17 +1222,17 @@ struct Foo { field: i32 }
 
 impl Foo { fn foo(&self) { let _: fn(&Self) = |foo| { $0 } } }"#,
             expect![[r#"
-                fd self.field       i32
-                me self.foo() fn(&self)
-                lc foo             &Foo
-                lc self            &Foo
+                fd self.field          i32
+                me self.foo() fn(&'_ self)
+                lc foo                &Foo
+                lc self               &Foo
                 md core::
-                sp Self             Foo
-                st Foo              Foo
+                sp Self                Foo
+                st Foo                 Foo
                 tt Fn
                 tt FnMut
                 tt FnOnce
-                bt u32              u32
+                bt u32                 u32
             "#]],
         );
 
@@ -1243,16 +1243,16 @@ struct Foo { field: i32 }
 
 impl Foo { fn foo(&self) { let _: fn(&Self) = || { $0 } } }"#,
             expect![[r#"
-                fd self.field       i32
-                me self.foo() fn(&self)
-                lc self            &Foo
+                fd self.field          i32
+                me self.foo() fn(&'_ self)
+                lc self               &Foo
                 md core::
-                sp Self             Foo
-                st Foo              Foo
+                sp Self                Foo
+                st Foo                 Foo
                 tt Fn
                 tt FnMut
                 tt FnOnce
-                bt u32              u32
+                bt u32                 u32
             "#]],
         );
 
@@ -1263,18 +1263,18 @@ struct Foo { field: i32 }
 
 impl Foo { fn foo(&self) { let _: fn(&Self, &Self) = |foo, other| { $0 } } }"#,
             expect![[r#"
-                fd self.field       i32
-                me self.foo() fn(&self)
-                lc foo             &Foo
-                lc other           &Foo
-                lc self            &Foo
+                fd self.field          i32
+                me self.foo() fn(&'_ self)
+                lc foo                &Foo
+                lc other              &Foo
+                lc self               &Foo
                 md core::
-                sp Self             Foo
-                st Foo              Foo
+                sp Self                Foo
+                st Foo                 Foo
                 tt Fn
                 tt FnMut
                 tt FnOnce
-                bt u32              u32
+                bt u32                 u32
             "#]],
         );
     }
@@ -1299,7 +1299,7 @@ fn f() {
 }
     "#,
             expect![[r#"
-                me method() fn(&self)
+                me method() fn(&'_ self)
             "#]],
         );
     }
@@ -1397,8 +1397,8 @@ fn test(a: A) {
 }
 "#,
             expect![[r#"
-                fd 0                                                                 u8
-                me deref() (use core::ops::Deref) fn(&self) -> &<Self as Deref>::Target
+                fd 0                                                                    u8
+                me deref() (use core::ops::Deref) fn(&'_ self) -> &<Self as Deref>::Target
             "#]],
         );
     }
@@ -1453,8 +1453,8 @@ impl<F: core::ops::Deref<Target = impl Bar>> Foo<F> {
 }
 "#,
             expect![[r#"
-                fd foo            &u8
-                me foobar() fn(&self)
+                fd foo               &u8
+                me foobar() fn(&'_ self)
             "#]],
         );
     }
@@ -1637,9 +1637,9 @@ fn baz() {
         }
         "#,
             expect![[r#"
-                me clone() (as Clone)                                             fn(&self) -> Self
-                me fmt(…) (use core::fmt::Debug) fn(&self, &mut Formatter<'_>) -> Result<(), Error>
-                me into_iter() (as IntoIterator)       fn(self) -> <Self as IntoIterator>::IntoIter
+                me clone() (as Clone)                                                    fn(&'_ self) -> Self
+                me fmt(…) (use core::fmt::Debug) fn(&'_ self, &mut Formatter<'<erased>>) -> Result<(), Error>
+                me into_iter() (as IntoIterator)                 fn(self) -> <Self as IntoIterator>::IntoIter
             "#]],
         );
         check_no_kw(
@@ -1665,10 +1665,10 @@ fn foo() {
 }
 "#,
             expect![[r#"
-                me into_iter() (as IntoIterator)                fn(self) -> <Self as IntoIterator>::IntoIter
-                me into_iter().by_ref() (as Iterator)                             fn(&mut self) -> &mut Self
-                me into_iter().next() (as Iterator)        fn(&mut self) -> Option<<Self as Iterator>::Item>
-                me into_iter().nth(…) (as Iterator) fn(&mut self, usize) -> Option<<Self as Iterator>::Item>
+                me into_iter() (as IntoIterator)                   fn(self) -> <Self as IntoIterator>::IntoIter
+                me into_iter().by_ref() (as Iterator)                             fn(&'_ mut self) -> &mut Self
+                me into_iter().next() (as Iterator)        fn(&'_ mut self) -> Option<<Self as Iterator>::Item>
+                me into_iter().nth(…) (as Iterator) fn(&'_ mut self, usize) -> Option<<Self as Iterator>::Item>
             "#]],
         );
         check_no_kw(
@@ -1696,12 +1696,12 @@ fn foo() {
 }
 "#,
             expect![[r#"
-                me deref() (use core::ops::Deref)                 fn(&self) -> &<Self as Deref>::Target
-                me into_iter() (as IntoIterator)           fn(self) -> <Self as IntoIterator>::IntoIter
-                me iter()                                                             fn(&self) -> Iter
-                me iter().by_ref() (as Iterator)                             fn(&mut self) -> &mut Self
-                me iter().next() (as Iterator)        fn(&mut self) -> Option<<Self as Iterator>::Item>
-                me iter().nth(…) (as Iterator) fn(&mut self, usize) -> Option<<Self as Iterator>::Item>
+                me deref() (use core::ops::Deref)                 fn(&'_ self) -> &<Self as Deref>::Target
+                me into_iter() (as IntoIterator)              fn(self) -> <Self as IntoIterator>::IntoIter
+                me iter()                                                             fn(&'_ self) -> Iter
+                me iter().by_ref() (as Iterator)                             fn(&'_ mut self) -> &mut Self
+                me iter().next() (as Iterator)        fn(&'_ mut self) -> Option<<Self as Iterator>::Item>
+                me iter().nth(…) (as Iterator) fn(&'_ mut self, usize) -> Option<<Self as Iterator>::Item>
             "#]],
         );
     }
@@ -1805,10 +1805,10 @@ fn main() {
 }
 "#,
             expect![[r#"
-                me by_ref() (as Iterator)                             fn(&mut self) -> &mut Self
-                me into_iter() (as IntoIterator)    fn(self) -> <Self as IntoIterator>::IntoIter
-                me next() (as Iterator)        fn(&mut self) -> Option<<Self as Iterator>::Item>
-                me nth(…) (as Iterator) fn(&mut self, usize) -> Option<<Self as Iterator>::Item>
+                me by_ref() (as Iterator)                             fn(&'_ mut self) -> &mut Self
+                me into_iter() (as IntoIterator)       fn(self) -> <Self as IntoIterator>::IntoIter
+                me next() (as Iterator)        fn(&'_ mut self) -> Option<<Self as Iterator>::Item>
+                me nth(…) (as Iterator) fn(&'_ mut self, usize) -> Option<<Self as Iterator>::Item>
             "#]],
         );
     }
