@@ -26,11 +26,7 @@ fn lower_path(path: ast::Path) -> (TestDB, ExpressionStore, Option<Path>) {
         file_id.into(),
         crate::LoweringMode::Analysis,
     );
-    let lowered_path = ctx.lower_path(
-        path,
-        &mut ExprCollector::impl_trait_allocator,
-        &mut ExprCollector::elided_lifetime_error_allocator,
-    );
+    let lowered_path = ctx.lower_path(path, &mut ExprCollector::impl_trait_allocator);
     let (store, _) = ctx.store.finish();
     (db, store, lowered_path)
 }

@@ -1527,7 +1527,7 @@ fn test(s: S<u32, i32>) {
 }"#,
         expect![[r#"
             106..110 'self': &'_ S<T, U>
-            132..143 '{ loop {} }': &'? (dyn Trait<T, U> + 'static)
+            132..143 '{ loop {} }': &'_ (dyn Trait<T, U> + 'static)
             134..141 'loop {}': !
             139..141 '{}': ()
             255..256 's': S<u32, i32>
@@ -3243,8 +3243,8 @@ fn foo() {
 }"#,
         expect![[r#"
             154..158 'self': &'_ Box<T>
-            166..205 '{     ...     }': &'? T
-            176..199 'unsafe...nner }': &'? T
+            166..205 '{     ...     }': &'_ T
+            176..199 'unsafe...nner }': &'_ T
             185..197 '&*self.inner': &'? T
             186..197 '*self.inner': T
             187..191 'self': &'_ Box<T>
@@ -5040,7 +5040,7 @@ fn main() {
 "#,
         expect![[r#"
             147..151 'self': &'_ AnyhowError
-            170..181 '{ loop {} }': &'? (dyn Error + Send + Sync + 'static)
+            170..181 '{ loop {} }': &'_ (dyn Error + Send + Sync + 'static)
             172..179 'loop {}': !
             177..179 '{}': ()
             223..227 'self': AnyhowError

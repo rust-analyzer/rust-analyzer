@@ -11,10 +11,10 @@ use syntax::ast::{self, HasName, HasTypeBounds};
 use thin_vec::ThinVec;
 
 use crate::{
-    GenericDefId, LifetimeParamId, TypeOrConstParamId, TypeParamId,
+    GenericDefId, TypeOrConstParamId, TypeParamId,
     expr_store::{
         TypePtr,
-        lower::{ExprCollector, LifetimeBoundScope, NamedLifetimeStore},
+        lower::{ExprCollector, LifetimeBoundScope},
     },
     hir::generics::{
         ConstParamData, GenericParams, LifetimeBoundType, LifetimeParamData, TypeOrConstParamData,
@@ -23,14 +23,11 @@ use crate::{
     type_ref::{LifetimeRef, LifetimeRefId, TypeBound, TypeRef, TypeRefId},
 };
 
-pub(crate) type ImplTraitLowerFn<'l> = &'l mut dyn for<'ec, 'db> FnMut(
-    &'ec mut ExprCollector<'db>,
+pub(crate) type ImplTraitLowerFn<'l> = &'l mut dyn for<'ec, 'db, 'a> FnMut(
+    &'ec mut ExprCollector<'db, 'a>,
     TypePtr,
     ThinVec<TypeBound>,
 ) -> TypeRefId;
-
-pub(crate) type LifetimeElisionFn<'l> =
-    &'l mut dyn for<'ec, 'db> FnMut(&'ec mut ExprCollector<'db>) -> LifetimeRefId;
 
 pub(crate) struct GenericParamsCollector {
     type_or_consts: Arena<TypeOrConstParamData>,
@@ -49,7 +46,7 @@ impl GenericParamsCollector {
         }
     }
     pub(crate) fn with_self_param(
-        ec: &mut ExprCollector<'_>,
+        ec: &mut ExprCollector<'_, '_>,
         parent: GenericDefId,
         bounds: Option<ast::TypeBoundList>,
     ) -> Self {
@@ -60,7 +57,7 @@ impl GenericParamsCollector {
 
     pub(crate) fn lower(
         &mut self,
-        ec: &mut ExprCollector<'_>,
+        ec: &mut ExprCollector<'_, '_>,
         generic_param_list: Option<ast::GenericParamList>,
         where_clause: Option<ast::WhereClause>,
     ) {
@@ -72,11 +69,12 @@ impl GenericParamsCollector {
         }
     }
 
-    pub(crate) fn collect_impl_trait<R>(
-        &mut self,
-        ec: &mut ExprCollector<'_>,
-        cb: impl FnOnce(&mut ExprCollector<'_>, ImplTraitLowerFn<'_>, LifetimeElisionFn<'_>) -> R,
+    pub(crate) fn collect_impl_trait<'a, R>(
+        &'a mut self,
+        ec: &mut ExprCollector<'_, 'a>,
+        cb: impl FnOnce(&mut ExprCollector<'_, '_>, ImplTraitLowerFn<'_>) -> R,
     ) -> R {
+        ec.elide_create_lifetime(&mut self.lifetimes, self.parent, LifetimeBoundType::LateBound);
         cb(
             ec,
             &mut Self::lower_argument_impl_trait(
@@ -84,14 +82,7 @@ impl GenericParamsCollector {
                 &mut self.where_predicates,
                 self.parent,
             ),
-            &mut Self::lower_elided_lifetime(&mut self.lifetimes, self.parent, false),
         )
-    }
-
-    pub(crate) fn lower_elided_lifetime_in_impl_header(
-        &mut self,
-    ) -> impl for<'ec, 'db> FnMut(&'ec mut ExprCollector<'db>) -> LifetimeRefId {
-        Self::lower_elided_lifetime(&mut self.lifetimes, self.parent, true)
     }
 
     pub(crate) fn finish(self) -> GenericParams {
@@ -109,7 +100,11 @@ impl GenericParamsCollector {
         }
     }
 
-    fn lower_param_list(&mut self, ec: &mut ExprCollector<'_>, params: ast::GenericParamList) {
+    pub(crate) fn lifetimes_mut(&mut self) -> &mut Arena<LifetimeParamData> {
+        &mut self.lifetimes
+    }
+
+    fn lower_param_list(&mut self, ec: &mut ExprCollector<'_, '_>, params: ast::GenericParamList) {
         for generic_param in params.generic_params() {
             let enabled = ec.check_cfg(&generic_param);
             if !enabled {
@@ -120,11 +115,7 @@ impl GenericParamsCollector {
                 ast::GenericParam::TypeParam(type_param) => {
                     let name = type_param.name().map_or_else(Name::missing, |it| it.as_name());
                     let default = type_param.default_type().map(|it| {
-                        ec.lower_type_ref(
-                            it,
-                            &mut ExprCollector::impl_trait_error_allocator,
-                            &mut ExprCollector::elided_lifetime_error_allocator,
-                        )
+                        ec.lower_type_ref(it, &mut ExprCollector::impl_trait_error_allocator)
                     });
                     let param = TypeParamData {
                         name: Some(name.clone()),
@@ -147,22 +138,17 @@ impl GenericParamsCollector {
                     let ty = ec.lower_type_ref_opt(
                         const_param.ty(),
                         &mut ExprCollector::impl_trait_error_allocator,
-                        &mut ExprCollector::elided_lifetime_error_allocator,
                     );
                     let default = const_param.default_val().map(|it| ec.lower_const_arg(it));
                     let param = ConstParamData { name, ty, default };
                     self.type_or_consts.alloc(param.into());
                 }
                 ast::GenericParam::LifetimeParam(lifetime_param) => {
-                    let lifetime = ec.lower_lifetime_ref_opt(
-                        lifetime_param.lifetime(),
-                        &mut ExprCollector::elided_lifetime_error_allocator,
-                    );
+                    let lifetime = ec.lower_lifetime_ref_opt(lifetime_param.lifetime());
                     if let LifetimeRef::Named(name) = &ec.store.lifetimes[lifetime] {
                         let param = LifetimeParamData {
                             name: name.clone(),
                             bound_type: LifetimeBoundType::EarlyBound,
-                            elided_source: None,
                         };
                         let _idx = self.lifetimes.alloc(param);
                         ec.with_lifetime_bound_scope(LifetimeBoundScope::WhereClause, |ec| {
@@ -180,22 +166,17 @@ impl GenericParamsCollector {
 
     fn lower_where_predicates(
         &mut self,
-        ec: &mut ExprCollector<'_>,
+        ec: &mut ExprCollector<'_, '_>,
         where_clause: ast::WhereClause,
     ) {
         ec.with_lifetime_bound_scope(LifetimeBoundScope::WhereClause, |ec| {
             for pred in where_clause.predicates() {
                 let target = if let Some(type_ref) = pred.ty() {
-                    Either::Left(ec.lower_type_ref(
-                        type_ref,
-                        &mut ExprCollector::impl_trait_error_allocator,
-                        &mut ExprCollector::elided_lifetime_error_allocator,
-                    ))
+                    Either::Left(
+                        ec.lower_type_ref(type_ref, &mut ExprCollector::impl_trait_error_allocator),
+                    )
                 } else if let Some(lifetime) = pred.lifetime() {
-                    Either::Right(ec.lower_lifetime_ref(
-                        lifetime,
-                        &mut ExprCollector::elided_lifetime_error_allocator,
-                    ))
+                    Either::Right(ec.lower_lifetime_ref(lifetime))
                 } else {
                     continue;
                 };
@@ -222,7 +203,7 @@ impl GenericParamsCollector {
 
     fn lower_bounds(
         &mut self,
-        ec: &mut ExprCollector<'_>,
+        ec: &mut ExprCollector<'_, '_>,
         type_bounds: Option<ast::TypeBoundList>,
         target: Either<TypeRefId, LifetimeRefId>,
     ) {
@@ -233,7 +214,7 @@ impl GenericParamsCollector {
 
     fn lower_type_bound_as_predicate(
         &mut self,
-        ec: &mut ExprCollector<'_>,
+        ec: &mut ExprCollector<'_, '_>,
         bound: ast::TypeBound,
         hrtb_lifetimes: Option<&[Name]>,
         target: Either<TypeRefId, LifetimeRefId>,
@@ -245,7 +226,6 @@ impl GenericParamsCollector {
                 &mut self.where_predicates,
                 self.parent,
             ),
-            &mut ExprCollector::elided_lifetime_error_allocator,
         );
         let predicate = match (target, bound) {
             (_, TypeBound::Error | TypeBound::Use(_)) => return,
@@ -269,8 +249,11 @@ impl GenericParamsCollector {
         type_or_consts: &mut Arena<TypeOrConstParamData>,
         where_predicates: &mut Vec<WherePredicate>,
         parent: GenericDefId,
-    ) -> impl for<'ec, 'db> FnMut(&'ec mut ExprCollector<'db>, TypePtr, ThinVec<TypeBound>) -> TypeRefId
-    {
+    ) -> impl for<'ec, 'db, 'a> FnMut(
+        &'ec mut ExprCollector<'db, 'a>,
+        TypePtr,
+        ThinVec<TypeBound>,
+    ) -> TypeRefId {
         move |ec, ptr, impl_trait_bounds| {
             let param = TypeParamData {
                 name: None,
@@ -293,7 +276,11 @@ impl GenericParamsCollector {
         }
     }
 
-    fn fill_self_param(&mut self, ec: &mut ExprCollector<'_>, bounds: Option<ast::TypeBoundList>) {
+    fn fill_self_param(
+        &mut self,
+        ec: &mut ExprCollector<'_, '_>,
+        bounds: Option<ast::TypeBoundList>,
+    ) {
         let self_ = Name::new_symbol_root(sym::Self_);
         let idx = self.type_or_consts.alloc(
             TypeParamData {
@@ -311,56 +298,6 @@ impl GenericParamsCollector {
         let self_ = ec.alloc_type_ref_desugared(type_ref);
         if let Some(bounds) = bounds {
             self.lower_bounds(ec, Some(bounds), Either::Left(self_));
-        }
-    }
-
-    pub(crate) fn update_to_late_bound_lifetimes(
-        &mut self,
-        named_lifetime_store: &NamedLifetimeStore,
-    ) {
-        for (_param_id, lifetime) in self.lifetimes.iter_mut() {
-            let lifetime_name = &lifetime.name;
-            if named_lifetime_store.lifetimes_in_where_clause.contains(lifetime_name) {
-                continue;
-            }
-
-            if !named_lifetime_store.lifetimes_constrained_by_input.contains(lifetime_name)
-                && named_lifetime_store.lifetimes_in_output.contains(lifetime_name)
-            {
-                continue;
-            }
-
-            lifetime.bound_type = LifetimeBoundType::LateBound
-        }
-    }
-
-    fn lower_elided_lifetime(
-        lifetimes: &mut Arena<LifetimeParamData>,
-        parent: GenericDefId,
-        is_impl_header: bool,
-    ) -> impl for<'ec, 'db> FnMut(&'ec mut ExprCollector<'db>) -> LifetimeRefId {
-        move |ec| {
-            let elided_source = ec.elision_context.clone();
-
-            let lifetime_ref =
-                if matches!(ec.elision_binder_source, super::ElisionBinderSource::ForBinder) {
-                    return ec.lower_elided_lifetime_for_binder();
-                } else {
-                    let bound_type = if is_impl_header {
-                        LifetimeBoundType::EarlyBound
-                    } else {
-                        LifetimeBoundType::LateBound
-                    };
-
-                    let lifetime = LifetimeParamData {
-                        name: Name::anon_lifetime(),
-                        bound_type,
-                        elided_source,
-                    };
-                    let param_id = LifetimeParamId { parent, local_id: lifetimes.alloc(lifetime) };
-                    LifetimeRef::Param(param_id)
-                };
-            ec.alloc_lifetime_ref_desugared(lifetime_ref)
         }
     }
 }

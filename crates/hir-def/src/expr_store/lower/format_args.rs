@@ -22,7 +22,7 @@ use crate::{
     type_ref::{Mutability, Rawness},
 };
 
-impl<'db> ExprCollector<'db> {
+impl<'db> ExprCollector<'db, '_> {
     pub(super) fn collect_format_args(
         &mut self,
         f: ast::FormatArgsExpr,

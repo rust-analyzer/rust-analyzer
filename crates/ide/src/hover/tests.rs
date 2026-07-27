@@ -11711,7 +11711,7 @@ impl Enum<'_, Borrowed> {
             ```
 
             ```rust
-            const CONSTANT: Self = Variant1(&[Variant2])
+            const CONSTANT: Self = Self::Variant1(&[Self::Variant2])
             ```
         "#]],
     );

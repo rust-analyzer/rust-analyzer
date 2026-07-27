@@ -35,16 +35,9 @@ pub struct TypeParamData {
 pub struct LifetimeParamData {
     pub name: Name,
     pub bound_type: LifetimeBoundType,
-    pub elided_source: Option<ElidedSource>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
-pub enum ElidedSource {
-    Self_,
-    Param,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Hash)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum LifetimeBoundType {
     EarlyBound,
     LateBound,

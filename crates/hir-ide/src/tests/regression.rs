@@ -937,7 +937,7 @@ fn flush(&self) {
             129..133 'self': &'_ Mutex<T>
             156..158 '{}': MutexGuard<'?, T>
             242..246 'self': &'_ MutexGuard<'a, T>
-            265..276 '{ loop {} }': &'? T
+            265..276 '{ loop {} }': &'_ T
             267..274 'loop {}': !
             272..274 '{}': ()
             289..293 'self': &'_ {unknown}
@@ -2225,7 +2225,7 @@ impl<'a, T: Deref<Target = impl Trait>> Struct<'a, T> {
 "#,
         expect![[r#"
             137..141 'self': &'_ Struct<'a, T>
-            152..160 '{ self }': &'? Struct<'a, T>
+            152..160 '{ self }': &'_ Struct<'a, T>
             154..158 'self': &'_ Struct<'a, T>
             174..178 'self': &'_ Struct<'a, T>
             180..215 '{     ...     }': ()
@@ -2298,7 +2298,7 @@ fn test(x: bool) {
             76..78 '{}': ()
             93..97 'self': &'_ Map<T, U>
             99..100 '_': &'_ T
-            120..131 '{ loop {} }': Option<&'? U>
+            120..131 '{ loop {} }': Option<&'_ U>
             122..129 'loop {}': !
             127..129 '{}': ()
             143..144 'x': bool

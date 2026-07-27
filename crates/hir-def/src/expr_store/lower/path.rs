@@ -30,8 +30,6 @@ use crate::{
     type_ref::TypeRef,
 };
 
-use super::generics::LifetimeElisionFn;
-
 #[cfg(test)]
 thread_local! {
     /// This is used to test `hir_segment_to_ast_segment()`. It's a hack, but it makes testing much easier.
@@ -43,10 +41,9 @@ thread_local! {
 // If you modify the logic of the lowering, make sure to check if `hir_segment_to_ast_segment()`
 // also needs an update.
 pub(super) fn lower_path(
-    collector: &mut ExprCollector<'_>,
+    collector: &mut ExprCollector<'_, '_>,
     mut path: ast::Path,
     impl_trait_lower_fn: ImplTraitLowerFn<'_>,
-    lifetime_elision_fn: LifetimeElisionFn<'_>,
 ) -> Option<Path> {
     let mut kind = PathKind::Plain;
     let mut type_anchor = None;
@@ -104,16 +101,13 @@ pub(super) fn lower_path(
                 let name = name_ref.as_name();
                 let args = segment
                     .generic_arg_list()
-                    .and_then(|it| {
-                        collector.lower_generic_args(it, impl_trait_lower_fn, lifetime_elision_fn)
-                    })
+                    .and_then(|it| collector.lower_generic_args(it, impl_trait_lower_fn))
                     .or_else(|| {
                         collector.with_type_bound_source(ElisionBinderSource::ForBinder, |this| {
                             this.lower_generic_args_from_fn_path(
                                 segment.parenthesized_arg_list(),
                                 segment.ret_type(),
                                 impl_trait_lower_fn,
-                                lifetime_elision_fn,
                             )
                         })
                     })
@@ -134,7 +128,7 @@ pub(super) fn lower_path(
 
                 let type_ref = type_ref?;
                 let self_type = collector.for_path_type_projection(|collector| {
-                    collector.lower_type_ref(type_ref, impl_trait_lower_fn, lifetime_elision_fn)
+                    collector.lower_type_ref(type_ref, impl_trait_lower_fn)
                 });
 
                 match trait_ref {
@@ -146,11 +140,7 @@ pub(super) fn lower_path(
                     // <T as Trait<A>>::Foo desugars to Trait<Self=T, A>::Foo
                     Some(trait_ref) => {
                         let path = collector.for_path_type_projection(|collector| {
-                            collector.lower_path(
-                                trait_ref.path()?,
-                                impl_trait_lower_fn,
-                                lifetime_elision_fn,
-                            )
+                            collector.lower_path(trait_ref.path()?, impl_trait_lower_fn)
                         })?;
                         // FIXME: Unnecessary clone
                         collector.alloc_type_ref(
@@ -289,13 +279,10 @@ pub(super) fn lower_path(
         (def, is_trait_assoc_item)
     };
 
-    if collector.elision_context.is_some() && !is_trait_assoc_item {
+    if collector.argument_elision_context.is_some() && !is_trait_assoc_item {
         let args_in_source = generic_args.last().and_then(|g| g.as_ref());
-        let merged_args_with_elided = collector.collect_path_elided_liftetimes(
-            resolved_module_def_id,
-            args_in_source,
-            lifetime_elision_fn,
-        );
+        let merged_args_with_elided =
+            collector.collect_path_elided_liftetimes(resolved_module_def_id, args_in_source);
         match &merged_args_with_elided {
             // there are elided args
             Some(_) => {
