@@ -398,7 +398,7 @@ fn trait_method_fuzzy_completion() {
     check(
         fixture,
         expect![[r#"
-            me random_method() (use dep::test_mod::TestTrait) fn(&'_ self)
+            me random_method() (use dep::test_mod::TestTrait) fn(&self)
         "#]],
     );
 
@@ -443,7 +443,7 @@ fn main() {
     check(
         fixture,
         expect![[r#"
-            me some_method() (use foo::TestTrait) fn(&'_ self)
+            me some_method() (use foo::TestTrait) fn(&self)
         "#]],
     );
 
@@ -490,7 +490,7 @@ fn main() {
     check(
         fixture,
         expect![[r#"
-            me some_method() (use foo::TestTrait) fn(&'_ self)
+            me some_method() (use foo::TestTrait) fn(&self)
         "#]],
     );
 
@@ -538,7 +538,7 @@ fn completion<T: Wrapper>(whatever: T) {
     check(
         fixture,
         expect![[r#"
-            me not_in_scope() (use foo::NotInScope) fn(&'_ self)
+            me not_in_scope() (use foo::NotInScope) fn(&self)
         "#]],
     );
 
@@ -779,7 +779,7 @@ fn main() {
 }
         "#,
         expect![[r#"
-            me random_method() (use dep::test_mod::TestTrait) fn(&'_ self) DEPRECATED
+            me random_method() (use dep::test_mod::TestTrait) fn(&self) DEPRECATED
         "#]],
     );
 
@@ -809,9 +809,9 @@ fn main() {
 }
 "#,
         expect![[r#"
-            ct SPECIAL_CONST (use dep::test_mod::TestTrait)              u8 DEPRECATED
-            fn weird_function() (use dep::test_mod::TestTrait)         fn() DEPRECATED
-            me random_method(…) (use dep::test_mod::TestTrait) fn(&'_ self) DEPRECATED
+            ct SPECIAL_CONST (use dep::test_mod::TestTrait)           u8 DEPRECATED
+            fn weird_function() (use dep::test_mod::TestTrait)      fn() DEPRECATED
+            me random_method(…) (use dep::test_mod::TestTrait) fn(&self) DEPRECATED
         "#]],
     );
 }
@@ -1775,7 +1775,7 @@ mod module {
 }
 "#,
         expect![[r#"
-            me choose (use module::SliceRandom) fn(&'_ self)
+            me choose (use module::SliceRandom) fn(&self)
         "#]],
     );
 }
@@ -2065,7 +2065,7 @@ fn trait_method_import_across_multiple_crates() {
     check(
         fixture,
         expect![[r#"
-            me test_function() (use test_trait::TestTrait) fn(&'_ self) -> u32
+            me test_function() (use test_trait::TestTrait) fn(&self) -> u32
         "#]],
     );
 

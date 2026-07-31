@@ -190,7 +190,8 @@ fn signature_help_for_call(
                 .iter()
                 .filter(|param| match param {
                     GenericParam::TypeParam(type_param) => !type_param.is_implicit(db),
-                    GenericParam::ConstParam(_) | GenericParam::LifetimeParam(_) => true,
+                    GenericParam::LifetimeParam(lt_param) => !lt_param.is_elided(db),
+                    GenericParam::ConstParam(_) => true,
                 })
                 .map(|param| param.display(db, display_target))
                 .join(", ");
@@ -921,7 +922,7 @@ fn bar() {
 }
 "#,
             expect![[r#"
-                fn do_it<'_>(&'_ self)
+                fn do_it(&self)
             "#]],
         );
     }
@@ -939,8 +940,8 @@ impl S {
 fn main() { S.foo($0); }
 "#,
             expect![[r#"
-                fn foo<'_>(&'_ self, x: i32)
-                                     ^^^^^^
+                fn foo(&self, x: i32)
+                              ^^^^^^
             "#]],
         );
     }
@@ -958,8 +959,8 @@ impl<T> S<T> {
 fn main() { S(1u32).foo($0); }
 "#,
             expect![[r#"
-                fn foo<'_>(&'_ self, x: u32)
-                                     ^^^^^^
+                fn foo(&self, x: u32)
+                              ^^^^^^
             "#]],
         );
     }
@@ -977,8 +978,8 @@ impl S {
 fn main() { S::foo($0); }
 "#,
             expect![[r#"
-                fn foo<'_>(self: &S, x: i32)
-                           ^^^^^^^^  ------
+                fn foo(self: &S, x: i32)
+                       ^^^^^^^^  ------
             "#]],
         );
     }
@@ -1116,8 +1117,8 @@ fn foo(mut r: impl WriteHandler<()>) {
 
                 By default this method stops actor's `Context`.
                 ------
-                fn finished<'_, '_>(&'_ mut self, ctx: &mut <impl WriteHandler<()> as Actor>::Context)
-                                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                fn finished(&mut self, ctx: &mut <impl WriteHandler<()> as Actor>::Context)
+                                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
             "#]],
         );
     }
@@ -1202,8 +1203,8 @@ fn main() {
 }
 "#,
             expect![[r#"
-                fn bar<'_>(&'_ self, _: u32)
-                                     ^^^^^^
+                fn bar(&self, _: u32)
+                              ^^^^^^
             "#]],
         );
     }
@@ -1829,8 +1830,8 @@ fn sup() {
 }
 "#,
             expect![[r#"
-                fn test<'_, V>(&'_ mut self, val: V)
-                                             ^^^^^^
+                fn test<V>(&mut self, val: V)
+                                      ^^^^^^
             "#]],
         );
     }
@@ -2035,8 +2036,8 @@ fn f() {
 }
 "#,
             expect![[r#"
-                fn foo<'_>(self: &Self, other: Self)
-                           ^^^^^^^^^^^  -----------
+                fn foo(self: &Self, other: Self)
+                       ^^^^^^^^^^^  -----------
             "#]],
         );
     }

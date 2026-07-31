@@ -374,6 +374,10 @@ fn print_generic_params(
         w!(p, "<");
         let mut first = true;
         for (_i, param) in generic_params.iter_lt() {
+            if param.is_elided() {
+                continue;
+            }
+
             if !first {
                 w!(p, ", ");
             }
@@ -1288,7 +1292,9 @@ impl Printer<'_> {
                     Mutability::Mut => "mut ",
                 };
                 w!(self, "&");
-                if let Some(lt) = &ref_.lifetime {
+                if let Some(lt) = &ref_.lifetime
+                    && !self.store[*lt].is_elided(self.db)
+                {
                     self.print_lifetime_ref(*lt);
                     w!(self, " ");
                 }
@@ -1310,9 +1316,7 @@ impl Printer<'_> {
             TypeRef::Fn(fn_) => {
                 let ((_, return_type), args) =
                     fn_.params.split_last().expect("TypeRef::Fn is missing return type");
-                if let Some(binder) = &fn_.binder
-                    && !binder.is_empty()
-                {
+                if let Some(binder) = &fn_.binder {
                     w!(
                         self,
                         "for<{}> ",

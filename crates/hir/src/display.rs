@@ -329,7 +329,9 @@ impl<'db> HirDisplay<'db> for SelfParam {
             TypeRef::Reference(ref_) if matches!(&data.store[ref_.ty], TypeRef::Path(p) if p.is_self_type()) =>
             {
                 f.write_char('&')?;
-                if let Some(lifetime) = &ref_.lifetime {
+                if let Some(lifetime) = &ref_.lifetime
+                    && !data.store[*lifetime].is_elided(f.db)
+                {
                     lifetime.hir_fmt(f, owner, &data.store)?;
                     f.write_char(' ')?;
                 }
@@ -714,7 +716,7 @@ fn write_generic_params_or_args<'db>(
 ) -> Result {
     let (params, store) = GenericParams::with_store(f.db, def);
     let owner = def.into();
-    if params.iter_lt().next().is_none()
+    if params.iter_lt().all(|it| it.1.is_elided())
         && params.iter_type_or_consts().all(|it| it.1.const_param().is_none())
         && params
             .iter_type_or_consts()
@@ -735,6 +737,9 @@ fn write_generic_params_or_args<'db>(
         }
     };
     for (_, lifetime) in params.iter_lt() {
+        if lifetime.is_elided() {
+            continue;
+        }
         delim(f)?;
         write!(f, "{}", lifetime.name.display(f.db, f.edition()))?;
     }

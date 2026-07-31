@@ -1394,7 +1394,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
                 })
             }
             LifetimeRef::HrtbParam(hrtb_param_id) => {
-                Some(self.hrtb_region_param(hrtb_param_id.0 as u32, INNERMOST, self.generic_def))
+                Some(self.hrtb_region_param(hrtb_param_id.0, INNERMOST, self.generic_def))
             }
             _ => None,
         }

@@ -2343,7 +2343,7 @@ impl<'db> HirDisplay<'db> for Region<'db> {
                     write!(f, "'_")
                 }
             }
-            RegionKind::ReErased => write!(f, "'<erased>"),
+            RegionKind::ReErased => write!(f, "'_"),
             RegionKind::RePlaceholder(_) => write!(f, "'<placeholder>"),
             RegionKind::ReLateParam(_) => write!(f, "'_"),
         }
@@ -2508,7 +2508,9 @@ impl<'db> HirDisplayWithExpressionStore<'db> for TypeRefId {
                     hir_def::type_ref::Mutability::Mut => "mut ",
                 };
                 write!(f, "&")?;
-                if let Some(lifetime) = &ref_.lifetime {
+                if let Some(lifetime) = &ref_.lifetime
+                    && !store[*lifetime].is_elided(f.db)
+                {
                     lifetime.hir_fmt(f, owner, store)?;
                     write!(f, " ")?;
                 }
@@ -2528,9 +2530,7 @@ impl<'db> HirDisplayWithExpressionStore<'db> for TypeRefId {
                 write!(f, "]")?;
             }
             TypeRef::Fn(fn_) => {
-                if let Some(binder) = &fn_.binder
-                    && !binder.is_empty()
-                {
+                if let Some(binder) = &fn_.binder {
                     let edition = f.edition();
                     write!(
                         f,

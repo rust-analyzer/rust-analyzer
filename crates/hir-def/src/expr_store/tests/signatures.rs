@@ -109,7 +109,7 @@ const async unsafe extern "C" fn a() {}
 fn ret_impl_trait() -> impl Trait {}
 "#,
         expect![[r#"
-            fn foo<'a, '_, const C: usize = 314235, T = B>(&'_ Struct, (), u32) -> &'a dyn Fn::<(), Output = i32>
+            fn foo<'a, const C: usize = 314235, T = B>(&Struct, (), u32) -> &'a dyn Fn::<(), Output = i32>
             where
                 T: Trait::<Item = A>,
                 (): Default
@@ -169,15 +169,15 @@ fn allowed3(baz: impl Baz<Assoc = Qux<impl Foo>>) {}
              {...}
             fn not_allowed2<Param[0]>(Param[0])
             where
-                Param[0]: for<'_> Fn::<(&'_ {error}), Output = ()>
+                Param[0]: for<'_> Fn::<(&{error}), Output = ()>
              {...}
             fn not_allowed3<Param[0]>(Param[0])
             where
                 Param[0]: Bar::<{error}>
              {...}
-            fn not_allowed4<'_, Param[0]>(Param[0])
+            fn not_allowed4<Param[0]>(Param[0])
             where
-                Param[0]: Bar::<&'_ {error}>
+                Param[0]: Bar::<&{error}>
              {...}
             fn allowed1<Param[0], Param[1]>(Param[1])
             where
@@ -207,7 +207,7 @@ type Alias<'a, 'b, T> = &'b T;
 fn f<T>(_: Alias<T>) {}
 "#,
         expect![[r#"
-            fn f<'_, '_, T>(Alias::<'_, '_, T>) {...}
+            fn f<T>(Alias::<'_, '_, T>) {...}
         "#]],
     );
 }

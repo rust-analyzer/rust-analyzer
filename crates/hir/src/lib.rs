@@ -3661,6 +3661,10 @@ impl LifetimeParam {
         params[self.id.local_id].name.clone()
     }
 
+    pub fn is_elided(self, db: &dyn HirDatabase) -> bool {
+        self.name(db).is_anon_lifetime()
+    }
+
     pub fn module(self, db: &dyn HirDatabase) -> Module {
         self.id.parent.module(db).into()
     }

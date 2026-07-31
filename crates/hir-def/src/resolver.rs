@@ -571,7 +571,10 @@ impl<'db> Resolver<'db> {
             LifetimeRef::Param(lifetime_param_id) => {
                 Some(LifetimeNs::LifetimeParam(*lifetime_param_id))
             }
-            LifetimeRef::HrtbParam(_) => None, // this should be unreachable, should we panic?
+            LifetimeRef::HrtbParam(_) => {
+                stdx::never!();
+                None
+            }
         }
     }
 

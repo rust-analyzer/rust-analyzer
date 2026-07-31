@@ -19,7 +19,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()  fn(&'_ self)
+            me foo()     fn(&self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -53,7 +53,7 @@ fn main() {
 }
 "#,
         expect![[r#"
-            me foo()  fn(&'_ self)
+            me foo()     fn(&self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -89,7 +89,7 @@ impl Foo {
 fn main() {}
 "#,
         expect![[r#"
-            me foo()  fn(&'_ self)
+            me foo()     fn(&self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}
@@ -125,7 +125,7 @@ impl Foo {
 fn main() {}
 "#,
         expect![[r#"
-            me foo()  fn(&'_ self)
+            me foo()     fn(&self)
             sn box  Box::new(expr)
             sn call function(expr)
             sn const      const {}

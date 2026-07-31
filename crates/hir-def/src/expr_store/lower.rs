@@ -933,7 +933,11 @@ impl<'db> ExprCollector<'db> {
                 let abi = inner.abi().map(lower_abi).unwrap_or(ExternAbi::Rust);
                 params.push((None, ret_ty));
 
-                let binder = self.for_type_binder.take().map(|(b, _)| b.into());
+                let binder = self
+                    .for_type_binder
+                    .take()
+                    .filter(|(b, _)| !b.is_empty())
+                    .map(|(b, _)| b.into());
 
                 self.for_type_binder = old_binder;
                 self.elision_binder_source = old_elision_binder_source;
@@ -1141,7 +1145,7 @@ impl<'db> ExprCollector<'db> {
     fn lower_elided_lifetime_for_binder(&mut self) -> LifetimeRefId {
         let name = Name::anon_lifetime();
         let local_id = self.push_elided_lifetime_in_for_binder(name);
-        let param_id = HrtbLifetimeParamId(local_id);
+        let param_id = HrtbLifetimeParamId(local_id as u32);
         let lifetime_ref = LifetimeRef::HrtbParam(param_id);
         self.alloc_lifetime_ref_desugared(lifetime_ref)
     }
