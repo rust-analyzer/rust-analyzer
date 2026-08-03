@@ -2116,12 +2116,10 @@ impl Const {
 
     /// Evaluate the constant.
     pub fn eval(self, db: &dyn HirDatabase) -> Result<EvaluatedConst<'_>, ConstEvalError<'_>> {
+        let interner = DbInterner::new_no_crate(db);
         let ty = db.value_ty(self.id.into()).unwrap().instantiate_identity().skip_norm_wip();
-        db.const_eval(self.id, GenericArgs::empty(), None).map(|it| EvaluatedConst {
-            allocation: it,
-            def: self.id.into(),
-            ty,
-        })
+        db.const_eval(self.id, GenericArgs::identity_for_item(interner, self.id.into()), None)
+            .map(|it| EvaluatedConst { allocation: it, def: self.id.into(), ty })
     }
 }
 
