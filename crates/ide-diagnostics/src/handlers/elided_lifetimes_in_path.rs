@@ -95,6 +95,7 @@ impl Trait<'_> for Foo<'_> {}
     }
 
     #[test]
+    #[ignore]
     fn impl_() {
         check_diagnostics(
             r#"

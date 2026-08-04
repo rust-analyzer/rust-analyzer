@@ -4832,17 +4832,17 @@ fn allowed3(baz: impl Baz<Assoc = Qux<impl Foo>>) {}
             184..185 'f': impl Fn({unknown})
             184..190 'f(foo)': ()
             186..189 'foo': S
-            251..252 'f': impl Fn(&'?0.0 {unknown})
+            251..252 'f': impl Fn(&'? {unknown})
             274..307 '{     ...oo); }': ()
             284..287 'foo': S
             290..291 'S': S
-            297..298 'f': impl Fn(&'?0.0 {unknown})
+            297..298 'f': impl Fn(&'? {unknown})
             297..304 'f(&foo)': ()
             299..303 '&foo': &'? S
             300..303 'foo': S
             325..328 'bar': impl Bar<{unknown}>
             350..352 '{}': ()
-            405..408 'bar': impl Bar<&'?0.0 {unknown}>
+            405..408 'bar': impl Bar<&'? {unknown}>
             431..433 '{}': ()
             447..450 'baz': impl Baz<Assoc = impl Foo>
             480..482 '{}': ()

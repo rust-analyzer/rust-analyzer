@@ -279,10 +279,10 @@ pub(super) fn lower_path(
         (def, is_trait_assoc_item)
     };
 
-    if collector.argument_elision_context.is_some() && !is_trait_assoc_item {
+    if collector.lifetime_elision_kind.can_elide() && !is_trait_assoc_item {
         let args_in_source = generic_args.last().and_then(|g| g.as_ref());
         let merged_args_with_elided =
-            collector.collect_path_elided_liftetimes(resolved_module_def_id, args_in_source);
+            collector.collect_path_elided_lifetimes(resolved_module_def_id, args_in_source);
         match &merged_args_with_elided {
             // there are elided args
             Some(_) => {
