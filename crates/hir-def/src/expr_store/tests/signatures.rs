@@ -169,7 +169,7 @@ fn allowed3(baz: impl Baz<Assoc = Qux<impl Foo>>) {}
              {...}
             fn not_allowed2<Param[0]>(Param[0])
             where
-                Param[0]: Fn::<(&'{error} {error}), Output = ()>
+                Param[0]: for<'_> Fn::<(&{error}), Output = ()>
              {...}
             fn not_allowed3<Param[0]>(Param[0])
             where

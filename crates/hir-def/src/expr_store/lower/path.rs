@@ -8,7 +8,7 @@ use std::iter;
 use crate::{
     ModuleDefId,
     expr_store::{
-        lower::{ElisionBinderSource, ExprCollector, generics::ImplTraitLowerFn},
+        lower::{ExprCollector, generics::ImplTraitLowerFn},
         path::NormalPath,
     },
     item_scope::BuiltinShadowMode,
@@ -103,13 +103,11 @@ pub(super) fn lower_path(
                     .generic_arg_list()
                     .and_then(|it| collector.lower_generic_args(it, impl_trait_lower_fn))
                     .or_else(|| {
-                        collector.with_type_bound_source(ElisionBinderSource::ForBinder, |this| {
-                            this.lower_generic_args_from_fn_path(
-                                segment.parenthesized_arg_list(),
-                                segment.ret_type(),
-                                impl_trait_lower_fn,
-                            )
-                        })
+                        collector.lower_generic_args_from_fn_path(
+                            segment.parenthesized_arg_list(),
+                            segment.ret_type(),
+                            impl_trait_lower_fn,
+                        )
                     })
                     .or_else(|| {
                         segment.return_type_syntax().map(|_| GenericArgs::return_type_notation())
