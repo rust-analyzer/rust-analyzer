@@ -871,7 +871,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
 
         if matches!(resolution, TypeNs::TraitId(_)) && remaining_index.is_none() {
             // trait object type without dyn
-            let bound = TypeBound::Path(path_id, TraitBoundModifier::None);
+            let bound = TypeBound::Path(None, path_id, TraitBoundModifier::None);
             let ty = self.lower_dyn_trait(&[bound]);
             return (ty, None);
         }
@@ -992,11 +992,11 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         };
 
         match bound {
-            &TypeBound::ForLifetime(ref binder, path) => {
+            &TypeBound::Path(Some(ref binder), path, _) => {
                 self.with_shifted_in(binder, |ctx| lower_path_bound(ctx, path)).0
             }
-            &TypeBound::Path(path, TraitBoundModifier::None) => lower_path_bound(self, path),
-            &TypeBound::Path(path, TraitBoundModifier::Maybe) => {
+            &TypeBound::Path(None, path, TraitBoundModifier::None) => lower_path_bound(self, path),
+            &TypeBound::Path(None, path, TraitBoundModifier::Maybe) => {
                 let sized_trait = self.lang_items.Sized;
                 // Don't lower associated type bindings as the only possible relaxed trait bound
                 // `?Sized` has no of them.
@@ -1049,7 +1049,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
             for b in bounds {
                 let db = self.db;
                 match b {
-                    TypeBound::Path(_, TraitBoundModifier::None) => {
+                    TypeBound::Path(None, _, TraitBoundModifier::None) => {
                         // `dyn Trait<'a>` is an existential predicate that introduces a binder.
                         self.with_shifted_in(&[], |ctx| {
                             ctx.lower_type_bound(b, dummy_self_ty, false)
@@ -2043,9 +2043,7 @@ impl SupertraitsInfo {
                 let WherePredicate::TypeBound { lifetimes: _, target, bound } = pred else {
                     continue;
                 };
-                let (TypeBound::Path(bounded_trait, TraitBoundModifier::None)
-                | TypeBound::ForLifetime(_, bounded_trait)) = *bound
-                else {
+                let TypeBound::Path(_, bounded_trait, TraitBoundModifier::None) = *bound else {
                     continue;
                 };
                 let target = &signature.store[*target];
@@ -2159,9 +2157,7 @@ fn resolve_type_param_assoc_type_shorthand(
             let WherePredicate::TypeBound { lifetimes: _, target, bound } = pred else {
                 continue;
             };
-            let (TypeBound::Path(bounded_trait_path, TraitBoundModifier::None)
-            | TypeBound::ForLifetime(_, bounded_trait_path)) = *bound
-            else {
+            let TypeBound::Path(_, bounded_trait_path, TraitBoundModifier::None) = *bound else {
                 continue;
             };
             let Some(target) = ctx.lower_ty_only_param(*target) else { continue };

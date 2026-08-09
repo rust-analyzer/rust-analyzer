@@ -507,7 +507,7 @@ pub(crate) fn lower_function(
         let path = PathId::from_type_ref_unchecked(
             expr_collector.alloc_type_ref_desugared(TypeRef::Path(path)),
         );
-        let ty_bound = TypeBound::Path(path, TraitBoundModifier::None);
+        let ty_bound = TypeBound::Path(None, path, TraitBoundModifier::None);
         Some(
             expr_collector
                 .alloc_type_ref_desugared(TypeRef::ImplTrait(ThinVec::from_iter([ty_bound]))),
@@ -1645,14 +1645,9 @@ impl<'db, 'a> ExprCollector<'db, 'a> {
                     ec.lower_path_type(&path_type, impl_trait_lower_fn)
                         .map(|p| {
                             let path = ec.alloc_path(p, AstPtr::new(&path_type).upcast());
-                            let binder = ec.for_type_binder.take();
-                            if let Some(binder) = binder
-                                && !binder.is_empty()
-                            {
-                                TypeBound::ForLifetime(binder, path)
-                            } else {
-                                TypeBound::Path(path, m)
-                            }
+                            let binder = ec.for_type_binder.take().filter(|b| !b.is_empty());
+                            let m = if binder.is_some() { TraitBoundModifier::None } else { m };
+                            TypeBound::Path(binder, path, m)
                         })
                         .unwrap_or(TypeBound::Error)
                 })

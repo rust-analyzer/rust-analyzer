@@ -164,8 +164,7 @@ pub enum LifetimeRef {
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum TypeBound {
-    Path(PathId, TraitBoundModifier),
-    ForLifetime(ThinVec<Name>, PathId),
+    Path(Option<ThinVec<Name>>, PathId, TraitBoundModifier),
     Lifetime(LifetimeRefId),
     Use(ThinVec<UseArgRef>),
     Error,
@@ -197,8 +196,7 @@ impl TypeRef {
 impl TypeBound {
     pub fn as_path<'a>(&self, map: &'a ExpressionStore) -> Option<(&'a Path, TraitBoundModifier)> {
         match self {
-            &TypeBound::Path(p, m) => Some((&map[p], m)),
-            &TypeBound::ForLifetime(_, p) => Some((&map[p], TraitBoundModifier::None)),
+            &TypeBound::Path(_, p, m) => Some((&map[p], m)),
             TypeBound::Lifetime(_) | TypeBound::Error | TypeBound::Use(_) => None,
         }
     }

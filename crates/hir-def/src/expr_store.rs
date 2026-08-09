@@ -998,8 +998,7 @@ impl<V: StoreVisitor> StoreVisitor for &mut V {
 pub trait StoreVisitorExt: StoreVisitor {
     fn on_type_bound(&mut self, bound: &TypeBound) {
         match bound {
-            TypeBound::Path(path_id, _) => self.on_type(path_id.type_ref()),
-            TypeBound::ForLifetime(_, path_id) => self.on_type(path_id.type_ref()),
+            TypeBound::Path(_, path_id, _) => self.on_type(path_id.type_ref()),
             TypeBound::Lifetime(lifetime) => self.on_lifetime(*lifetime),
             TypeBound::Use(args) => {
                 for arg in args {

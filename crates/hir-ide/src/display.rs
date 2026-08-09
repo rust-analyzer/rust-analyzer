@@ -2643,7 +2643,15 @@ impl<'db> HirDisplayWithExpressionStore<'db> for TypeBound {
         store: &ExpressionStore,
     ) -> Result {
         match self {
-            &TypeBound::Path(path, modifier) => {
+            &TypeBound::Path(ref binder, path, modifier) => {
+                if let Some(lifetimes) = binder {
+                    let edition = f.edition();
+                    write!(
+                        f,
+                        "for<{}> ",
+                        lifetimes.iter().map(|it| it.display(f.db, edition)).format(", ")
+                    )?;
+                }
                 match modifier {
                     TraitBoundModifier::None => (),
                     TraitBoundModifier::Maybe => write!(f, "?")?,
@@ -2651,15 +2659,6 @@ impl<'db> HirDisplayWithExpressionStore<'db> for TypeBound {
                 store[path].hir_fmt(f, owner, store)
             }
             TypeBound::Lifetime(lifetime) => lifetime.hir_fmt(f, owner, store),
-            TypeBound::ForLifetime(lifetimes, path) => {
-                let edition = f.edition();
-                write!(
-                    f,
-                    "for<{}> ",
-                    lifetimes.iter().map(|it| it.display(f.db, edition)).format(", ")
-                )?;
-                store[*path].hir_fmt(f, owner, store)
-            }
             TypeBound::Use(args) => {
                 write!(f, "use<")?;
                 let edition = f.edition();

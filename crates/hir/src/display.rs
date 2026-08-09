@@ -248,7 +248,7 @@ fn write_function<'db>(f: &mut HirFormatter<'_, 'db>, func_id: FunctionId) -> Re
     } else if let Some(ret_type) = data.ret_type {
         match &data.store[ret_type] {
             TypeRef::ImplTrait(bounds) => match &bounds[0] {
-                &TypeBound::Path(path, _) => Some(
+                &TypeBound::Path(_, path, _) => Some(
                     *data.store[path]
                         .segments()
                         .iter()

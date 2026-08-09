@@ -237,7 +237,7 @@ impl GenericParamsCollector {
             (Either::Right(lifetime), TypeBound::Lifetime(bound)) => {
                 WherePredicate::Lifetime { target: lifetime, bound }
             }
-            (Either::Right(_), TypeBound::ForLifetime(..) | TypeBound::Path(..)) => return,
+            (Either::Right(_), TypeBound::Path(..)) => return,
         };
         if let WherePredicate::Lifetime { target, .. } = predicate {
             ec.push_named_target_lifetime(target);
