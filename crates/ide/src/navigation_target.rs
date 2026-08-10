@@ -423,7 +423,7 @@ impl ToNavFromAst for hir::Trait {
 
 impl<'db, D> TryToNav<'db> for D
 where
-    D: HasSource + ToNavFromAst + Copy + HasDocs + HirDisplay<'db> + HasCrate + hir::HasName,
+    D: HasSource + ToNavFromAst + Copy + HasDocs + HirDisplay<'db> + HasCrate<'db> + hir::HasName,
     D::Ast: ast::HasName,
 {
     fn try_to_nav(

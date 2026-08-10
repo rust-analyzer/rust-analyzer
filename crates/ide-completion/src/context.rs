@@ -595,7 +595,7 @@ impl<'db> CompletionContext<'_, 'db> {
     /// Checks if an item is visible, not `doc(hidden)` and stable at the completion site.
     pub(crate) fn is_visible<I>(&self, item: &I) -> Visible
     where
-        I: hir::HasVisibility + hir::HasAttrs + hir::HasCrate + Copy,
+        I: hir::HasVisibility + hir::HasAttrs + hir::HasCrate<'db> + Copy,
     {
         let vis = item.visibility(self.db);
         let attrs = item.attrs(self.db);
@@ -641,7 +641,7 @@ impl<'db> CompletionContext<'_, 'db> {
 
     pub(crate) fn check_stability_and_hidden<I>(&self, item: I) -> bool
     where
-        I: hir::HasAttrs + hir::HasCrate,
+        I: hir::HasAttrs + hir::HasCrate<'db>,
     {
         let defining_crate = item.krate(self.db);
         let attrs = item.attrs(self.db);

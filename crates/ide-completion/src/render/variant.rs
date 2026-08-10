@@ -92,10 +92,10 @@ pub(crate) fn render_tuple_lit(
 /// Find all the visible fields in a given list. Returns the list of visible
 /// fields, plus a boolean for whether the list is comprehensive (contains no
 /// private fields and its item is not marked `#[non_exhaustive]`).
-pub(crate) fn visible_fields(
-    ctx: &CompletionContext<'_, '_>,
+pub(crate) fn visible_fields<'db>(
+    ctx: &CompletionContext<'_, 'db>,
     fields: &[hir::Field],
-    item: impl HasAttrs + HasCrate + Copy,
+    item: impl HasAttrs + HasCrate<'db> + Copy,
 ) -> Option<(Vec<hir::Field>, bool)> {
     let module = ctx.module;
     let n_fields = fields.len();

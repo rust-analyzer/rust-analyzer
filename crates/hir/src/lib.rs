@@ -532,8 +532,8 @@ impl<'db> ModuleDef<'db> {
     }
 }
 
-impl HasCrate for ModuleDef<'_> {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for ModuleDef<'_> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         match self.module(db) {
             Some(module) => module.krate(db),
             None => Crate::core(db).unwrap_or_else(|| all_crates(db)[0].into()),
@@ -2705,7 +2705,7 @@ impl<'db> ItemInNs<'db> {
     }
 
     /// Returns the crate defining this item (or `None` if `self` is built-in).
-    pub fn krate(&self, db: &dyn HirDatabase) -> Option<Crate> {
+    pub fn krate(&self, db: &'db dyn HirDatabase) -> Option<Crate> {
         match self {
             ItemInNs::Types(did) | ItemInNs::Values(did) => did.module(db).map(|m| m.krate(db)),
             ItemInNs::Macros(id) => Some(id.module(db).krate(db)),
@@ -6187,114 +6187,114 @@ impl<'db> TraitPredicate<'db> {
 }
 
 /// Trait for obtaining the defining crate of an item.
-pub trait HasCrate {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate;
+pub trait HasCrate<'db> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate;
 }
 
-impl<T: hir_def::HasModule> HasCrate for T {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db, T: hir_def::HasModule> HasCrate<'db> for T {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db).into()
     }
 }
 
-impl HasCrate for AssocItem<'_> {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for AssocItem<'_> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Struct {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Struct {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Union {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Union {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Enum {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Enum {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Field {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Field {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.parent_def(db).module(db).krate(db)
     }
 }
 
-impl HasCrate for EnumVariant {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for EnumVariant {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Function<'_> {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Function<'_> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Const {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Const {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for TypeAlias {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for TypeAlias {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Type<'_> {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Type<'_> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.krate(db).into()
     }
 }
 
-impl HasCrate for Macro {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Macro {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Trait {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Trait {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Static {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Static {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Adt {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Adt {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Impl<'_> {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Impl<'_> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
-impl HasCrate for Module {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for Module {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         Module::krate(*self, db)
     }
 }
 
-impl<'db> HasCrate for AnonConst<'db> {
-    fn krate(&self, db: &dyn HirDatabase) -> Crate {
+impl<'db> HasCrate<'db> for AnonConst<'db> {
+    fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         hir_def::HasModule::krate(&self.id.loc(db).owner, db).into()
     }
 }
