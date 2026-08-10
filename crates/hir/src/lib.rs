@@ -6191,7 +6191,7 @@ pub trait HasCrate<'db> {
     fn krate(&self, db: &'db dyn HirDatabase) -> Crate;
 }
 
-impl<'db, T: hir_def::HasModule> HasCrate<'db> for T {
+impl<'db, T: hir_def::HasModule<'db>> HasCrate<'db> for T {
     fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.module(db).krate(db).into()
     }
@@ -6598,7 +6598,7 @@ fn has_non_default_type_params(db: &dyn HirDatabase, generic_def: GenericDefId) 
 
 fn param_env_from_has_crate<'db>(
     db: &'db dyn HirDatabase,
-    id: impl hir_def::HasModule + Into<GenericDefId> + Copy,
+    id: impl hir_def::HasModule<'db> + Into<GenericDefId> + Copy,
 ) -> ParamEnvAndCrate<'db> {
     ParamEnvAndCrate { param_env: db.trait_environment(id.into()), krate: id.krate(db) }
 }

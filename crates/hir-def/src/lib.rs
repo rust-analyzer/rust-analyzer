@@ -152,7 +152,7 @@ impl<N: AstIdNode> Hash for ItemLoc<N> {
     }
 }
 
-impl<N: AstIdNode> HasModule for ItemLoc<N> {
+impl<'db, N: AstIdNode> HasModule<'db> for ItemLoc<N> {
     #[inline]
     fn module(&self, _db: &dyn SourceDatabase) -> ModuleId {
         self.container
@@ -189,9 +189,9 @@ impl<N: AstIdNode> Hash for AssocItemLoc<N> {
     }
 }
 
-impl<N: AstIdNode> HasModule for AssocItemLoc<N> {
+impl<'db, N: AstIdNode> HasModule<'db> for AssocItemLoc<N> {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.container.module(db)
     }
 }
@@ -249,9 +249,9 @@ macro_rules! impl_loc {
             }
         }
 
-        impl HasModule for $loc {
+        impl<'db> HasModule<'db> for $loc {
             #[inline]
-            fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+            fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
                 self.$container.module(db)
             }
         }
@@ -622,7 +622,7 @@ impl ModuleId {
     }
 }
 
-impl HasModule for ModuleId {
+impl<'db> HasModule<'db> for ModuleId {
     #[inline]
     fn module(&self, _db: &dyn SourceDatabase) -> ModuleId {
         *self
@@ -1183,38 +1183,38 @@ impl VariantId {
     }
 }
 
-pub trait HasModule {
+pub trait HasModule<'db> {
     /// Returns the enclosing module this thing is defined within.
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId;
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId;
     /// Returns the crate this thing is defined within.
     #[inline]
     #[doc(alias = "crate")]
-    fn krate(&self, db: &dyn SourceDatabase) -> Crate {
+    fn krate(&self, db: &'db dyn SourceDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
 // In theory this impl should work out for us, but rustc thinks it collides with all the other
 // manual impls that do not have a ModuleId container...
-// impl<N, ItemId, Data> HasModule for ItemId
+// impl<'db, N, ItemId, Data> HasModule<'db> for ItemId
 // where
 //     N: ItemTreeNode,
-//     ItemId: for<'db> Lookup<Database<'db> = dyn SourceDatabase + 'db, Data = Data> + Copy,
+//     ItemId: Lookup<Database<'db> = dyn SourceDatabase + 'db, Data = Data> + Copy,
 //     Data: ItemTreeLoc<Id = N, Container = ModuleId>,
 // {
 //     #[inline]
-//     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+//     fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
 //         self.lookup(db).container()
 //     }
 // }
 
-impl<N, ItemId> HasModule for ItemId
+impl<'db, N, ItemId> HasModule<'db> for ItemId
 where
     N: AstIdNode,
     ItemId: Lookup<Data = ItemLoc<N>> + Copy,
 {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
@@ -1227,7 +1227,7 @@ where
 //     ItemId: for<'db> Lookup<Database<'db> = dyn SourceDatabase + 'db, Data = AssocItemLoc<N>> + Copy,
 // {
 //     #[inline]
-//     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+//     fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
 //         self.lookup(db).container.module(db)
 //     }
 // }
@@ -1241,79 +1241,79 @@ fn module_for_assoc_item_loc<'db>(
     id.lookup(db).container.module(db)
 }
 
-impl HasModule for BuiltinDeriveImplLoc {
+impl<'db> HasModule<'db> for BuiltinDeriveImplLoc {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.adt.module(db)
     }
 }
 
-impl HasModule for BuiltinDeriveImplId<'_> {
+impl<'db> HasModule<'db> for BuiltinDeriveImplId<'_> {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.loc(db).module(db)
     }
 }
 
-impl HasModule for FunctionId {
+impl<'db> HasModule<'db> for FunctionId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 
-impl HasModule for ConstId {
+impl<'db> HasModule<'db> for ConstId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 
-impl HasModule for StaticId {
+impl<'db> HasModule<'db> for StaticId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 
-impl HasModule for TypeAliasId {
+impl<'db> HasModule<'db> for TypeAliasId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 // endregion: manual-assoc-has-module-impls
 
-impl HasModule for EnumVariantId {
+impl<'db> HasModule<'db> for EnumVariantId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).parent.module(db)
     }
 }
 
-impl HasModule for MacroRulesId {
+impl<'db> HasModule<'db> for MacroRulesId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
 
-impl HasModule for Macro2Id {
+impl<'db> HasModule<'db> for Macro2Id {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
 
-impl HasModule for ProcMacroId {
+impl<'db> HasModule<'db> for ProcMacroId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
 
-impl HasModule for ItemContainerId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for ItemContainerId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             ItemContainerId::ModuleId(it) => it,
             ItemContainerId::ImplId(it) => it.module(db),
@@ -1323,8 +1323,8 @@ impl HasModule for ItemContainerId {
     }
 }
 
-impl HasModule for AdtId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for AdtId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             AdtId::StructId(it) => it.module(db),
             AdtId::UnionId(it) => it.module(db),
@@ -1333,8 +1333,8 @@ impl HasModule for AdtId {
     }
 }
 
-impl HasModule for VariantId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for VariantId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             VariantId::EnumVariantId(it) => it.module(db),
             VariantId::StructId(it) => it.module(db),
@@ -1343,8 +1343,8 @@ impl HasModule for VariantId {
     }
 }
 
-impl HasModule for MacroId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for MacroId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             MacroId::MacroRulesId(it) => it.module(db),
             MacroId::Macro2Id(it) => it.module(db),
@@ -1353,8 +1353,8 @@ impl HasModule for MacroId {
     }
 }
 
-impl HasModule for DefWithBodyId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for DefWithBodyId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             DefWithBodyId::FunctionId(it) => it.module(db),
             DefWithBodyId::StaticId(it) => it.module(db),
@@ -1364,8 +1364,8 @@ impl HasModule for DefWithBodyId {
     }
 }
 
-impl HasModule for ExpressionStoreOwnerId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for ExpressionStoreOwnerId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             ExpressionStoreOwnerId::Signature(def) => def.module(db),
             ExpressionStoreOwnerId::Body(def) => def.module(db),
@@ -1374,8 +1374,8 @@ impl HasModule for ExpressionStoreOwnerId {
     }
 }
 
-impl HasModule for GenericDefId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for GenericDefId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             GenericDefId::FunctionId(it) => it.module(db),
             GenericDefId::AdtId(it) => it.module(db),
@@ -1388,8 +1388,8 @@ impl HasModule for GenericDefId {
     }
 }
 
-impl HasModule for AttrDefId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for AttrDefId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             AttrDefId::ModuleId(it) => *it,
             AttrDefId::AdtId(it) => it.module(db),

@@ -549,7 +549,7 @@ impl<'db> From<EnumVariantId> for InferBodyId<'db> {
     }
 }
 
-impl HasModule for InferBodyId<'_> {
+impl HasModule<'_> for InferBodyId<'_> {
     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
         match self {
             InferBodyId::DefWithBodyId(id) => id.module(db),

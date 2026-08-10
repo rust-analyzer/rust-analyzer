@@ -301,9 +301,9 @@ impl VariantFields {
     }
 }
 
-pub fn visibility_from_ast(
-    db: &dyn SourceDatabase,
-    has_resolver: impl HasResolver + HasModule,
+pub fn visibility_from_ast<'db>(
+    db: &'db dyn SourceDatabase,
+    has_resolver: impl HasResolver + HasModule<'db>,
     ast_vis: InFile<Option<ast::Visibility>>,
 ) -> Visibility {
     let mut span_map = None;

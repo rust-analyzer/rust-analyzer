@@ -489,7 +489,7 @@ impl<'db> AnonConstId<'db> {
     }
 }
 
-impl HasModule for AnonConstId<'_> {
+impl HasModule<'_> for AnonConstId<'_> {
     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
         self.loc(db).owner.module(db)
     }
