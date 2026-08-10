@@ -2836,7 +2836,7 @@ impl<'db> AsAssocItem<'db> for GenericDef<'db> {
 }
 
 fn as_assoc_item<'db, ID, DEF, LOC>(
-    db: &(dyn HirDatabase + 'db),
+    db: &dyn HirDatabase,
     ctor: impl FnOnce(DEF) -> AssocItem<'db>,
     id: ID,
 ) -> Option<AssocItem<'db>>
@@ -2852,7 +2852,7 @@ where
 }
 
 fn as_extern_assoc_item<'db, ID, DEF, LOC>(
-    db: &(dyn HirDatabase + 'db),
+    db: &dyn HirDatabase,
     ctor: impl FnOnce(DEF) -> ExternAssocItem<'db>,
     id: ID,
 ) -> Option<ExternAssocItem<'db>>
