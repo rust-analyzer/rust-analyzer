@@ -83,7 +83,7 @@ fn item_for_path_search<'db>(db: &dyn HirDatabase, item: ItemInNs<'db>) -> Optio
     })
 }
 
-fn item_as_assoc<'db>(db: &dyn HirDatabase, item: ItemInNs<'db>) -> Option<AssocItem<'db>> {
+fn item_as_assoc<'db>(db: &'db dyn HirDatabase, item: ItemInNs<'db>) -> Option<AssocItem<'db>> {
     item.into_module_def().as_assoc_item(db)
 }
 

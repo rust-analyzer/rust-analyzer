@@ -927,7 +927,7 @@ impl<'db> From<Either<PathResolution<'db>, InlineAsmOperand>> for Definition<'db
 }
 
 impl<'db> AsAssocItem<'db> for Definition<'db> {
-    fn as_assoc_item(self, db: &dyn hir::db::HirDatabase) -> Option<AssocItem<'db>> {
+    fn as_assoc_item(self, db: &'db dyn hir::db::HirDatabase) -> Option<AssocItem<'db>> {
         match self {
             Definition::Function(it) => it.as_assoc_item(db),
             Definition::Const(it) => it.as_assoc_item(db),
@@ -938,7 +938,10 @@ impl<'db> AsAssocItem<'db> for Definition<'db> {
 }
 
 impl<'db> AsExternAssocItem<'db> for Definition<'db> {
-    fn as_extern_assoc_item(self, db: &dyn hir::db::HirDatabase) -> Option<ExternAssocItem<'db>> {
+    fn as_extern_assoc_item(
+        self,
+        db: &'db dyn hir::db::HirDatabase,
+    ) -> Option<ExternAssocItem<'db>> {
         match self {
             Definition::Function(it) => it.as_extern_assoc_item(db),
             Definition::Static(it) => it.as_extern_assoc_item(db),

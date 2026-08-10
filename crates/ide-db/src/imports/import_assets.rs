@@ -753,7 +753,10 @@ fn validate_resolvable<'db>(
     result
 }
 
-pub fn item_for_path_search<'db>(db: &RootDatabase, item: ItemInNs<'db>) -> Option<ItemInNs<'db>> {
+pub fn item_for_path_search<'db>(
+    db: &'db RootDatabase,
+    item: ItemInNs<'db>,
+) -> Option<ItemInNs<'db>> {
     Some(match item {
         ItemInNs::Types(_) | ItemInNs::Values(_) => match item_as_assoc(db, item) {
             Some(assoc_item) => item_for_path_search_assoc(db, assoc_item)?,
@@ -1076,6 +1079,6 @@ fn path_import_candidate<'db>(
     })
 }
 
-fn item_as_assoc<'db>(db: &RootDatabase, item: ItemInNs<'db>) -> Option<AssocItem<'db>> {
+fn item_as_assoc<'db>(db: &'db RootDatabase, item: ItemInNs<'db>) -> Option<AssocItem<'db>> {
     item.into_module_def().as_assoc_item(db)
 }

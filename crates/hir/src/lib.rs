@@ -2730,11 +2730,11 @@ pub enum ExternAssocItem<'db> {
 }
 
 pub trait AsExternAssocItem<'db> {
-    fn as_extern_assoc_item(self, db: &dyn HirDatabase) -> Option<ExternAssocItem<'db>>;
+    fn as_extern_assoc_item(self, db: &'db dyn HirDatabase) -> Option<ExternAssocItem<'db>>;
 }
 
 impl<'db> AsExternAssocItem<'db> for Function<'db> {
-    fn as_extern_assoc_item(self, db: &dyn HirDatabase) -> Option<ExternAssocItem<'db>> {
+    fn as_extern_assoc_item(self, db: &'db dyn HirDatabase) -> Option<ExternAssocItem<'db>> {
         let AnyFunctionId::FunctionId(id) = self.id else {
             return None;
         };
@@ -2743,13 +2743,13 @@ impl<'db> AsExternAssocItem<'db> for Function<'db> {
 }
 
 impl<'db> AsExternAssocItem<'db> for Static {
-    fn as_extern_assoc_item(self, db: &dyn HirDatabase) -> Option<ExternAssocItem<'db>> {
+    fn as_extern_assoc_item(self, db: &'db dyn HirDatabase) -> Option<ExternAssocItem<'db>> {
         as_extern_assoc_item(db, ExternAssocItem::Static, self.id)
     }
 }
 
 impl<'db> AsExternAssocItem<'db> for TypeAlias {
-    fn as_extern_assoc_item(self, db: &dyn HirDatabase) -> Option<ExternAssocItem<'db>> {
+    fn as_extern_assoc_item(self, db: &'db dyn HirDatabase) -> Option<ExternAssocItem<'db>> {
         as_extern_assoc_item(db, ExternAssocItem::TypeAlias, self.id)
     }
 }
@@ -2779,11 +2779,11 @@ pub enum AssocItemContainer<'db> {
 }
 
 pub trait AsAssocItem<'db> {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'db>>;
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>>;
 }
 
 impl<'db> AsAssocItem<'db> for Function<'db> {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'db>> {
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>> {
         match self.id {
             AnyFunctionId::FunctionId(id) => as_assoc_item(db, AssocItem::Function, id),
             AnyFunctionId::BuiltinDeriveImplMethod { .. } => Some(AssocItem::Function(self)),
@@ -2791,20 +2791,20 @@ impl<'db> AsAssocItem<'db> for Function<'db> {
     }
 }
 
-impl AsAssocItem<'static> for Const {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'static>> {
+impl<'db> AsAssocItem<'db> for Const {
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>> {
         as_assoc_item(db, AssocItem::Const, self.id)
     }
 }
 
-impl AsAssocItem<'static> for TypeAlias {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'static>> {
+impl<'db> AsAssocItem<'db> for TypeAlias {
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>> {
         as_assoc_item(db, AssocItem::TypeAlias, self.id)
     }
 }
 
 impl<'db> AsAssocItem<'db> for ModuleDef<'db> {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'db>> {
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>> {
         match self {
             ModuleDef::Function(it) => it.as_assoc_item(db),
             ModuleDef::Const(it) => it.as_assoc_item(db),
@@ -2815,7 +2815,7 @@ impl<'db> AsAssocItem<'db> for ModuleDef<'db> {
 }
 
 impl<'db> AsAssocItem<'db> for DefWithBody<'db> {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'db>> {
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>> {
         match self {
             DefWithBody::Function(it) => it.as_assoc_item(db),
             DefWithBody::Const(it) => it.as_assoc_item(db),
@@ -2825,7 +2825,7 @@ impl<'db> AsAssocItem<'db> for DefWithBody<'db> {
 }
 
 impl<'db> AsAssocItem<'db> for GenericDef<'db> {
-    fn as_assoc_item(self, db: &dyn HirDatabase) -> Option<AssocItem<'db>> {
+    fn as_assoc_item(self, db: &'db dyn HirDatabase) -> Option<AssocItem<'db>> {
         match self {
             GenericDef::Function(it) => it.as_assoc_item(db),
             GenericDef::Const(it) => it.as_assoc_item(db),
