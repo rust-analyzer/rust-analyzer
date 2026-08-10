@@ -2836,14 +2836,14 @@ impl<'db> AsAssocItem<'db> for GenericDef<'db> {
 }
 
 fn as_assoc_item<'db, ID, DEF, LOC>(
-    db: &dyn HirDatabase,
+    db: &'db dyn HirDatabase,
     ctor: impl FnOnce(DEF) -> AssocItem<'db>,
     id: ID,
 ) -> Option<AssocItem<'db>>
 where
-    ID: Lookup<Data = AssocItemLoc<LOC>>,
+    ID: Lookup<'db, Data = AssocItemLoc<LOC>>,
     DEF: From<ID>,
-    LOC: AstIdNode,
+    LOC: AstIdNode + 'db,
 {
     match id.lookup(db).container {
         ItemContainerId::TraitId(_) | ItemContainerId::ImplId(_) => Some(ctor(DEF::from(id))),
@@ -2852,14 +2852,14 @@ where
 }
 
 fn as_extern_assoc_item<'db, ID, DEF, LOC>(
-    db: &dyn HirDatabase,
+    db: &'db dyn HirDatabase,
     ctor: impl FnOnce(DEF) -> ExternAssocItem<'db>,
     id: ID,
 ) -> Option<ExternAssocItem<'db>>
 where
-    ID: Lookup<Data = AssocItemLoc<LOC>>,
+    ID: Lookup<'db, Data = AssocItemLoc<LOC>>,
     DEF: From<ID>,
-    LOC: AstIdNode,
+    LOC: AstIdNode + 'db,
 {
     match id.lookup(db).container {
         ItemContainerId::ExternBlockId(_) => Some(ctor(DEF::from(id))),

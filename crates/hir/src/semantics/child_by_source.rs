@@ -380,8 +380,8 @@ fn insert_item_loc<'db, ID, N, Data>(
     id: ID,
     key: StaticKey<N, ID>,
 ) where
-    ID: Lookup<Data = Data> + 'static,
-    Data: AstIdLoc<Ast = N>,
+    ID: Lookup<'db, Data = Data> + 'static,
+    Data: AstIdLoc<Ast = N> + 'db,
     N: AstIdNode + 'static,
 {
     let loc = id.lookup(db);

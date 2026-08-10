@@ -1014,12 +1014,12 @@ impl GenericDefId {
         self,
         db: &dyn SourceDatabase,
     ) -> (HirFileId, Option<ast::GenericParamList>) {
-        fn file_id_and_params_of_item_loc<Loc>(
-            db: &dyn SourceDatabase,
-            def: impl Lookup<Data = Loc>,
+        fn file_id_and_params_of_item_loc<'db, Loc>(
+            db: &'db dyn SourceDatabase,
+            def: impl Lookup<'db, Data = Loc>,
         ) -> (HirFileId, Option<ast::GenericParamList>)
         where
-            Loc: src::HasSource,
+            Loc: src::HasSource + 'db,
             Loc::Value: ast::HasGenericParams,
         {
             let src = def.lookup(db).source(db);
@@ -1210,8 +1210,8 @@ pub trait HasModule<'db> {
 
 impl<'db, N, ItemId> HasModule<'db> for ItemId
 where
-    N: AstIdNode,
-    ItemId: Lookup<Data = ItemLoc<N>> + Copy,
+    N: AstIdNode + 'db,
+    ItemId: Lookup<'db, Data = ItemLoc<N>> + Copy,
 {
     #[inline]
     fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
@@ -1235,8 +1235,8 @@ where
 // region: manual-assoc-has-module-impls
 #[inline]
 fn module_for_assoc_item_loc<'db>(
-    db: &(dyn 'db + SourceDatabase),
-    id: impl Lookup<Data = AssocItemLoc<impl AstIdNode>>,
+    db: &'db dyn SourceDatabase,
+    id: impl Lookup<'db, Data = AssocItemLoc<impl AstIdNode + 'db>>,
 ) -> ModuleId {
     id.lookup(db).container.module(db)
 }

@@ -54,10 +54,10 @@ pub enum LineFormat {
     Indentation,
 }
 
-fn item_name<Id, Loc>(db: &dyn SourceDatabase, id: Id, default: &str) -> String
+fn item_name<'db, Id, Loc>(db: &'db dyn SourceDatabase, id: Id, default: &str) -> String
 where
-    Id: Lookup<Data = Loc>,
-    Loc: HasSource,
+    Id: Lookup<'db, Data = Loc>,
+    Loc: HasSource + 'db,
     Loc::Value: ast::HasName,
 {
     let loc = id.lookup(db);
