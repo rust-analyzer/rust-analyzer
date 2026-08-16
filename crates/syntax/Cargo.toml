@@ -10,7 +10,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [package.metadata.cargo-machete]
-ignored = ["unicode-ident", "unicode-properties"]
+ignored = ["ra-ap-rustc_lexer", "unicode-ident", "unicode-properties"]
 
 [lib]
 doctest = false

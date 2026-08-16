@@ -56,3 +56,6 @@ in-rust-tree = ["hir-expand/in-rust-tree"]
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["ra-ap-rustc_parse_format"]

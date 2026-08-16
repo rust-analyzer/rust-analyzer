@@ -1,8 +1,8 @@
 //! Proc macro ABI
-use crate::{
-    ProcMacroClientHandle, ProcMacroKind, ProcMacroSrvSpan, TrackedEnv, token_stream::TokenStream,
-};
+use proc_macro_api::token_stream::TokenStream;
 use rustc_proc_macro::bridge;
+
+use crate::{ProcMacroClientHandle, ProcMacroKind, ProcMacroSrvSpan, TrackedEnv};
 
 impl From<bridge::PanicMessage> for crate::PanicMessage {
     fn from(p: bridge::PanicMessage) -> Self {

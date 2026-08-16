@@ -20,7 +20,8 @@ use proc_macro_api::{
         },
         reject_subrequests,
     },
-    legacy_protocol::msg::{PanicMessage, ServerConfig, SpanDataIndexMap, SpanMode},
+    flat::SpanDataIndexMap,
+    legacy_protocol::msg::{PanicMessage, ServerConfig, SpanMode},
     version::CURRENT_API_VERSION,
 };
 

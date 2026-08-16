@@ -21,7 +21,7 @@ use hir_expand::{
 use intern::{Interned, Symbol, sym};
 use syntax::{AstNode, ast};
 use syntax_bridge::DocCommentDesugarMode;
-use tt::token_to_literal;
+use tt::literal_from_str;
 
 use crate::item_tree::lower::Ctx;
 
@@ -64,11 +64,13 @@ impl AttrsOrCfg {
                 ast::Meta::KeyValueMeta(meta) => {
                     let span = span_map.span_for(path_range);
                     let input = meta.expr().and_then(|value| {
-                        if let ast::Expr::Literal(value) = value {
-                            Some(Box::new(AttrInput::Literal(token_to_literal(
+                        if let ast::Expr::Literal(value) = value
+                            && let Ok(lit) = literal_from_str(
                                 value.token().text(),
                                 span_map.span_for(value.syntax().text_range()),
-                            ))))
+                            )
+                        {
+                            Some(Box::new(AttrInput::Literal(lit)))
                         } else {
                             None
                         }

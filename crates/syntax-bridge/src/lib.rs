@@ -18,7 +18,7 @@ use syntax::{
     ast::make::tokens::doc_comment,
     format_smolstr,
 };
-use tt::{Punct, buffer::Cursor, token_to_literal};
+use tt::{Punct, buffer::Cursor};
 
 pub mod prettify_macro_expansion;
 mod to_parser_input;
@@ -318,7 +318,7 @@ where
                         k if k.is_literal() => {
                             let text = token.to_text(conv);
                             let span = conv.span_for(abs_range);
-                            token_to_literal(&text, span).into()
+                            tt::literal_from_str_or_err(&text, span).into()
                         }
                         LIFETIME_IDENT => {
                             let apostrophe = tt::Leaf::from(tt::Punct {

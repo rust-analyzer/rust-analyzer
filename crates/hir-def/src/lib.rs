@@ -9,11 +9,9 @@
 
 #![cfg_attr(feature = "in-rust-tree", feature(rustc_private))]
 
-#[cfg(feature = "in-rust-tree")]
-extern crate rustc_parse_format;
-
-#[cfg(not(feature = "in-rust-tree"))]
-extern crate ra_ap_rustc_parse_format as rustc_parse_format;
+stdx::rustc_crates! {
+    extern crate rustc_parse_format or ra_ap_rustc_parse_format;
+}
 
 pub extern crate ra_ap_rustc_abi as layout;
 pub extern crate ra_ap_rustc_abi as rustc_abi;

@@ -10,7 +10,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
     ProcMacroKind,
-    legacy_protocol::msg::{FlatTree, Message, PanicMessage, ServerConfig},
+    flat::FlatTree,
+    legacy_protocol::msg::{Message, PanicMessage, ServerConfig},
     transport::postcard,
 };
 

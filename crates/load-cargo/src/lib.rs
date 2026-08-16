@@ -24,8 +24,8 @@ use ide_db::{
 };
 use itertools::Itertools;
 use proc_macro_api::{
-    MacroDylib, ProcMacroClient,
     bidirectional_protocol::msg::{ParentSpan, SubRequest, SubResponse},
+    client::{MacroDylib, ProcMacroClient},
 };
 use project_model::{CargoConfig, PackageRoot, ProjectManifest, ProjectWorkspace};
 use span::{Span, SpanAnchor, SyntaxContext};
@@ -558,7 +558,7 @@ fn load_crate_graph_into_db(
 }
 
 fn expander_to_proc_macro(
-    expander: proc_macro_api::ProcMacro,
+    expander: proc_macro_api::client::ProcMacro,
     ignored_macros: &[Box<str>],
 ) -> ProcMacro {
     let name = expander.name();
@@ -577,7 +577,7 @@ fn expander_to_proc_macro(
 }
 
 #[derive(Debug, PartialEq, Eq)]
-struct Expander(proc_macro_api::ProcMacro);
+struct Expander(proc_macro_api::client::ProcMacro);
 
 impl ProcMacroExpander for Expander {
     fn expand(

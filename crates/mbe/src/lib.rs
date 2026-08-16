@@ -8,10 +8,9 @@
 
 #![cfg_attr(feature = "in-rust-tree", feature(rustc_private))]
 
-#[cfg(not(feature = "in-rust-tree"))]
-extern crate ra_ap_rustc_lexer as rustc_lexer;
-#[cfg(feature = "in-rust-tree")]
-extern crate rustc_lexer;
+stdx::rustc_crates! {
+    extern crate rustc_lexer or ra_ap_rustc_lexer;
+}
 
 mod expander;
 mod macro_call_style;

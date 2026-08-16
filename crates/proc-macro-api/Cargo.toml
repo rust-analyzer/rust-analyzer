@@ -22,20 +22,36 @@ indexmap.workspace = true
 
 # local deps
 paths = { workspace = true, features = ["serde1"] }
-tt.workspace = true
+tt = { path = "../tt", version = "0.0.0", default-features = false }
 stdx.workspace = true
-proc-macro-srv = {workspace = true, optional = true}
 # span = {workspace = true, default-features = false} does not work
-span = { path = "../span", version = "0.0.0", default-features = false}
+span = { path = "../span", version = "0.0.0", default-features = false }
+
+ra-ap-rustc_lexer.workspace = true
 
 intern.workspace = true
 postcard.workspace = true
 semver.workspace = true
 rayon.workspace = true
 
+[dev-dependencies]
+# Enable both features for test.
+proc-macro-api = { path = "../proc-macro-api", features = [
+    "in-ra",
+    "in-proc-macro-srv",
+] }
+
 [features]
-in-rust-tree = ["proc-macro-srv", "proc-macro-srv/in-rust-tree"]
-default = []
+default = ["in-ra"]
+in-rust-tree = ["tt/in-rust-tree"]
+in-ra = ["tt/in-ra"]
+in-proc-macro-srv = []
 
 [lints]
 workspace = true
+
+[package.metadata.rust-analyzer]
+rustc_private = true
+
+[package.metadata.cargo-machete]
+ignored = ["ra-ap-rustc_lexer"]

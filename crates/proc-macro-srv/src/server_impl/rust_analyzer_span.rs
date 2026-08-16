@@ -9,12 +9,27 @@ use std::ops::{Bound, Range};
 use intern::Symbol;
 use rustc_proc_macro::bridge::server;
 use span::{ErasedFileAstId, Span, TextRange, TextSize};
+use tt::literal_from_str;
 
 use crate::{
     ProcMacroClientHandle, TrackedEnv,
-    bridge::{Diagnostic, ExpnGlobals, Literal, TokenTree},
-    server_impl::literal_from_str,
+    server_impl::bridge::{literal_into_bridge, token_tree_from_bridge, token_tree_into_bridge},
 };
+
+mod ours {
+    use span::Span;
+
+    pub(super) type TokenStream = crate::server_impl::bridge::ours::TokenStream<Span>;
+}
+
+mod bridge {
+    use span::Span;
+
+    pub(super) use crate::server_impl::bridge::bridge::*;
+
+    pub(super) type TokenTree = crate::server_impl::bridge::bridge::TokenTree<Span>;
+    pub(super) type Literal = crate::server_impl::bridge::bridge::Literal<Span>;
+}
 
 pub struct RaSpanServer<'a> {
     pub tracked_env: &'a mut TrackedEnv,
@@ -26,12 +41,12 @@ pub struct RaSpanServer<'a> {
 }
 
 impl server::Server for RaSpanServer<'_> {
-    type TokenStream = crate::token_stream::TokenStream<Span>;
+    type TokenStream = ours::TokenStream;
     type Span = Span;
     type Symbol = Symbol;
 
-    fn globals(&mut self) -> ExpnGlobals<Self::Span> {
-        ExpnGlobals {
+    fn globals(&mut self) -> bridge::ExpnGlobals<Self::Span> {
+        bridge::ExpnGlobals {
             def_site: self.def_site,
             call_site: self.call_site,
             mixed_site: self.mixed_site,
@@ -53,12 +68,13 @@ impl server::Server for RaSpanServer<'_> {
         self.tracked_env.paths.insert(path.into());
     }
 
-    fn literal_from_str(&mut self, s: &str) -> Result<Literal<Self::Span>, String> {
+    fn literal_from_str(&mut self, s: &str) -> Result<bridge::Literal, String> {
         literal_from_str(s, self.call_site)
-            .map_err(|()| "cannot parse string into literal".to_string())
+            .map(literal_into_bridge)
+            .map_err(|()| "cannot parse string into literal".to_owned())
     }
 
-    fn emit_diagnostic(&mut self, _: Diagnostic<Self::Span>) {
+    fn emit_diagnostic(&mut self, _: bridge::Diagnostic<Self::Span>) {
         // FIXME handle diagnostic
     }
 
@@ -81,8 +97,8 @@ impl server::Server for RaSpanServer<'_> {
         stream.to_string()
     }
 
-    fn ts_from_token_tree(&mut self, tree: TokenTree<Self::Span>) -> Self::TokenStream {
-        Self::TokenStream::new(vec![tree])
+    fn ts_from_token_tree(&mut self, tree: bridge::TokenTree) -> Self::TokenStream {
+        ours::TokenStream::new(vec![token_tree_from_bridge(tree)])
     }
 
     fn ts_expand_expr(&mut self, self_: &Self::TokenStream) -> Result<Self::TokenStream, ()> {
@@ -96,17 +112,16 @@ impl server::Server for RaSpanServer<'_> {
 
     fn ts_concat_trees(
         &mut self,
-        base: Option<Self::TokenStream>,
-        trees: Vec<TokenTree<Self::Span>>,
+        base: Option<ours::TokenStream>,
+        trees: Vec<bridge::TokenTree>,
     ) -> Self::TokenStream {
+        let trees = trees.into_iter().map(token_tree_from_bridge);
         match base {
             Some(mut base) => {
-                for tt in trees {
-                    base.push_tree(tt);
-                }
+                base.extend(trees);
                 base
             }
-            None => Self::TokenStream::new(trees),
+            None => trees.collect(),
         }
     }
 
@@ -115,15 +130,14 @@ impl server::Server for RaSpanServer<'_> {
         base: Option<Self::TokenStream>,
         streams: Vec<Self::TokenStream>,
     ) -> Self::TokenStream {
-        let mut stream = base.unwrap_or_default();
-        for s in streams {
-            stream.push_stream(s);
-        }
+        let mut streams = streams.into_iter();
+        let mut stream = base.or_else(|| streams.next()).unwrap_or_default();
+        stream.extend_with_streams(streams);
         stream
     }
 
-    fn ts_into_trees(&mut self, stream: Self::TokenStream) -> Vec<TokenTree<Self::Span>> {
-        (*stream.0).clone()
+    fn ts_into_trees(&mut self, stream: ours::TokenStream) -> Vec<bridge::TokenTree> {
+        stream.iter().cloned().map(token_tree_into_bridge).collect()
     }
 
     fn span_debug(&mut self, span: Self::Span) -> String {

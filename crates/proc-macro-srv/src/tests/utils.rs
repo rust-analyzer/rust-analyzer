@@ -1,6 +1,7 @@
 //! utils used in proc-macro tests
 
 use expect_test::Expect;
+use proc_macro_api::token_stream::TokenStream;
 use span::{
     EditionedFileId, FileId, ROOT_ERASED_FILE_AST_ID, Span, SpanAnchor, SyntaxContext, TextRange,
 };
@@ -8,7 +9,6 @@ use std::ops::Range;
 
 use crate::{
     EnvSnapshot, ProcMacroClientInterface, ProcMacroSrv, SpanId, dylib, proc_macro_test_dylib_path,
-    token_stream::TokenStream,
 };
 
 fn make_ctx() -> SyntaxContext {

@@ -1,6 +1,4 @@
 //! Defines messages for cross-process message passing based on `ndjson` wire protocol
-pub(crate) mod flat;
-pub use self::flat::*;
 
 use std::io::{self, BufRead, Write};
 
@@ -8,7 +6,7 @@ use paths::Utf8PathBuf;
 use serde::de::DeserializeOwned;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::{ProcMacroKind, transport::json};
+use crate::{ProcMacroKind, flat::FlatTree, transport::json};
 
 /// Represents requests sent from the client to the proc-macro-srv.
 #[derive(Debug, Serialize, Deserialize)]
@@ -376,7 +374,7 @@ mod tests {
 
                 assert_eq!(
                     tt,
-                    back.data.macro_body.to_subtree_resolved(v, &span_data_table),
+                    back.data.macro_body.to_subtree(v, &span_data_table),
                     "version: {v}"
                 );
             }
@@ -384,7 +382,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "in-rust-tree")]
     fn test_proc_macro_rpc_works_ts() {
         for tt in [
             fixture_token_tree_top_many_none,
@@ -395,18 +392,19 @@ mod tests {
             for v in version::RUST_ANALYZER_SPAN_SUPPORT..=version::CURRENT_API_VERSION {
                 let mut span_data_table = Default::default();
                 let flat_tree = FlatTree::from_subtree(tt.view(), v, &mut span_data_table);
-                assert_eq!(
-                    tt,
-                    flat_tree.clone().to_subtree_resolved(v, &span_data_table),
-                    "version: {v}"
-                );
-                let ts = flat_tree.to_tokenstream_resolved(v, &span_data_table, |a, b| a.cover(b));
+                assert_eq!(tt, flat_tree.clone().to_subtree(v, &span_data_table), "version: {v}");
+                let ts = flat_tree.to_tokenstream::<Span>(v, &span_data_table);
                 let call_site = *span_data_table.first().unwrap();
                 let mut span_data_table = Default::default();
                 assert_eq!(
                     tt,
-                    FlatTree::from_tokenstream(ts.clone(), v, call_site, &mut span_data_table)
-                        .to_subtree_resolved(v, &span_data_table),
+                    FlatTree::from_tokenstream::<Span>(
+                        ts.clone(),
+                        call_site,
+                        v,
+                        &mut span_data_table
+                    )
+                    .to_subtree(v, &span_data_table),
                     "version: {v}, ts:\n{ts:#?}"
                 );
             }

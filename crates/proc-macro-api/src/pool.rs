@@ -3,7 +3,10 @@ use std::sync::Arc;
 
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
-use crate::{MacroDylib, ProcMacro, ServerError, process::ProcMacroServerProcess};
+use crate::{
+    client::{MacroDylib, ProcMacro, ServerError},
+    process::ProcMacroServerProcess,
+};
 
 #[derive(Debug, Clone)]
 pub(crate) struct ProcMacroServerPool {
