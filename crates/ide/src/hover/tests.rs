@@ -10465,6 +10465,60 @@ fn f<T: UnCompat$0>
 }
 
 #[test]
+fn rpit_keyword() {
+    check(
+        r#"
+//- minicore: send, unpin
+//- /main.rs crate:main deps:std
+trait Trait {}
+impl Trait for T {}
+fn foo() -> $0impl Trait {
+    &raw const ()
+}
+//- /libstd.rs crate:std
+#[doc(keyword = "impl")]
+/// keyword docs
+mod impl_keyword {}
+"#,
+        expect![[r#"
+            *impl*
+            ```rust
+            impl Trait + Unpin
+            impl Trait = *const ()
+            ```
+
+            ---
+
+            ```rust
+            impl
+            ```
+
+            ---
+
+            keyword docs
+        "#]],
+    );
+
+    check(
+        r#"
+//- minicore: send, unpin
+trait Trait {}
+impl Trait for T {}
+fn foo() -> $0impl Trait {
+    2
+}
+"#,
+        expect![[r#"
+            *impl*
+            ```rust
+            impl Trait + Send + Unpin
+            impl Trait = i32
+            ```
+        "#]],
+    );
+}
+
+#[test]
 fn issue_18613() {
     check(
         r#"

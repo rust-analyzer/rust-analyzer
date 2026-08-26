@@ -297,6 +297,14 @@ impl Crate {
             .flatten()
     }
 
+    pub fn auto_traits_in_deps(self, db: &dyn HirDatabase) -> impl Iterator<Item = &TraitId> {
+        self.id
+            .transitive_deps(db)
+            .into_iter()
+            .filter_map(|krate| hir_def::crate_auto_traits(db, krate))
+            .flatten()
+    }
+
     pub fn root_module(self, db: &dyn HirDatabase) -> Module {
         Module { id: crate_def_map(db, self.id).root_module_id() }
     }

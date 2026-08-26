@@ -414,6 +414,25 @@ pub fn crate_notable_traits(db: &dyn SourceDatabase, krate: Crate) -> Option<Box
     if traits.is_empty() { None } else { Some(traits.into_iter().collect()) }
 }
 
+#[salsa::tracked(returns(as_deref))]
+pub fn crate_auto_traits(db: &dyn SourceDatabase, krate: Crate) -> Option<Box<[TraitId]>> {
+    let mut traits = Vec::new();
+
+    let crate_def_map = crate_def_map(db, krate);
+
+    for (_, module_data) in crate_def_map.modules() {
+        for def in module_data.scope.declarations() {
+            let ModuleDefId::TraitId(trait_) = def else { continue };
+            let sig = crate::signatures::TraitSignature::of(db, trait_);
+            if sig.flags.contains(crate::signatures::TraitFlags::AUTO) {
+                traits.push(trait_);
+            }
+        }
+    }
+
+    if traits.is_empty() { None } else { Some(traits.into_iter().collect()) }
+}
+
 macro_rules! assign_solver {
     ( $self:ident, $def:ident, $lang_item:ident, TraitId, solver ) => {
         $self.assign_solver_trait(SolverTraitLangItem::$lang_item, $def);
