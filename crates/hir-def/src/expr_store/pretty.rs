@@ -374,10 +374,6 @@ fn print_generic_params(
         w!(p, "<");
         let mut first = true;
         for (_i, param) in generic_params.iter_lt() {
-            if param.is_elided() {
-                continue;
-            }
-
             if !first {
                 w!(p, ", ");
             }
@@ -1292,9 +1288,7 @@ impl Printer<'_> {
                     Mutability::Mut => "mut ",
                 };
                 w!(self, "&");
-                if let Some(lt) = &ref_.lifetime
-                    && !self.store[*lt].is_elided(self.db)
-                {
+                if let Some(lt) = &ref_.lifetime {
                     self.print_lifetime_ref(*lt);
                     w!(self, " ");
                 }

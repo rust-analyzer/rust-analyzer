@@ -277,21 +277,17 @@ pub(super) fn lower_path(
         (def, is_trait_assoc_item)
     };
 
-    if collector.lifetime_elision_kind.can_elide() && !is_trait_assoc_item {
-        let args_in_source = generic_args.last().and_then(|g| g.as_ref());
+    if collector.lifetime_elision_kind.can_elide() && !is_trait_assoc_item && segments_len != 0 {
+        // `segments_len == 0` can happen with some erroneous paths, e.g. `<ty>`.
+        let had_last_segment_args = generic_args.len() == segments_len;
+        let args_in_source =
+            if had_last_segment_args { generic_args.pop().flatten() } else { None };
         let merged_args_with_elided =
             collector.collect_path_elided_lifetimes(resolved_module_def_id, args_in_source);
-        match &merged_args_with_elided {
-            // there are elided args
-            Some(_) => {
-                if args_in_source.is_none() {
-                    generic_args.resize(segments_len, None);
-                }
-                if let Some(args) = generic_args.last_mut() {
-                    *args = merged_args_with_elided
-                }
-            }
-            _ => {} // there are no elided args
+        if merged_args_with_elided.is_some() || had_last_segment_args {
+            generic_args.resize_with(segments_len - 1, || None);
+            generic_args.push(merged_args_with_elided);
+            debug_assert_eq!(segments_len, generic_args.len());
         }
     }
 

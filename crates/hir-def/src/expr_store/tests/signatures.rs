@@ -109,7 +109,7 @@ const async unsafe extern "C" fn a() {}
 fn ret_impl_trait() -> impl Trait {}
 "#,
         expect![[r#"
-            fn foo<'a, const C: usize = 314235, T = B>(&Struct, (), u32) -> &'a dyn Fn::<(), Output = i32>
+            fn foo<'a, '_, const C: usize = 314235, T = B>(&'_ Struct, (), u32) -> &'a dyn Fn::<(), Output = i32>
             where
                 T: Trait::<Item = A>,
                 (): Default
@@ -169,7 +169,7 @@ fn allowed3(baz: impl Baz<Assoc = Qux<impl Foo>>) {}
              {...}
             fn not_allowed2<Param[0]>(Param[0])
             where
-                Param[0]: for<'_> Fn::<(&{error}), Output = ()>
+                Param[0]: for<'_> Fn::<(&'_ {error}), Output = ()>
              {...}
             fn not_allowed3<Param[0]>(Param[0])
             where
@@ -207,7 +207,7 @@ type Alias<'a, 'b, T> = &'b T;
 fn f<T>(_: Alias<T>) {}
 "#,
         expect![[r#"
-            fn f<T>(Alias::<'_, '_, T>) {...}
+            fn f<'_, '_, T>(Alias::<'_, '_, T>) {...}
         "#]],
     );
 }
@@ -264,14 +264,14 @@ fn foo(value: &str, v2: &str) -> &str {}
             ;
             fn with_self<'a, 'b>(&'a Self, &'b str) -> &'a str {...}
             fn with_self<'b>(&'static Self, &'b str) -> &'static str {...}
-            fn with_self<>(&Self, &str) -> &str {...}
-            fn with_self_error<>(&Box::<&Self>) -> &'{error} str {...}
+            fn with_self<'_, '_>(&'_ Self, &'_ str) -> &'_ str {...}
+            fn with_self_error<'_, '_>(&'_ Box::<&'_ Self>) -> &'{error} str {...}
             fn foo<'a>(&'a str) -> &'a str {...}
             fn foo(&'static str) -> &'static str {...}
-            fn foo<>(&str) -> &str {...}
+            fn foo<'_>(&'_ str) -> &'_ str {...}
             fn foo<'a, 'b>(&'a str, &'b str) -> &'{error} str {...}
             fn foo(&'static str, &'static str) -> &'{error} str {...}
-            fn foo<>(&str, &str) -> &'{error} str {...}
+            fn foo<'_, '_>(&'_ str, &'_ str) -> &'{error} str {...}
         "#]],
     );
 }

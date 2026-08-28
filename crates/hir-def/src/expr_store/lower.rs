@@ -4058,7 +4058,7 @@ impl<'db, 'a> ExprCollector<'db, 'a> {
     pub(crate) fn collect_path_elided_lifetimes(
         &mut self,
         module_def_id: Option<ModuleDefId>,
-        args: Option<&GenericArgs>,
+        args: Option<GenericArgs>,
     ) -> Option<GenericArgs> {
         let num_lifetime_args = args
             .as_ref()
@@ -4083,13 +4083,8 @@ impl<'db, 'a> ExprCollector<'db, 'a> {
         }
         if !elided_args.is_empty() {
             if let Some(prev_generic_args) = args {
-                elided_args.extend_from_slice(prev_generic_args.args.as_ref());
-                Some(GenericArgs {
-                    args: elided_args.into_boxed_slice(),
-                    has_self_type: prev_generic_args.has_self_type,
-                    bindings: prev_generic_args.bindings.clone(),
-                    parenthesized: prev_generic_args.parenthesized,
-                })
+                elided_args.extend(prev_generic_args.args);
+                Some(GenericArgs { args: elided_args.into_boxed_slice(), ..prev_generic_args })
             } else {
                 Some(GenericArgs {
                     args: elided_args.into_boxed_slice(),
@@ -4099,7 +4094,7 @@ impl<'db, 'a> ExprCollector<'db, 'a> {
                 })
             }
         } else {
-            None
+            args
         }
     }
 }

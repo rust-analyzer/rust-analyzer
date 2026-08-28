@@ -188,11 +188,7 @@ fn signature_help_for_call(
             let generic_params = GenericDef::Function(func)
                 .params(db)
                 .iter()
-                .filter(|param| match param {
-                    GenericParam::TypeParam(type_param) => !type_param.is_implicit(db),
-                    GenericParam::LifetimeParam(lt_param) => !lt_param.is_elided(db),
-                    GenericParam::ConstParam(_) => true,
-                })
+                .filter(|param| !should_skip_generic_param_for_display(db, param))
                 .map(|param| param.display(db, display_target))
                 .join(", ");
             if !generic_params.is_empty() {
@@ -373,9 +369,7 @@ fn signature_help_for_generics(
     res.signature.push('<');
     let mut buf = String::new();
     for param in params {
-        if let hir::GenericParam::TypeParam(ty) = param
-            && ty.is_implicit(db)
-        {
+        if should_skip_generic_param_for_display(db, &param) {
             continue;
         }
 
@@ -402,6 +396,14 @@ fn signature_help_for_generics(
     res.signature.push('>');
 
     Some(res)
+}
+
+fn should_skip_generic_param_for_display(db: &RootDatabase, param: &GenericParam) -> bool {
+    match param {
+        GenericParam::TypeParam(type_param) => type_param.is_implicit(db),
+        GenericParam::LifetimeParam(lifetime_param) => lifetime_param.is_elided(db),
+        GenericParam::ConstParam(_) => false,
+    }
 }
 
 fn add_assoc_type_bindings(
@@ -1810,8 +1812,8 @@ fn f() {
 }
         "#,
             expect![[r#"
-                fn f<'_, T>
-                     ^^  -
+                fn f<T>
+                     ^
             "#]],
         );
     }
