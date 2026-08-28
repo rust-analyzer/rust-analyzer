@@ -400,6 +400,9 @@ pub fn crate_notable_traits(db: &dyn SourceDatabase, krate: Crate) -> Option<Box
     let mut traits = Vec::new();
 
     let crate_def_map = crate_def_map(db, krate);
+    if !crate_def_map.features().doc_notable_trait {
+        return None;
+    }
 
     for (_, module_data) in crate_def_map.modules() {
         for def in module_data.scope.declarations() {
@@ -419,6 +422,9 @@ pub fn crate_auto_traits(db: &dyn SourceDatabase, krate: Crate) -> Option<Box<[T
     let mut traits = Vec::new();
 
     let crate_def_map = crate_def_map(db, krate);
+    if !crate_def_map.features().auto_traits {
+        return None;
+    }
 
     for (_, module_data) in crate_def_map.modules() {
         for def in module_data.scope.declarations() {
