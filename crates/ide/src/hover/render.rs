@@ -275,10 +275,16 @@ pub(super) fn rpit(
 
     let db = sema.db;
 
-    let impl_type = ast::Type::from(token.parent().and_then(ast::ImplTraitType::cast)?);
+    let impl_type = token.parent().and_then(ast::ImplTraitType::cast)?;
     // FIXME: supports nested rpit, like `Option<impl Trait>` #23237
     let ret_type = impl_type.syntax().parent().and_then(ast::RetType::cast)?;
     let func = ret_type.syntax().parent().and_then(ast::Fn::cast)?;
+    // XXX: Should be resolve type and iteratively the bound list, not a string
+    let exists = impl_type
+        .type_bound_list()?
+        .bounds()
+        .filter_map(|it| Some(it.ty()?.to_string()))
+        .collect_vec();
 
     let mut res = impl_type.to_string();
 
@@ -290,7 +296,8 @@ pub(super) fn rpit(
         .krate()
         .auto_traits_in_deps(db)
         .map(|trait_| Trait::from(*trait_))
-        .filter(|trait_| trait_.is_auto(db) && ty.impls_trait(db, *trait_, &[]));
+        .filter(|trait_| trait_.is_auto(db) && ty.impls_trait(db, *trait_, &[]))
+        .filter(|trait_| !exists.iter().any(|it| it == trait_.name(db).as_str()));
     for trait_ in auto_traits {
         format_to!(res, " + {}", trait_.name(db).display(db, edition));
     }
