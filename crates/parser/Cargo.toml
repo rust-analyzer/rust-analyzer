@@ -22,6 +22,7 @@ edition.workspace = true
 
 [dev-dependencies]
 expect-test = "1.5.1"
+proptest = "1.5"
 
 stdx.workspace = true
 

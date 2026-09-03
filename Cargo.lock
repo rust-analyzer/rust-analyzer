@@ -1765,6 +1765,7 @@ dependencies = [
  "drop_bomb",
  "edition",
  "expect-test 1.5.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "proptest",
  "ra-ap-rustc_lexer",
  "rustc-literal-escaper",
  "stdx",

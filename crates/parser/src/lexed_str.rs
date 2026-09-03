@@ -45,7 +45,7 @@ impl<'a> LexedStr<'a> {
         }
 
         let mut was_frontmatter = false;
-        // Try to parse only first frontmatter skipping whitespaces
+        // Try to parse only first frontmatter, skipping whitespaces
         while let Some(token) =
             tokenize_at(conv.offset, rustc_lexer::FrontmatterAllowed::Yes).next()
         {
@@ -64,7 +64,7 @@ impl<'a> LexedStr<'a> {
                         token_text,
                     );
 
-                    // Peek next token after the frontmatter to check if this is eof
+                    // Peek the next token after the frontmatter to check if this is eof
                     let is_next_eof = tokenize_at(
                         conv.offset + token.len as usize,
                         rustc_lexer::FrontmatterAllowed::Yes,
@@ -73,7 +73,7 @@ impl<'a> LexedStr<'a> {
                     .is_none();
 
                     // Push only a normally closed frontmatter or unclosed frontmatter containing tokens after it,
-                    // to prevent eating the whole file due to typo in frontmatter dashes.
+                    // to prevent eating the whole file due to a missing dash.
                     if !is_unclosed || !is_next_eof {
                         conv.push(FRONTMATTER, token.len as usize, errs);
                         was_frontmatter = true;
@@ -176,7 +176,7 @@ impl<'a> LexedStr<'a> {
         self.start.push(offset as u32);
     }
 
-    // Implements similar checks from the rustc validate_frontmatter fn
+    // Implements similar checks from the rustc_lexer validate_frontmatter fn
     fn validate_frontmatter(
         has_invalid_preceding_whitespace: bool,
         invalid_infostring: bool,
@@ -187,7 +187,7 @@ impl<'a> LexedStr<'a> {
         let mut is_unclosed = false;
         let mut errs = Vec::new();
 
-        // rustc_lexer::tokenize may leave '\r' suffix for windows soource (with crlf).
+        // rustc_lexer::tokenize may add '\r' suffix for windows sources (with newlines as CRLF).
         // We strip it here:
         let text = text.strip_suffix('\r').unwrap_or(text);
 
@@ -596,6 +596,10 @@ fn err_to_msg(error: EscapeError, mode: Mode) -> String {
 #[cfg(test)]
 mod tests {
     use super::LexedStr;
+    use proptest::collection::vec;
+    use proptest::prelude::{Just, any, proptest};
+    use proptest::prop_oneof;
+    use proptest::strategy::Strategy;
 
     #[test]
     fn validate_frontmatter_test() {
@@ -652,5 +656,41 @@ mod tests {
             vec!["extra characters after frontmatter close are not allowed".to_owned()]
         );
         assert!(!is_unclosed);
+    }
+
+    fn frontmatter_gen_strategy() -> impl Strategy<Value = &'static str> {
+        prop_oneof![
+            Just(""),
+            Just("fn main(){}"),
+            Just("[dependencies]"),
+            Just("a=1"),
+            Just("x"),
+            Just("1"),
+            Just("&"),
+            Just("<"),
+            Just(">"),
+            Just("{"),
+            Just("}"),
+            Just("\u{0301}"),
+            Just(" "),
+            Just("\t"),
+            Just("\n"),
+            Just("\r\n"),
+            Just("-"),
+            Just("--"),
+            Just("---"),
+            Just("----"),
+            Just("-----"),
+        ]
+    }
+
+    proptest! {
+        // Frontmatter validator panic test.
+        #[test]
+        fn validate_frontmatter_boundaries(text in vec(frontmatter_gen_strategy(), 0..100)
+            .prop_map(|s| s.into_iter().collect::<String>()),
+            bool1 in any::<bool>(), bool2 in any::<bool>()) {
+            let (_, _) = LexedStr::validate_frontmatter(bool1, bool2, text.as_str());
+        }
     }
 }
