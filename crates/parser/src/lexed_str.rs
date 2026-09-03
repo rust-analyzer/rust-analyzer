@@ -325,16 +325,8 @@ impl<'a> Converter<'a> {
                     Self::comment_kind(*doc_style)
                 }
 
-                rustc_lexer::TokenKind::Frontmatter {
-                    has_invalid_preceding_whitespace,
-                    invalid_infostring,
-                } => {
-                    if *has_invalid_preceding_whitespace {
-                        errors.push("invalid preceding whitespace for frontmatter opening".into());
-                    } else if *invalid_infostring {
-                        errors.push("invalid infostring for frontmatter".into());
-                    }
-                    FRONTMATTER
+                rustc_lexer::TokenKind::Frontmatter { .. } => {
+                    return; // frontmatter is processed outside this function
                 }
 
                 rustc_lexer::TokenKind::Whitespace => WHITESPACE,
