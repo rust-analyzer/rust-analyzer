@@ -42,6 +42,7 @@ fn lex_err() {
     }
 }
 
+// Test how validate_frontmatter() fixes dangling '\r' and 'invalid_infostring' flag in the Frontmatter token returned by rustc_lexer::tokenize
 #[test]
 fn lex_frontmatter_crlf() {
     expect![[r#"
