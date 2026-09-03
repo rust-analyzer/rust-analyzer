@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use expect_test::expect_file;
+use expect_test::{expect, expect_file};
 
 use crate::{Edition, LexedStr, TopEntryPoint};
 
@@ -40,6 +40,24 @@ fn lex_err() {
         let actual = lex(&case.text, infer_edition(&case.rs));
         expect_file![case.rast].assert_eq(&actual)
     }
+}
+
+#[test]
+fn lex_frontmatter_crlf() {
+    expect![[r#"
+        FRONTMATTER "---\r\n[dependencies]\r\n---\r"
+        WHITESPACE "\n\r\n"
+        FN_KW "fn"
+        WHITESPACE " "
+        IDENT "main"
+        L_PAREN "("
+        R_PAREN ")"
+        WHITESPACE " "
+        L_CURLY "{"
+        R_CURLY "}"
+        WHITESPACE "\r\n"
+    "#]]
+    .assert_eq(&lex("---\r\n[dependencies]\r\n---\r\n\r\nfn main() {}\r\n", Edition::CURRENT));
 }
 
 fn lex(text: &str, edition: Edition) -> String {

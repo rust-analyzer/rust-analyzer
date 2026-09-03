@@ -1,5 +1,6 @@
-FRONTMATTER "\n---\n[dependencies]\nclap = \"4\"\n---\n"
 WHITESPACE "\n"
+FRONTMATTER "---\n[dependencies]\nclap = \"4\"\n---"
+WHITESPACE "\n\n"
 FN_KW "fn"
 WHITESPACE " "
 IDENT "main"

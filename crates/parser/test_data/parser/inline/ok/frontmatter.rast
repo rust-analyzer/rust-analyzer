@@ -1,7 +1,8 @@
 SOURCE_FILE
-  SHEBANG "#!/usr/bin/env cargo\n"
-  FRONTMATTER "\n---\n[dependencies]\nclap = { version = \"4.2\", features = [\"derive\"] }\n---\n"
-  WHITESPACE "\n"
+  SHEBANG "#!/usr/bin/env cargo"
+  WHITESPACE "\n\n"
+  FRONTMATTER "---\n[dependencies]\nclap = { version = \"4.2\", features = [\"derive\"] }\n---"
+  WHITESPACE "\n\n"
   FN
     FN_KW "fn"
     WHITESPACE " "
