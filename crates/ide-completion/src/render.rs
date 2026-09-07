@@ -3597,13 +3597,13 @@ fn needs(info: &mut u32) {}
             expect![[r#"
                 fd self.info u32 [name]
                 fd &mut self.info [type+name]
-                me self.info() fn(&'_ self) -> u32 [name]
+                me self.info() fn(&self) -> u32 [name]
                 me &mut self.info() [type+name]
                 lc self &S [local]
                 st S S []
                 sp Self S []
                 fn needs(…) fn(&mut u32) []
-                me self.foo() fn(&'_ self) []
+                me self.foo() fn(&self) []
             "#]],
         );
         // Regression test https://github.com/rust-lang/rust-analyzer/issues/22324

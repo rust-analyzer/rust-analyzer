@@ -89,7 +89,8 @@ pub(super) fn lower_body(
     let mut self_param = None;
     let mut source_map_self_param = None;
     let mut params = vec![];
-    let mut collector = ExprCollector::new(db, module, current_file_id, LoweringMode::Analysis);
+    let mut collector = ExprCollector::new(db, module, current_file_id, LoweringMode::Analysis)
+        .elide_infer_lifetime();
 
     let skip_body = AttrFlags::query(
         db,
@@ -713,6 +714,7 @@ pub enum LifetimeElisionKind {
         return_lt: ReturnLifetimeElision,
     },
     Lifetime(LifetimeRef),
+    Infer,
     Static,
     Error,
 }
@@ -732,6 +734,7 @@ impl LifetimeElisionKind {
             LifetimeElisionKind::NewGenericLifetime { return_lt, .. }
             | LifetimeElisionKind::NewHrtbLifetime { return_lt, .. } => Some(return_lt),
             LifetimeElisionKind::Lifetime(_)
+            | LifetimeElisionKind::Infer
             | LifetimeElisionKind::Static
             | LifetimeElisionKind::Error => None,
         }
@@ -795,6 +798,11 @@ impl<'db, 'a> ExprCollector<'db, 'a> {
 
     fn elide_static_lifetime(mut self) -> Self {
         self.lifetime_elision_kind = LifetimeElisionKind::Static;
+        self
+    }
+
+    fn elide_infer_lifetime(mut self) -> Self {
+        self.lifetime_elision_kind = LifetimeElisionKind::Infer;
         self
     }
 
@@ -1230,6 +1238,7 @@ impl<'db, 'a> ExprCollector<'db, 'a> {
                 LifetimeRef::HrtbParam(param_id)
             }
             LifetimeElisionKind::Lifetime(lifetime_ref) => lifetime_ref.clone(),
+            LifetimeElisionKind::Infer => LifetimeRef::Placeholder,
             LifetimeElisionKind::Static => LifetimeRef::Static,
             LifetimeElisionKind::Error => LifetimeRef::Error,
         };
