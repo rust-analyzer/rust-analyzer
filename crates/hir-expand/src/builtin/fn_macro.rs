@@ -32,7 +32,7 @@ macro_rules! register_builtin {
         }
 
         impl $EXPANDER {
-            fn expander(&self) -> fn (&dyn SourceDatabase, MacroCallId, &tt::TopSubtree, Span) -> ExpandResult<tt::TopSubtree>  {
+            fn expander(&self) -> fn(&dyn SourceDatabase, MacroCallId, &tt::TopSubtree, Span) -> ExpandResult<tt::TopSubtree>  {
                 match *self {
                     $( Self::$kind => $expand, )*
                 }

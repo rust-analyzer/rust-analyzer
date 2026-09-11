@@ -6418,16 +6418,18 @@ impl_has_name!(
     DeriveHelper,
     ToolModule,
     Label,
+    Local<'_>,
     GenericParam,
     TypeParam,
     LifetimeParam,
     ConstParam,
     TypeOrConstParam,
     InlineAsmOperand,
+    Param<'_>,
 );
 
 macro_rules! impl_has_name_no_db {
-    ( $( $ty:ident ),* $(,)? ) => {
+    ( $( $ty:ty ),* $(,)? ) => {
         $(
             impl HasName for $ty {
                 fn name(&self, _db: &dyn HirDatabase) -> Option<Name> {
@@ -6438,25 +6440,7 @@ macro_rules! impl_has_name_no_db {
     };
 }
 
-impl_has_name_no_db!(StaticLifetime, BuiltinType, BuiltinAttr);
-
-impl HasName for Local<'_> {
-    fn name(&self, db: &dyn HirDatabase) -> Option<Name> {
-        (*self).name(db).into()
-    }
-}
-
-impl HasName for TupleField<'_> {
-    fn name(&self, _db: &dyn HirDatabase) -> Option<Name> {
-        (*self).name().into()
-    }
-}
-
-impl HasName for Param<'_> {
-    fn name(&self, db: &dyn HirDatabase) -> Option<Name> {
-        self.name(db)
-    }
-}
+impl_has_name_no_db!(StaticLifetime, BuiltinType, BuiltinAttr, TupleField<'_>);
 
 fn container_id_to_hir(c: ItemContainerId) -> ItemContainer<'static> {
     match c {
