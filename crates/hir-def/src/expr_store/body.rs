@@ -4,6 +4,7 @@ use std::ops;
 
 use base_db::SourceDatabase;
 use hir_expand::{InFile, Lookup};
+use salsa::SalsaValue;
 use span::Edition;
 use syntax::{SyntaxNodePtr, ast};
 use triomphe::Arc;
@@ -17,7 +18,7 @@ use crate::{
     src::HasSource,
 };
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, SalsaValue)]
 pub struct Param<Id> {
     /// The id of the formal parameter. In analysis, you want to use this: it has a special status as a parameter,
     /// while [`user_written`][Self::user_written] is just a local variable.
@@ -36,21 +37,21 @@ impl<Id: Copy> Param<Id> {
 }
 
 /// The body of an item (function, const etc.).
-#[derive(Debug, Eq, PartialEq)]
-pub struct Body {
-    pub store: ExpressionStore,
+#[derive(Debug, Eq, PartialEq, SalsaValue)]
+pub struct Body<'db> {
+    pub store: ExpressionStore<'db>,
     /// The patterns for the function's parameters. While the parameter types are
     /// part of the function signature, the patterns are not (they don't change
     /// the external type of the function).
     ///
     /// If this `Body` is for the body of a constant, this will just be
     /// empty.
-    pub params: Box<[Param<PatId>]>,
+    pub params: Box<[Param<PatId<'db>>]>,
     pub self_param: Option<Param<BindingId>>,
 }
 
-impl ops::Deref for Body {
-    type Target = ExpressionStore;
+impl<'db> ops::Deref for Body<'db> {
+    type Target = ExpressionStore<'db>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -69,14 +70,14 @@ impl ops::Deref for Body {
 /// both the HirFileId and the position inside the file. However, we only store
 /// AST -> ExprId mapping for non-macro files, as it is not clear how to handle
 /// this properly for macros.
-#[derive(Default, Debug, Eq, PartialEq)]
-pub struct BodySourceMap {
+#[derive(Default, Debug, Eq, PartialEq, SalsaValue)]
+pub struct BodySourceMap<'db> {
     pub self_param: Option<InFile<SelfParamPtr>>,
-    pub store: ExpressionStoreSourceMap,
+    pub store: ExpressionStoreSourceMap<'db>,
 }
 
-impl ops::Deref for BodySourceMap {
-    type Target = ExpressionStoreSourceMap;
+impl<'db> ops::Deref for BodySourceMap<'db> {
+    type Target = ExpressionStoreSourceMap<'db>;
 
     #[inline]
     fn deref(&self) -> &Self::Target {
@@ -85,12 +86,12 @@ impl ops::Deref for BodySourceMap {
 }
 
 #[salsa::tracked]
-impl Body {
+impl<'db> Body<'db> {
     #[salsa::tracked(lru = 512, returns(ref))]
     pub fn with_source_map(
         db: &dyn SourceDatabase,
         def: DefWithBodyId,
-    ) -> (Arc<Body>, BodySourceMap) {
+    ) -> (Arc<Body<'_>>, BodySourceMap<'_>) {
         let _p = tracing::info_span!("body_with_source_map_query").entered();
         let mut params = None;
 
@@ -135,13 +136,13 @@ impl Body {
     }
 
     #[salsa::tracked(returns(deref))]
-    pub fn of(db: &dyn SourceDatabase, def: DefWithBodyId) -> Arc<Body> {
+    pub fn of(db: &dyn SourceDatabase, def: DefWithBodyId) -> Arc<Body<'_>> {
         Self::with_source_map(db, def).0.clone()
     }
 }
 
-impl Body {
-    pub fn root_expr(&self) -> ExprId {
+impl<'db> Body<'db> {
+    pub fn root_expr(&self) -> ExprId<'db> {
         // A `Body` can also contain root expressions that aren't the body (in the param patterns),
         // but the body always come last.
         self.store.expr_roots().next_back().unwrap()
@@ -157,7 +158,7 @@ impl Body {
 
     pub fn pretty_print(
         &self,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         owner: DefWithBodyId,
         edition: Edition,
     ) -> String {
@@ -166,9 +167,9 @@ impl Body {
 
     pub fn pretty_print_expr(
         &self,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         owner: DefWithBodyId,
-        expr: ExprId,
+        expr: ExprId<'db>,
         edition: Edition,
     ) -> String {
         pretty::print_expr_hir(db, self, owner.into(), expr, edition)
@@ -176,9 +177,9 @@ impl Body {
 
     pub fn pretty_print_pat(
         &self,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         owner: ExpressionStoreOwnerId,
-        pat: PatId,
+        pat: PatId<'db>,
         oneline: bool,
         edition: Edition,
     ) -> String {
@@ -186,7 +187,7 @@ impl Body {
     }
 }
 
-impl BodySourceMap {
+impl<'db> BodySourceMap<'db> {
     pub fn self_param_syntax(&self) -> Option<InFile<SelfParamPtr>> {
         self.self_param
     }

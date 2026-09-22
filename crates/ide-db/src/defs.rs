@@ -33,7 +33,7 @@ use syntax::{
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum Definition<'db> {
     Macro(Macro),
-    Field(Field),
+    Field(Field<'db>),
     TupleField(TupleField<'db>),
     Module(Module),
     Crate(Crate),
@@ -45,7 +45,7 @@ pub enum Definition<'db> {
     Trait(Trait),
     TypeAlias(TypeAlias),
     SelfType(Impl<'db>),
-    GenericParam(GenericParam),
+    GenericParam(GenericParam<'db>),
     Local(Local<'db>),
     Label(Label),
     DeriveHelper(DeriveHelper),
@@ -55,7 +55,7 @@ pub enum Definition<'db> {
     ToolModule(ToolModule),
     ExternCrateDecl(ExternCrateDecl),
     InlineAsmRegOrRegClass(()),
-    InlineAsmOperand(InlineAsmOperand),
+    InlineAsmOperand(InlineAsmOperand<'db>),
 }
 
 impl<'db> Definition<'db> {
@@ -525,7 +525,7 @@ pub enum NameClass<'db> {
     /// a definition into a local scope, and refers to an existing definition.
     PatFieldShorthand {
         local_def: Local<'db>,
-        field_ref: Field,
+        field_ref: Field<'db>,
         adt_subst: GenericSubstitution<'db>,
     },
 }
@@ -725,7 +725,7 @@ pub enum NameRefClass<'db> {
     Definition(Definition<'db>, Option<GenericSubstitution<'db>>),
     FieldShorthand {
         local_ref: Local<'db>,
-        field_ref: Field,
+        field_ref: Field<'db>,
         adt_subst: GenericSubstitution<'db>,
     },
     /// The specific situation where we have an extern crate decl without a rename
@@ -893,7 +893,7 @@ impl<'db> NameRefClass<'db> {
 
 impl_from!(
     impl<'db>
-    Field,
+    Field<'db>,
     TupleField<'db>,
     Module,
     Crate,
@@ -906,11 +906,11 @@ impl_from!(
     TypeAlias,
     BuiltinType,
     Local<'db>,
-    GenericParam,
+    GenericParam<'db>,
     Label,
     Macro,
     ExternCrateDecl,
-    InlineAsmOperand
+    InlineAsmOperand<'db>
     for Definition<'db>
 );
 
@@ -920,8 +920,8 @@ impl<'db> From<Impl<'db>> for Definition<'db> {
     }
 }
 
-impl<'db> From<Either<PathResolution<'db>, InlineAsmOperand>> for Definition<'db> {
-    fn from(value: Either<PathResolution<'db>, InlineAsmOperand>) -> Self {
+impl<'db> From<Either<PathResolution<'db>, InlineAsmOperand<'db>>> for Definition<'db> {
+    fn from(value: Either<PathResolution<'db>, InlineAsmOperand<'db>>) -> Self {
         value.either(Definition::from, Definition::from)
     }
 }

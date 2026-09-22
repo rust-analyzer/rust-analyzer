@@ -351,7 +351,7 @@ pub(crate) fn convert_closure_to_fn(acc: &mut Assists, ctx: &AssistContext<'_, '
 fn compute_closure_type_params(
     make: &SyntaxFactory,
     ctx: &AssistContext<'_, '_>,
-    mentioned_generic_params: FxHashSet<hir::GenericParam>,
+    mentioned_generic_params: FxHashSet<hir::GenericParam<'_>>,
     closure: &ast::ClosureExpr,
 ) -> (Option<ast::GenericParamList>, Option<ast::WhereClause>) {
     if mentioned_generic_params.is_empty() {

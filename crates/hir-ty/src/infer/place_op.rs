@@ -28,7 +28,7 @@ pub(super) enum PlaceOp {
 impl<'db> InferenceContext<'db> {
     pub(super) fn try_overloaded_deref(
         &self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         base_ty: Ty<'db>,
     ) -> Option<InferOk<'db, MethodCallee<'db>>> {
         self.try_overloaded_place_op(expr, base_ty, None, PlaceOp::Deref)
@@ -49,8 +49,8 @@ impl<'db> InferenceContext<'db> {
     /// Type-check `*oprnd_expr` with `oprnd_expr` type-checked already.
     pub(super) fn lookup_derefing(
         &mut self,
-        expr: ExprId,
-        oprnd_expr: ExprId,
+        expr: ExprId<'db>,
+        oprnd_expr: ExprId<'db>,
         oprnd_ty: Ty<'db>,
     ) -> Option<Ty<'db>> {
         if let Some(ty) = oprnd_ty.builtin_deref(true) {
@@ -79,9 +79,9 @@ impl<'db> InferenceContext<'db> {
     /// Type-check `*base_expr[index_expr]` with `base_expr` and `index_expr` type-checked already.
     pub(super) fn lookup_indexing(
         &mut self,
-        expr: ExprId,
-        base_expr: ExprId,
-        index_expr: ExprId,
+        expr: ExprId<'db>,
+        base_expr: ExprId<'db>,
+        index_expr: ExprId<'db>,
         base_ty: Ty<'db>,
         idx_ty: Ty<'db>,
     ) -> Option<(/*index type*/ Ty<'db>, /*element type*/ Ty<'db>)> {
@@ -104,9 +104,9 @@ impl<'db> InferenceContext<'db> {
     /// This loop implements one step in that search; the autoderef loop
     /// is implemented by `lookup_indexing`.
     fn try_index_step(
-        expr: ExprId,
-        base_expr: ExprId,
-        index_expr: ExprId,
+        expr: ExprId<'db>,
+        base_expr: ExprId<'db>,
+        index_expr: ExprId<'db>,
         autoderef: &mut InferenceContextAutoderef<'_, 'db>,
         index_ty: Ty<'db>,
     ) -> Option<(/*index type*/ Ty<'db>, /*element type*/ Ty<'db>)> {
@@ -187,7 +187,7 @@ impl<'db> InferenceContext<'db> {
     /// `convert_place_derefs_to_mutable`.
     pub(super) fn try_overloaded_place_op(
         &self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         base_ty: Ty<'db>,
         opt_rhs_ty: Option<Ty<'db>>,
         op: PlaceOp,
@@ -217,7 +217,7 @@ impl<'db> InferenceContext<'db> {
 
     pub(super) fn try_mutable_overloaded_place_op(
         table: &InferenceTable<'db>,
-        expr: ExprId,
+        expr: ExprId<'db>,
         base_ty: Ty<'db>,
         opt_rhs_ty: Option<Ty<'db>>,
         op: PlaceOp,
@@ -251,9 +251,9 @@ impl<'db> InferenceContext<'db> {
     pub(super) fn convert_place_op_to_mutable(
         &mut self,
         op: PlaceOp,
-        expr: ExprId,
-        base_expr: ExprId,
-        index_expr: Option<ExprId>,
+        expr: ExprId<'db>,
+        base_expr: ExprId<'db>,
+        index_expr: Option<ExprId<'db>>,
     ) {
         debug!("convert_place_op_to_mutable({:?}, {:?}, {:?})", op, expr, base_expr);
         if !self.result.method_resolutions.contains_key(&expr) {

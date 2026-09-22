@@ -28,24 +28,24 @@ use super::InferCtxt;
 
 /// The reason why we incurred this obligation; used for error reporting.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, TypeVisitable, TypeFoldable)]
-pub struct ObligationCause {
+pub struct ObligationCause<'db> {
     #[type_visitable(ignore)]
-    span: Span,
+    span: Span<'db>,
 }
 
-impl ObligationCause {
+impl<'db> ObligationCause<'db> {
     #[inline]
-    pub fn new<S: Into<Span>>(span: S) -> ObligationCause {
+    pub fn new<S: Into<Span<'db>>>(span: S) -> ObligationCause<'db> {
         ObligationCause { span: span.into() }
     }
 
     #[inline]
-    pub fn dummy() -> ObligationCause {
+    pub fn dummy() -> ObligationCause<'static> {
         ObligationCause::new(Span::Dummy)
     }
 
     #[inline]
-    pub(crate) fn span(&self) -> Span {
+    pub(crate) fn span(&self) -> Span<'db> {
         self.span
     }
 }
@@ -61,7 +61,7 @@ pub struct Obligation<'db, T> {
     #[type_foldable(identity)]
     #[type_visitable(ignore)]
     /// The reason we have to prove this thing.
-    pub cause: ObligationCause,
+    pub cause: ObligationCause<'db>,
 
     /// The environment in which we should prove this thing.
     pub param_env: ParamEnv<'db>,
@@ -105,7 +105,7 @@ impl<'db> Elaboratable<DbInterner<'db>> for PredicateObligation<'db> {
     fn child_with_derived_cause(
         &self,
         clause: Clause<'db>,
-        span: Span,
+        span: Span<'db>,
         _parent_trait_pred: PolyTraitPredicate<'db>,
         _index: usize,
     ) -> Self {
@@ -174,7 +174,7 @@ impl<'db> PredicateObligation<'db> {
 impl<'db, O> Obligation<'db, O> {
     pub fn new(
         interner: DbInterner<'db>,
-        cause: ObligationCause,
+        cause: ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         predicate: impl Upcast<DbInterner<'db>, O>,
     ) -> Obligation<'db, O> {
@@ -191,7 +191,7 @@ impl<'db, O> Obligation<'db, O> {
 
     pub fn with_depth(
         interner: DbInterner<'db>,
-        cause: ObligationCause,
+        cause: ObligationCause<'db>,
         recursion_depth: usize,
         param_env: ParamEnv<'db>,
         predicate: impl Upcast<DbInterner<'db>, O>,

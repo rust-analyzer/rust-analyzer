@@ -34,40 +34,40 @@ use crate::{
 // to our resolver and so we cannot have mutable reference, but we really want to have
 // ability to dispatch diagnostics during this work otherwise the code becomes a complete mess.
 #[derive(Debug, Default, Clone)]
-pub(super) struct Diagnostics(RefCell<ThinVec<InferenceDiagnostic>>);
+pub(super) struct Diagnostics<'db>(RefCell<ThinVec<InferenceDiagnostic<'db>>>);
 
-impl Diagnostics {
-    pub(super) fn push(&self, diagnostic: InferenceDiagnostic) {
+impl<'db> Diagnostics<'db> {
+    pub(super) fn push(&self, diagnostic: InferenceDiagnostic<'db>) {
         self.0.borrow_mut().push(diagnostic);
     }
 
-    pub(super) fn extend(&self, diagnostic: &[InferenceDiagnostic]) {
+    pub(super) fn extend(&self, diagnostic: &[InferenceDiagnostic<'db>]) {
         self.0.borrow_mut().extend(diagnostic.iter().cloned());
     }
 
-    fn push_ty_diagnostics(&self, diagnostics: ThinVec<TyLoweringDiagnostic>) {
+    fn push_ty_diagnostics(&self, diagnostics: ThinVec<TyLoweringDiagnostic<'db>>) {
         self.0
             .borrow_mut()
             .extend(diagnostics.into_iter().map(|diag| InferenceDiagnostic::TyDiagnostic { diag }));
     }
 
-    pub(super) fn finish(self) -> ThinVec<InferenceDiagnostic> {
+    pub(super) fn finish(self) -> ThinVec<InferenceDiagnostic<'db>> {
         self.0.into_inner()
     }
 }
 
-pub(crate) struct PathDiagnosticCallbackData<'a> {
+pub(crate) struct PathDiagnosticCallbackData<'a, 'db> {
     node: ExprOrPatIdPacked,
-    diagnostics: &'a Diagnostics,
+    diagnostics: &'a Diagnostics<'db>,
 }
 
 pub(super) struct InferenceTyLoweringVarsCtx<'a, 'db> {
     pub(super) table: &'a mut InferenceTable<'db>,
-    pub(super) type_of_type_placeholder: &'a mut ThinFxHashMap<TypeRefId, StoredTy>,
+    pub(super) type_of_type_placeholder: &'a mut ThinFxHashMap<TypeRefId<'db>, StoredTy>,
 }
 
 impl<'db> TyLoweringInferVarsCtx<'db> for InferenceTyLoweringVarsCtx<'_, 'db> {
-    fn next_ty_var(&mut self, span: Span) -> Ty<'db> {
+    fn next_ty_var(&mut self, span: Span<'db>) -> Ty<'db> {
         let ty = self.table.infer_ctxt.next_ty_var(span);
 
         if let Span::TypeRefId(type_ref) = span {
@@ -76,10 +76,10 @@ impl<'db> TyLoweringInferVarsCtx<'db> for InferenceTyLoweringVarsCtx<'_, 'db> {
 
         ty
     }
-    fn next_const_var(&mut self, span: Span) -> Const<'db> {
+    fn next_const_var(&mut self, span: Span<'db>) -> Const<'db> {
         self.table.infer_ctxt.next_const_var(span)
     }
-    fn next_region_var(&mut self, span: Span) -> Region<'db> {
+    fn next_region_var(&mut self, span: Span<'db>) -> Region<'db> {
         self.table.infer_ctxt.next_region_var(span)
     }
 
@@ -90,7 +90,7 @@ impl<'db> TyLoweringInferVarsCtx<'db> for InferenceTyLoweringVarsCtx<'_, 'db> {
 
 pub(super) struct InferenceTyLoweringContext<'db, 'a> {
     ctx: TyLoweringContext<'db, 'a>,
-    diagnostics: &'a Diagnostics,
+    diagnostics: &'a Diagnostics<'db>,
     defined_anon_consts: &'a RefCell<ThinVec<AnonConstId<'db>>>,
 }
 
@@ -99,8 +99,8 @@ impl<'db, 'a> InferenceTyLoweringContext<'db, 'a> {
     pub(super) fn new(
         db: &'db dyn HirDatabase,
         resolver: &'a Resolver<'db>,
-        store: &'db ExpressionStore,
-        diagnostics: &'a Diagnostics,
+        store: &'db ExpressionStore<'db>,
+        diagnostics: &'a Diagnostics<'db>,
         def: ExpressionStoreOwnerId,
         generic_def: GenericDefId,
         generics: &'a OnceCell<Generics<'db>>,
@@ -130,7 +130,7 @@ impl<'db, 'a> InferenceTyLoweringContext<'db, 'a> {
     #[inline]
     pub(super) fn at_path<'b>(
         &'b mut self,
-        path: &'b Path,
+        path: &'b Path<'db>,
         node: ExprOrPatIdPacked,
     ) -> PathLoweringContext<'b, 'a, 'db> {
         let on_diagnostic = PathDiagnosticCallback {
@@ -147,7 +147,7 @@ impl<'db, 'a> InferenceTyLoweringContext<'db, 'a> {
     #[inline]
     pub(super) fn at_path_forget_diagnostics<'b>(
         &'b mut self,
-        path: &'b Path,
+        path: &'b Path<'db>,
     ) -> PathLoweringContext<'b, 'a, 'db> {
         let on_diagnostic = PathDiagnosticCallback {
             data: Either::Right(PathDiagnosticCallbackData {

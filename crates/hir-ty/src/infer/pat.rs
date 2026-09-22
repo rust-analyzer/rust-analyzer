@@ -209,12 +209,12 @@ struct ResolvedPat<'db> {
     /// The type of the pattern, to be checked against the type of the scrutinee after peeling. This
     /// is also used to avoid peeling the scrutinee's constructors (see the `Cow` example above).
     ty: Ty<'db>,
-    kind: ResolvedPatKind,
+    kind: ResolvedPatKind<'db>,
 }
 
 #[derive(Clone, Copy, Debug)]
-enum ResolvedPatKind {
-    Path { res: ValueNs },
+enum ResolvedPatKind<'db> {
+    Path { res: ValueNs<'db> },
     Struct { variant: VariantId },
     TupleStruct { variant: VariantId },
 }
@@ -287,7 +287,12 @@ impl<'db> InferenceContext<'db> {
     ///
     /// Otherwise, `Some(span)` represents the span of a type expression
     /// which originated the `expected` type.
-    pub(super) fn infer_top_pat(&mut self, pat: PatId, expected: Ty<'db>, pat_origin: PatOrigin) {
+    pub(super) fn infer_top_pat(
+        &mut self,
+        pat: PatId<'db>,
+        expected: Ty<'db>,
+        pat_origin: PatOrigin,
+    ) {
         let pat_info =
             PatInfo { binding_mode: ByRef::No, max_ref_mutbl: MutblCap::Mut, pat_origin };
         self.infer_pat(pat, expected, pat_info);
@@ -299,7 +304,7 @@ impl<'db> InferenceContext<'db> {
     /// Outside of this module, `check_pat_top` should always be used.
     /// Conversely, inside this module, `check_pat_top` should never be used.
     #[instrument(level = "debug", skip(self, pat_info))]
-    fn infer_pat(&mut self, pat_id: PatId, expected: Ty<'db>, pat_info: PatInfo) {
+    fn infer_pat(&mut self, pat_id: PatId<'db>, expected: Ty<'db>, pat_info: PatInfo) {
         // For patterns containing paths, we need the path's resolution to determine whether to
         // implicitly dereference the scrutinee before matching.
         let pat = &self.store[pat_id];
@@ -376,7 +381,7 @@ impl<'db> InferenceContext<'db> {
     // Helper to avoid resolving the same path pattern several times.
     fn infer_pat_inner(
         &mut self,
-        pat: PatId,
+        pat: PatId<'db>,
         opt_path_res: Option<Result<ResolvedPat<'db>, ()>>,
         adjust_mode: AdjustMode,
         expected: Ty<'db>,
@@ -565,7 +570,7 @@ impl<'db> InferenceContext<'db> {
 
     fn check_deref_pattern(
         &mut self,
-        pat: PatId,
+        pat: PatId<'db>,
         opt_path_res: Option<Result<ResolvedPat<'db>, ()>>,
         adjust_mode: AdjustMode,
         expected: Ty<'db>,
@@ -603,8 +608,8 @@ impl<'db> InferenceContext<'db> {
     /// When the pattern contains a path, `opt_path_res` must be `Some(path_res)`.
     fn calc_adjust_mode(
         &mut self,
-        pat_id: PatId,
-        pat: &Pat,
+        pat_id: PatId<'db>,
+        pat: &Pat<'db>,
         opt_path_res: Option<Result<ResolvedPat<'db>, ()>>,
     ) -> AdjustMode {
         match pat {
@@ -740,11 +745,11 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn infer_expr_pat_unadjusted(&mut self, expr: ExprId) -> Ty<'db> {
+    fn infer_expr_pat_unadjusted(&mut self, expr: ExprId<'db>) -> Ty<'db> {
         self.infer_expr_no_expect(expr, ExprIsRead::Yes)
     }
 
-    fn infer_lit_pat(&mut self, expr: ExprId, expected: Ty<'db>) -> Ty<'db> {
+    fn infer_lit_pat(&mut self, expr: ExprId<'db>, expected: Ty<'db>) -> Ty<'db> {
         let literal = match &self.store[expr] {
             Expr::Literal(literal) => literal,
             _ => panic!("expected a literal"),
@@ -814,12 +819,12 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_range_pat(
         &mut self,
-        pat: PatId,
-        lhs_expr: Option<ExprId>,
-        rhs_expr: Option<ExprId>,
+        pat: PatId<'db>,
+        lhs_expr: Option<ExprId<'db>>,
+        rhs_expr: Option<ExprId<'db>>,
         expected: Ty<'db>,
     ) -> Ty<'db> {
-        let mut calc_side = |opt_expr: Option<ExprId>| match opt_expr {
+        let mut calc_side = |opt_expr: Option<ExprId<'db>>| match opt_expr {
             None => None,
             Some(expr) => {
                 let ty = self.infer_expr_pat_unadjusted(expr);
@@ -876,9 +881,9 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_bind_pat(
         &mut self,
-        pat: PatId,
+        pat: PatId<'db>,
         var_id: BindingId,
-        sub: Option<PatId>,
+        sub: Option<PatId<'db>>,
         expected: Ty<'db>,
         pat_info: PatInfo,
     ) -> Ty<'db> {
@@ -958,8 +963,8 @@ impl<'db> InferenceContext<'db> {
     fn check_dereferenceable(
         &mut self,
         expected: Ty<'db>,
-        pat: PatId,
-        inner: PatId,
+        pat: PatId<'db>,
+        inner: PatId<'db>,
     ) -> Result<(), ()> {
         if let Pat::Bind { .. } = self.store[inner]
             && let Some(pointee_ty) = self.shallow_resolve(expected).builtin_deref(true)
@@ -976,7 +981,11 @@ impl<'db> InferenceContext<'db> {
         Ok(())
     }
 
-    fn resolve_record_pat(&mut self, pat: PatId, path: &Path) -> Result<ResolvedPat<'db>, ()> {
+    fn resolve_record_pat(
+        &mut self,
+        pat: PatId<'db>,
+        path: &Path<'db>,
+    ) -> Result<ResolvedPat<'db>, ()> {
         // Resolve the path and check the definition for errors.
         let (pat_ty, Some(variant)) = self.resolve_variant(pat.into(), path, false) else {
             return Err(());
@@ -987,8 +996,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_record_pat(
         &mut self,
-        pat: PatId,
-        fields: &[RecordFieldPat],
+        pat: PatId<'db>,
+        fields: &[RecordFieldPat<'db>],
         has_rest_pat: bool,
         pat_ty: Ty<'db>,
         variant: VariantId,
@@ -1003,7 +1012,11 @@ impl<'db> InferenceContext<'db> {
         pat_ty
     }
 
-    fn resolve_pat_path(&mut self, pat: PatId, path: &Path) -> Result<ResolvedPat<'db>, ()> {
+    fn resolve_pat_path(
+        &mut self,
+        pat: PatId<'db>,
+        path: &Path<'db>,
+    ) -> Result<ResolvedPat<'db>, ()> {
         let (res, pat_ty) = self.infer_path(path, pat.into()).ok_or(())?;
         match res {
             ValueNs::FunctionId(_)
@@ -1022,7 +1035,7 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_pat_path(
         &mut self,
-        pat: PatId,
+        pat: PatId<'db>,
         resolved: &ResolvedPat<'db>,
         expected: Ty<'db>,
     ) -> Ty<'db> {
@@ -1032,8 +1045,8 @@ impl<'db> InferenceContext<'db> {
 
     fn resolve_tuple_struct_pat(
         &mut self,
-        pat: PatId,
-        path: &Path,
+        pat: PatId<'db>,
+        path: &Path<'db>,
     ) -> Result<ResolvedPat<'db>, ()> {
         // Resolve the path and check the definition for errors.
         let (pat_ty, Some(variant)) = self.resolve_variant(pat.into(), path, true) else {
@@ -1045,8 +1058,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_tuple_struct_pat(
         &mut self,
-        pat: PatId,
-        subpats: &[PatId],
+        pat: PatId<'db>,
+        subpats: &[PatId<'db>],
         ddpos: Option<u32>,
         pat_ty: Ty<'db>,
         variant: VariantId,
@@ -1100,8 +1113,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_tuple_pat(
         &mut self,
-        pat: PatId,
-        elements: &[PatId],
+        pat: PatId<'db>,
+        elements: &[PatId<'db>],
         ddpos: Option<u32>,
         expected: Ty<'db>,
         pat_info: PatInfo,
@@ -1154,9 +1167,9 @@ impl<'db> InferenceContext<'db> {
     fn check_record_pat_fields(
         &mut self,
         adt_ty: Ty<'db>,
-        pat: PatId,
+        pat: PatId<'db>,
         variant: VariantId,
-        fields: &[RecordFieldPat],
+        fields: &[RecordFieldPat<'db>],
         has_rest_pat: bool,
         pat_info: PatInfo,
     ) {
@@ -1254,8 +1267,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_box_pat(
         &mut self,
-        pat: PatId,
-        inner: PatId,
+        pat: PatId<'db>,
+        inner: PatId<'db>,
         expected: Ty<'db>,
         pat_info: PatInfo,
     ) -> Ty<'db> {
@@ -1280,8 +1293,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_deref_pat(
         &mut self,
-        pat: PatId,
-        inner: PatId,
+        pat: PatId<'db>,
+        inner: PatId<'db>,
         expected: Ty<'db>,
         pat_info: PatInfo,
     ) -> Ty<'db> {
@@ -1292,7 +1305,7 @@ impl<'db> InferenceContext<'db> {
         expected
     }
 
-    fn deref_pat_target(&mut self, pat: PatId, source_ty: Ty<'db>) -> Ty<'db> {
+    fn deref_pat_target(&mut self, pat: PatId<'db>, source_ty: Ty<'db>) -> Ty<'db> {
         let (Some(deref_pure), Some(deref_target)) =
             (self.lang_items.DerefPure, self.lang_items.DerefTarget)
         else {
@@ -1312,8 +1325,8 @@ impl<'db> InferenceContext<'db> {
     /// account for `ref mut` binding modes inherited from implicitly dereferencing `&mut` refs.
     fn register_deref_mut_bounds_if_needed(
         &self,
-        pat: PatId,
-        inner: PatId,
+        pat: PatId<'db>,
+        inner: PatId<'db>,
         derefed_tys: impl IntoIterator<Item = Ty<'db>>,
     ) -> InferOk<'db, ()> {
         let mut infer_ok = InferOk { value: (), obligations: Vec::new() };
@@ -1340,7 +1353,7 @@ impl<'db> InferenceContext<'db> {
     /// This is computed from the typeck results since we want to make
     /// sure to apply any match-ergonomics adjustments, which we cannot
     /// determine from the HIR alone.
-    pub(super) fn pat_has_ref_mut_binding(&self, pat: PatId) -> bool {
+    pub(super) fn pat_has_ref_mut_binding(&self, pat: PatId<'db>) -> bool {
         let mut has_ref_mut = false;
         self.store.walk_pats(pat, &mut |pat| {
             if let Some(BindingMode(ByRef::Yes(Mutability::Mut), _)) =
@@ -1355,8 +1368,8 @@ impl<'db> InferenceContext<'db> {
     // Precondition: Pat is Ref(inner)
     fn infer_ref_pat(
         &mut self,
-        pat: PatId,
-        inner: PatId,
+        pat: PatId<'db>,
+        inner: PatId<'db>,
         pat_mutbl: Mutability,
         mut expected: Ty<'db>,
         mut pat_info: PatInfo,
@@ -1521,16 +1534,16 @@ impl<'db> InferenceContext<'db> {
     }
 
     /// Create a reference or pinned reference type with a fresh region variable.
-    fn new_ref_ty(&self, span: Span, mutbl: Mutability, ty: Ty<'db>) -> Ty<'db> {
+    fn new_ref_ty(&self, span: Span<'db>, mutbl: Mutability, ty: Ty<'db>) -> Ty<'db> {
         let region = self.table.next_region_var(span);
         Ty::new_ref(self.interner(), region, ty, mutbl)
     }
 
     fn try_resolve_slice_ty_to_array_ty(
         &self,
-        before: &[PatId],
-        slice: Option<PatId>,
-        pat: PatId,
+        before: &[PatId<'db>],
+        slice: Option<PatId<'db>>,
+        pat: PatId<'db>,
     ) -> Option<Ty<'db>> {
         if slice.is_some() {
             return None;
@@ -1593,10 +1606,10 @@ impl<'db> InferenceContext<'db> {
     /// If `slice` is present, it can still represent 0 elements.
     fn infer_slice_pat(
         &mut self,
-        pat: PatId,
-        before: &[PatId],
-        slice: Option<PatId>,
-        after: &[PatId],
+        pat: PatId<'db>,
+        before: &[PatId<'db>],
+        slice: Option<PatId<'db>>,
+        after: &[PatId<'db>],
         expected: Ty<'db>,
         pat_info: PatInfo,
     ) -> Ty<'db> {
@@ -1659,10 +1672,10 @@ impl<'db> InferenceContext<'db> {
     /// inferred array type. We only return `None` for the slice type if `slice.is_none()`.
     fn check_array_pat_len(
         &mut self,
-        pat: PatId,
+        pat: PatId<'db>,
         element_ty: Ty<'db>,
         arr_ty: Ty<'db>,
-        slice: Option<PatId>,
+        slice: Option<PatId<'db>>,
         len: Const<'db>,
         min_len: u64,
     ) -> (Option<Ty<'db>>, Ty<'db>) {
@@ -1715,7 +1728,11 @@ impl<'db> InferenceContext<'db> {
         (Some(self.types.types.error), arr_ty)
     }
 
-    fn infer_destructuring_assignment_expr(&mut self, expr: ExprId, expected: Ty<'db>) -> Ty<'db> {
+    fn infer_destructuring_assignment_expr(
+        &mut self,
+        expr: ExprId<'db>,
+        expected: Ty<'db>,
+    ) -> Ty<'db> {
         // LHS of assignment doesn't constitute reads.
         let expr_is_read = ExprIsRead::No;
         let lhs_ty = self.infer_expr_inner(expr, &Expectation::has_type(expected), expr_is_read);

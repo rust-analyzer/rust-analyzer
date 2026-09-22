@@ -67,7 +67,7 @@ pub enum Expr<'db> {
     /// Local variable
     Local(Local<'db>),
     /// Constant generic parameter
-    ConstParam(ConstParam),
+    ConstParam(ConstParam<'db>),
     /// Well known type (such as `true` for bool)
     FamousType { ty: Type<'db>, value: &'static str },
     /// Function call (does not take self param)
@@ -86,7 +86,7 @@ pub enum Expr<'db> {
     /// Tuple construction
     Tuple { ty: Type<'db>, params: Vec<Expr<'db>> },
     /// Struct field access
-    Field { expr: Box<Expr<'db>>, field: Field },
+    Field { expr: Box<Expr<'db>>, field: Field<'db> },
     /// Passing type as reference (with `&`)
     Reference(Box<Expr<'db>>),
     /// Indicates possibility of many different options that all evaluate to `ty`

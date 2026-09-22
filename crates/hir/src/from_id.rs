@@ -19,12 +19,14 @@ use crate::{
 
 macro_rules! from_id {
     ($(($id:path, $ty:path)),* $(,)?) => {$(
-        impl From<$id> for $ty {
+        #[allow(unused_lifetimes, reason = "only some of the types passed to this macro have a `'db` lifetime")]
+        impl<'db> From<$id> for $ty {
             fn from(id: $id) -> $ty {
                 $ty { id }
             }
         }
-        impl From<$ty> for $id {
+        #[allow(unused_lifetimes)]
+        impl<'db> From<$ty> for $id {
             fn from(ty: $ty) -> $id {
                 ty.id
             }
@@ -42,9 +44,9 @@ from_id![
     (hir_def::TraitId, crate::Trait),
     (hir_def::StaticId, crate::Static),
     (hir_def::ConstId, crate::Const),
-    (hir_def::TypeOrConstParamId, crate::TypeOrConstParam),
-    (hir_def::TypeParamId, crate::TypeParam),
-    (hir_def::ConstParamId, crate::ConstParam),
+    (hir_def::TypeOrConstParamId<'db>, crate::TypeOrConstParam<'db>),
+    (hir_def::TypeParamId<'db>, crate::TypeParam<'db>),
+    (hir_def::ConstParamId<'db>, crate::ConstParam<'db>),
     (hir_def::LifetimeParamId, crate::LifetimeParam),
     (hir_def::MacroId, crate::Macro),
     (hir_def::EnumVariantId, crate::EnumVariant),
@@ -79,20 +81,22 @@ impl_from!(
     for Variant
 );
 impl_from!(
-    GenericParamId {
+    impl<'db>
+    GenericParamId<'db> {
         TypeParamId => TypeParam,
         ConstParamId => ConstParam,
         LifetimeParamId => LifetimeParam,
     }
-    for GenericParam
+    for GenericParam<'db>
 );
 impl_from!(
-    GenericParam {
+    impl<'db>
+    GenericParam<'db> {
         LifetimeParam => LifetimeParamId,
         ConstParam => ConstParamId,
         TypeParam => TypeParamId,
     }
-    for GenericParamId
+    for GenericParamId<'db>
 );
 
 impl_from!(
@@ -201,14 +205,14 @@ impl_from!(
     for VariantId
 );
 
-impl From<Field> for FieldId {
-    fn from(def: Field) -> Self {
+impl<'db> From<Field<'db>> for FieldId<'db> {
+    fn from(def: Field<'db>) -> Self {
         FieldId { parent: def.parent.into(), local_id: def.id }
     }
 }
 
-impl From<FieldId> for Field {
-    fn from(def: FieldId) -> Self {
+impl<'db> From<FieldId<'db>> for Field<'db> {
+    fn from(def: FieldId<'db>) -> Self {
         Field { parent: def.parent.into(), id: def.local_id }
     }
 }

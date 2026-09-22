@@ -73,9 +73,9 @@ pub enum PathResolution<'db> {
     /// A local binding (only value namespace)
     Local(Local<'db>),
     /// A type parameter
-    TypeParam(TypeParam),
+    TypeParam(TypeParam<'db>),
     /// A const parameter
-    ConstParam(ConstParam),
+    ConstParam(ConstParam<'db>),
     SelfType(Impl<'db>),
     BuiltinAttr(BuiltinAttr),
     ToolModule(ToolModule),
@@ -83,7 +83,7 @@ pub enum PathResolution<'db> {
 }
 
 impl<'db> PathResolution<'db> {
-    pub(crate) fn in_type_ns(&self) -> Option<TypeNs> {
+    pub(crate) fn in_type_ns(&self) -> Option<TypeNs<'db>> {
         match self {
             PathResolution::Def(ModuleDef::Adt(adt)) => Some(TypeNs::AdtId((*adt).into())),
             PathResolution::Def(ModuleDef::BuiltinType(builtin)) => {
@@ -165,7 +165,7 @@ pub struct Semantics<'db, DB: ?Sized> {
 }
 
 type DefWithoutBodyWithAnonConsts = Either<GenericDefId, VariantId>;
-type ExprToAnonConst<'db> = FxHashMap<ExprId, AnonConstId<'db>>;
+type ExprToAnonConst<'db> = FxHashMap<ExprId<'db>, AnonConstId<'db>>;
 type DefAnonConstsMap<'db> = FxHashMap<DefWithoutBodyWithAnonConsts, ExprToAnonConst<'db>>;
 
 pub struct SemanticsImpl<'db> {
@@ -817,7 +817,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn as_format_args_parts(
         &self,
         string: &ast::String,
-    ) -> Option<Vec<(TextRange, Option<Either<PathResolution<'db>, InlineAsmOperand>>)>> {
+    ) -> Option<Vec<(TextRange, Option<Either<PathResolution<'db>, InlineAsmOperand<'db>>>)>> {
         let string_start = string.syntax().text_range().start();
         let token = self.wrap_token_infile(string.syntax().clone());
         self.descend_into_macros_breakable(token, |token, _| {
@@ -874,7 +874,7 @@ impl<'db> SemanticsImpl<'db> {
         TextRange,
         HirFileRange,
         ast::String,
-        Option<Either<PathResolution<'db>, InlineAsmOperand>>,
+        Option<Either<PathResolution<'db>, InlineAsmOperand<'db>>>,
     )> {
         let original_token =
             self.wrap_token_infile(original_token).map(ast::String::cast).transpose()?;
@@ -896,7 +896,7 @@ impl<'db> SemanticsImpl<'db> {
         TextRange,
         HirFileRange,
         ast::String,
-        Option<Either<PathResolution<'db>, InlineAsmOperand>>,
+        Option<Either<PathResolution<'db>, InlineAsmOperand<'db>>>,
     )> {
         let relative_offset =
             offset.checked_sub(original_token.value.syntax().text_range().start())?;
@@ -928,7 +928,7 @@ impl<'db> SemanticsImpl<'db> {
         &self,
         InFile { value: string, file_id }: InFile<&ast::String>,
         offset: TextSize,
-    ) -> Option<(TextRange, Option<Either<PathResolution<'db>, InlineAsmOperand>>)> {
+    ) -> Option<(TextRange, Option<Either<PathResolution<'db>, InlineAsmOperand<'db>>>)> {
         debug_assert!(offset <= string.syntax().text_range().len());
         let literal = string.syntax().parent().filter(|it| it.kind() == SyntaxKind::LITERAL)?;
         let parent = literal.parent()?;
@@ -1660,11 +1660,11 @@ impl<'db> SemanticsImpl<'db> {
         };
         let (body, source_map) = Body::with_source_map(self.db, func_id.into());
 
-        fn collect_returns(
+        fn collect_returns<'db>(
             sema: &SemanticsImpl<'_>,
-            body: &Body,
-            source_map: &hir_def::expr_store::ExpressionStoreSourceMap,
-            expr_id: ExprId,
+            body: &Body<'db>,
+            source_map: &hir_def::expr_store::ExpressionStoreSourceMap<'db>,
+            expr_id: ExprId<'db>,
             acc: &mut Vec<InFile<ast::ReturnExpr>>,
         ) {
             match &body[expr_id] {
@@ -1814,7 +1814,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn resolve_method_call_fallback(
         &self,
         call: &ast::MethodCallExpr,
-    ) -> Option<(Either<Function<'db>, Field>, Option<GenericSubstitution<'db>>)> {
+    ) -> Option<(Either<Function<'db>, Field<'db>>, Option<GenericSubstitution<'db>>)> {
         self.analyze(call.syntax())?.resolve_method_call_fallback(self.db, call)
     }
 
@@ -1906,7 +1906,10 @@ impl<'db> SemanticsImpl<'db> {
         self.analyze(call.syntax())?.resolve_method_call_as_callable(self.db, call)
     }
 
-    pub fn resolve_field(&self, field: &ast::FieldExpr) -> Option<Either<Field, TupleField<'db>>> {
+    pub fn resolve_field(
+        &self,
+        field: &ast::FieldExpr,
+    ) -> Option<Either<Field<'db>, TupleField<'db>>> {
         self.analyze(field.syntax())?.resolve_field(field)
     }
 
@@ -1914,7 +1917,7 @@ impl<'db> SemanticsImpl<'db> {
         &self,
         field: &ast::FieldExpr,
     ) -> Option<(
-        Either<Either<Field, TupleField<'db>>, Function<'db>>,
+        Either<Either<Field<'db>, TupleField<'db>>, Function<'db>>,
         Option<GenericSubstitution<'db>>,
     )> {
         self.analyze(field.syntax())?.resolve_field_fallback(self.db, field)
@@ -1923,7 +1926,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn resolve_record_field(
         &self,
         field: &ast::RecordExprField,
-    ) -> Option<(Field, Option<Local<'db>>, Type<'db>)> {
+    ) -> Option<(Field<'db>, Option<Local<'db>>, Type<'db>)> {
         self.resolve_record_field_with_substitution(field)
             .map(|(field, local, ty, _)| (field, local, ty))
     }
@@ -1931,21 +1934,21 @@ impl<'db> SemanticsImpl<'db> {
     pub fn resolve_record_field_with_substitution(
         &self,
         field: &ast::RecordExprField,
-    ) -> Option<(Field, Option<Local<'db>>, Type<'db>, GenericSubstitution<'db>)> {
+    ) -> Option<(Field<'db>, Option<Local<'db>>, Type<'db>, GenericSubstitution<'db>)> {
         self.analyze(field.syntax())?.resolve_record_field(self.db, field)
     }
 
     pub fn resolve_record_pat_field(
         &self,
         field: &ast::RecordPatField,
-    ) -> Option<(Field, Type<'db>)> {
+    ) -> Option<(Field<'db>, Type<'db>)> {
         self.resolve_record_pat_field_with_subst(field).map(|(field, ty, _)| (field, ty))
     }
 
     pub fn resolve_record_pat_field_with_subst(
         &self,
         field: &ast::RecordPatField,
-    ) -> Option<(Field, Type<'db>, GenericSubstitution<'db>)> {
+    ) -> Option<(Field<'db>, Type<'db>, GenericSubstitution<'db>)> {
         self.analyze(field.syntax())?.resolve_record_pat_field(self.db, field)
     }
 
@@ -1953,7 +1956,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn resolve_tuple_struct_pat_fields(
         &self,
         tuple_struct_pat: &ast::TupleStructPat,
-    ) -> Option<Vec<(Field, Type<'db>)>> {
+    ) -> Option<Vec<(Field<'db>, Type<'db>)>> {
         self.analyze(tuple_struct_pat.syntax())?
             .resolve_tuple_struct_pat_fields(self.db, tuple_struct_pat)
     }
@@ -2050,14 +2053,14 @@ impl<'db> SemanticsImpl<'db> {
         self.analyze(path.syntax())?.resolve_path(self.db, path)
     }
 
-    pub fn resolve_use_type_arg(&self, name: &ast::NameRef) -> Option<TypeParam> {
+    pub fn resolve_use_type_arg(&self, name: &ast::NameRef) -> Option<TypeParam<'db>> {
         self.analyze(name.syntax())?.resolve_use_type_arg(name)
     }
 
     pub fn resolve_offset_of_field(
         &self,
         name_ref: &ast::NameRef,
-    ) -> Option<(Either<EnumVariant, Field>, GenericSubstitution<'db>)> {
+    ) -> Option<(Either<EnumVariant, Field<'db>>, GenericSubstitution<'db>)> {
         self.analyze_no_infer(name_ref.syntax())?.resolve_offset_of_field(self.db, name_ref)
     }
 
@@ -2082,7 +2085,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn record_literal_missing_fields(
         &self,
         literal: &ast::RecordExpr,
-    ) -> Vec<(Field, Type<'db>)> {
+    ) -> Vec<(Field<'db>, Type<'db>)> {
         self.analyze(literal.syntax())
             .and_then(|it| it.record_literal_missing_fields(self.db, literal))
             .unwrap_or_default()
@@ -2091,7 +2094,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn record_literal_matched_fields(
         &self,
         literal: &ast::RecordExpr,
-    ) -> Vec<(Field, Type<'db>)> {
+    ) -> Vec<(Field<'db>, Type<'db>)> {
         self.analyze(literal.syntax())
             .and_then(|it| it.record_literal_matched_fields(self.db, literal))
             .unwrap_or_default()
@@ -2100,7 +2103,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn record_pattern_missing_fields(
         &self,
         pattern: &ast::RecordPat,
-    ) -> Vec<(Field, Type<'db>)> {
+    ) -> Vec<(Field<'db>, Type<'db>)> {
         self.analyze(pattern.syntax())
             .and_then(|it| it.record_pattern_missing_fields(self.db, pattern))
             .unwrap_or_default()
@@ -2109,7 +2112,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn record_pattern_matched_fields(
         &self,
         pattern: &ast::RecordPat,
-    ) -> Vec<(Field, Type<'db>)> {
+    ) -> Vec<(Field<'db>, Type<'db>)> {
         self.analyze(pattern.syntax())
             .and_then(|it| it.record_pattern_matched_fields(self.db, pattern))
             .unwrap_or_default()
@@ -2211,7 +2214,7 @@ impl<'db> SemanticsImpl<'db> {
     fn find_anon_const_for_root_expr_in_signature(
         &self,
         def: DefWithoutBodyWithAnonConsts,
-        root_expr: ExprId,
+        root_expr: ExprId<'db>,
     ) -> Option<AnonConstId<'db>> {
         let mut cache = self.signature_anon_consts_cache.borrow_mut();
         let anon_consts_map = self.populate_anon_const_cache_for(&mut cache, def);
@@ -2221,8 +2224,8 @@ impl<'db> SemanticsImpl<'db> {
     pub(crate) fn infer_body_for_expr_or_pat(
         &self,
         def: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
-        node: ExprOrPatId,
+        store: &ExpressionStore<'db>,
+        node: ExprOrPatId<'db>,
     ) -> Option<InferBodyId<'db>> {
         let handle_def_without_body = |def| {
             let root_expr = match node {
@@ -2472,7 +2475,7 @@ impl<'db> SemanticsImpl<'db> {
         let mut resolver = sa.resolver.clone();
         let def = resolver.expression_store_owner()?;
 
-        let is_not_generated = |path: &Path| {
+        let is_not_generated = |path: &Path<'_>| {
             !path.mod_path().and_then(|path| path.as_ident()).is_some_and(Name::is_generated)
         };
 
@@ -2673,19 +2676,19 @@ to_def_impls![
     (crate::Const, ast::Const, const_to_def),
     (crate::Static, ast::Static, static_to_def),
     (crate::Function<'db>, ast::Fn, fn_to_def),
-    (crate::Field, ast::RecordField, record_field_to_def),
-    (crate::Field, ast::TupleField, tuple_field_to_def),
+    (crate::Field<'db>, ast::RecordField, record_field_to_def),
+    (crate::Field<'db>, ast::TupleField, tuple_field_to_def),
     (crate::EnumVariant, ast::Variant, enum_variant_to_def),
-    (crate::TypeParam, ast::TypeParam, type_param_to_def),
+    (crate::TypeParam<'db>, ast::TypeParam, type_param_to_def),
     (crate::LifetimeParam, ast::LifetimeParam, lifetime_param_to_def),
-    (crate::ConstParam, ast::ConstParam, const_param_to_def),
-    (crate::GenericParam, ast::GenericParam, generic_param_to_def),
+    (crate::ConstParam<'db>, ast::ConstParam, const_param_to_def),
+    (crate::GenericParam<'db>, ast::GenericParam, generic_param_to_def),
     (crate::Macro, ast::Macro, macro_to_def),
     (crate::Local<'db>, ast::SelfParam, self_param_to_def),
     (crate::Label, ast::Label, label_to_def),
     (crate::Adt, ast::Adt, adt_to_def),
     (crate::ExternCrateDecl, ast::ExternCrate, extern_crate_to_def),
-    (crate::InlineAsmOperand, ast::AsmOperandNamed, asm_operand_to_def),
+    (crate::InlineAsmOperand<'db>, ast::AsmOperandNamed, asm_operand_to_def),
     (crate::ExternBlock, ast::ExternBlock, extern_block_to_def),
     (MacroCallId, ast::MacroCall, macro_call_to_macro_call),
 ];
@@ -2890,19 +2893,19 @@ impl ops::Deref for VisibleTraits {
     }
 }
 
-struct RenameConflictsVisitor<'a> {
-    db: &'a dyn HirDatabase,
+struct RenameConflictsVisitor<'db> {
+    db: &'db dyn HirDatabase,
     owner: ExpressionStoreOwnerId,
-    resolver: Resolver<'a>,
-    body: &'a ExpressionStore,
+    resolver: Resolver<'db>,
+    body: &'db ExpressionStore<'db>,
     to_be_renamed: BindingId,
     new_name: Symbol,
     old_name: Symbol,
     conflicts: FxHashSet<BindingId>,
 }
 
-impl RenameConflictsVisitor<'_> {
-    fn resolve_path(&mut self, node: ExprOrPatId, path: &Path) {
+impl<'db> RenameConflictsVisitor<'db> {
+    fn resolve_path(&mut self, node: ExprOrPatId<'db>, path: &Path<'db>) {
         if let Path::BarePath(path) = path
             && let Some(name) = path.as_ident()
         {
@@ -2931,7 +2934,7 @@ impl RenameConflictsVisitor<'_> {
         }
     }
 
-    fn rename_conflicts(&mut self, expr: ExprId) {
+    fn rename_conflicts(&mut self, expr: ExprId<'db>) {
         match &self.body[expr] {
             Expr::Path(path) => {
                 let guard = self.resolver.update_to_inner_scope(self.db, self.owner, expr);

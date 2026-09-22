@@ -237,17 +237,17 @@ pub trait HirDatabase: SourceDatabase + 'static {
     fn const_param_types_with_diagnostics<'db>(
         &'db self,
         def: GenericDefId,
-    ) -> &'db TyLoweringResult<'db, ConstParamTypes> {
+    ) -> &'db TyLoweringResult<'db, ConstParamTypes<'db>> {
         let db = self.as_dyn();
         crate::lower::const_param_types_with_diagnostics(db, def)
     }
 
-    fn const_param_types(&self, def: GenericDefId) -> &ConstParamTypes {
+    fn const_param_types<'db>(&'db self, def: GenericDefId) -> &'db ConstParamTypes<'db> {
         let db = self.as_dyn();
         crate::lower::const_param_types(db, def)
     }
 
-    fn const_param_ty<'db>(&'db self, def: ConstParamId) -> Ty<'db> {
+    fn const_param_ty<'db>(&'db self, def: ConstParamId<'db>) -> Ty<'db> {
         let db = self.as_dyn();
         crate::lower::const_param_ty(db, def)
     }
@@ -268,12 +268,12 @@ pub trait HirDatabase: SourceDatabase + 'static {
     fn field_types_with_diagnostics<'db>(
         &'db self,
         var: VariantId,
-    ) -> &'db TyLoweringResult<'db, FieldTypes> {
+    ) -> &'db TyLoweringResult<'db, FieldTypes<'db>> {
         let db = self.as_dyn();
         crate::lower::field_types_with_diagnostics(db, var)
     }
 
-    fn field_types(&self, var: VariantId) -> &ArenaMap<LocalFieldId, FieldType> {
+    fn field_types<'db>(&'db self, var: VariantId) -> &'db ArenaMap<LocalFieldId<'db>, FieldType> {
         let db = self.as_dyn();
         crate::lower::field_types_query(db, var)
     }
@@ -363,7 +363,7 @@ pub struct InternedOpaqueTyId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
 pub struct InternedClosure<'db> {
     pub owner: InferBodyId<'db>,
-    pub expr: ExprId,
+    pub expr: ExprId<'db>,
     pub kind: ClosureKind,
 }
 
@@ -458,13 +458,13 @@ impl<'db> InternedCoroutineClosureId<'db> {
 /// An anonymous const expression that appears in a type position (e.g., array lengths,
 /// const generic arguments like `{ N + 1 }`, or const param defaults). Unlike named constants,
 /// these don't have their own `Body` — their expressions live in the parent's signature `ExpressionStore`.
-#[derive(Debug, Hash, PartialEq, Eq, Clone)]
-pub struct AnonConstLoc {
+#[derive(Debug, Hash, PartialEq, Eq, Clone, SalsaValue)]
+pub struct AnonConstLoc<'db> {
     /// The owner store containing this expression.
     pub owner: ExpressionStoreOwnerId,
     /// The ExprId within the owner's ExpressionStore that is the root
     /// of this anonymous const expression.
-    pub expr: ExprId,
+    pub expr: ExprId<'db>,
     pub ty: StoredEarlyBinder<StoredTy>,
     /// Whether to allow using generic params from the owner.
     /// true for array repeats, false for everything else.
@@ -475,13 +475,13 @@ pub struct AnonConstLoc {
 #[derive(PartialOrd, Ord)]
 pub struct AnonConstId {
     #[returns(ref)]
-    pub loc: AnonConstLoc,
+    pub loc: AnonConstLoc<'db>,
 }
 
 impl<'db> AnonConstId<'db> {
     pub(crate) fn new(
         db: &'db dyn SourceDatabase,
-        loc: AnonConstLoc,
+        loc: AnonConstLoc<'db>,
         token: TrackedStructToken,
     ) -> Self {
         _ = token;
@@ -504,7 +504,7 @@ impl HasResolver for AnonConstId<'_> {
 pub fn signature_anon_consts_and_diagnostics<'db>(
     db: &'db dyn HirDatabase,
     def: GenericDefId,
-) -> ArrayVec<(&'db [AnonConstId<'db>], &'db [TyLoweringDiagnostic]), 5> {
+) -> ArrayVec<(&'db [AnonConstId<'db>], &'db [TyLoweringDiagnostic<'db>]), 5> {
     let mut result = ArrayVec::new();
 
     // Queries common to all generic defs:
@@ -532,7 +532,7 @@ pub fn signature_anon_consts_and_diagnostics<'db>(
     return result;
 
     fn push<'db, T>(
-        result: &mut ArrayVec<(&'db [AnonConstId<'db>], &'db [TyLoweringDiagnostic]), 5>,
+        result: &mut ArrayVec<(&'db [AnonConstId<'db>], &'db [TyLoweringDiagnostic<'db>]), 5>,
         item: &'db TyLoweringResult<'db, T>,
     ) {
         result.push((item.defined_anon_consts(), item.diagnostics()));

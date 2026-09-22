@@ -442,7 +442,10 @@ impl<'db> HirDisplay<'db> for Union {
     }
 }
 
-fn visible_fields<'db>(fields: Vec<Field>, f: &mut HirFormatter<'_, 'db>) -> (Vec<Field>, bool) {
+fn visible_fields<'db>(
+    fields: Vec<Field<'db>>,
+    f: &mut HirFormatter<'_, 'db>,
+) -> (Vec<Field<'db>>, bool) {
     if f.render_private_fields() {
         return (fields, false);
     }
@@ -460,7 +463,7 @@ fn visible_fields<'db>(fields: Vec<Field>, f: &mut HirFormatter<'_, 'db>) -> (Ve
 }
 
 fn write_fields<'db>(
-    fields: &[Field],
+    fields: &[Field<'db>],
     hidden_fields: bool,
     has_where_clause: bool,
     limit: usize,
@@ -534,7 +537,7 @@ fn write_variants<'db>(
     Ok(())
 }
 
-impl<'db> HirDisplay<'db> for Field {
+impl<'db> HirDisplay<'db> for Field<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         write_visibility(self.parent.module(f.db).id, self.visibility(f.db), f)?;
         write!(f, "{}: ", self.name(f.db).display(f.db, f.edition()))?;
@@ -602,7 +605,7 @@ impl<'db> HirDisplay<'db> for ExternCrateDecl {
     }
 }
 
-impl<'db> HirDisplay<'db> for GenericParam {
+impl<'db> HirDisplay<'db> for GenericParam<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         match self {
             GenericParam::TypeParam(it) => it.hir_fmt(f),
@@ -612,7 +615,7 @@ impl<'db> HirDisplay<'db> for GenericParam {
     }
 }
 
-impl<'db> HirDisplay<'db> for TypeOrConstParam {
+impl<'db> HirDisplay<'db> for TypeOrConstParam<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         match self.split(f.db) {
             either::Either::Left(it) => it.hir_fmt(f),
@@ -621,7 +624,7 @@ impl<'db> HirDisplay<'db> for TypeOrConstParam {
     }
 }
 
-impl<'db> HirDisplay<'db> for TypeParam {
+impl<'db> HirDisplay<'db> for TypeParam<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         let params = GenericParams::of(f.db, self.id.parent());
         let param_data = &params[self.id.local_id()];
@@ -692,7 +695,7 @@ impl<'db> HirDisplay<'db> for LifetimeParam {
     }
 }
 
-impl<'db> HirDisplay<'db> for ConstParam {
+impl<'db> HirDisplay<'db> for ConstParam<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         write!(f, "const {}: ", self.name(f.db).display(f.db, f.edition()))?;
         self.ty(f.db).hir_fmt(f)
@@ -782,10 +785,10 @@ fn write_where_clause<'db>(def: GenericDefId, f: &mut HirFormatter<'_, 'db>) -> 
     Ok(true)
 }
 
-fn has_disaplayable_predicates(
+fn has_disaplayable_predicates<'db>(
     db: &dyn HirDatabase,
-    params: &GenericParams,
-    store: &ExpressionStore,
+    params: &GenericParams<'db>,
+    store: &ExpressionStore<'db>,
 ) -> bool {
     params.where_predicates().iter().any(|pred| {
         !matches!(
@@ -799,25 +802,26 @@ fn has_disaplayable_predicates(
 }
 
 fn write_where_predicates<'db>(
-    params: &GenericParams,
+    params: &GenericParams<'db>,
     owner: ExpressionStoreOwnerId,
-    store: &ExpressionStore,
+    store: &ExpressionStore<'db>,
     f: &mut HirFormatter<'_, 'db>,
 ) -> Result {
     use WherePredicate::*;
 
     // unnamed type targets are displayed inline with the argument itself, e.g. `f: impl Y`.
-    let is_unnamed_type_target = |target: TypeRefId| {
+    let is_unnamed_type_target = |target: TypeRefId<'db>| {
         matches!(store[target],
             TypeRef::TypeParam(id) if GenericParams::of(f.db,id.parent())[id.local_id()].name().is_none()
         )
     };
 
-    let check_same_target = |pred1: &WherePredicate, pred2: &WherePredicate| match (pred1, pred2) {
-        (TypeBound { target: t1, .. }, TypeBound { target: t2, .. }) => t1 == t2,
-        (Lifetime { target: t1, .. }, Lifetime { target: t2, .. }) => t1 == t2,
-        _ => false,
-    };
+    let check_same_target =
+        |pred1: &WherePredicate<'_>, pred2: &WherePredicate<'_>| match (pred1, pred2) {
+            (TypeBound { target: t1, .. }, TypeBound { target: t2, .. }) => t1 == t2,
+            (Lifetime { target: t1, .. }, Lifetime { target: t2, .. }) => t1 == t2,
+            _ => false,
+        };
 
     let mut iter = params.where_predicates().iter().peekable();
     while let Some(pred) = iter.next() {

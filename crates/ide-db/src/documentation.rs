@@ -59,7 +59,7 @@ macro_rules! impl_has_docs {
 
 impl_has_docs![
     hir::EnumVariant,
-    hir::Field,
+    hir::Field<'db>,
     hir::Static,
     hir::Const,
     hir::Trait,

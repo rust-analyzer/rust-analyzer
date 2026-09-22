@@ -17,7 +17,10 @@ use crate::{
 // Diagnostic: no-such-field
 //
 // This diagnostic is triggered if created structure does not have field provided in record.
-pub(crate) fn no_such_field(ctx: &DiagnosticsContext<'_, '_>, d: &hir::NoSuchField) -> Diagnostic {
+pub(crate) fn no_such_field(
+    ctx: &DiagnosticsContext<'_, '_>,
+    d: &hir::NoSuchField<'_>,
+) -> Diagnostic {
     let (code, message) = if d.private.is_some() {
         ("E0451", "field is private")
     } else if let VariantId::EnumVariantId(_) = d.variant {
@@ -32,7 +35,7 @@ pub(crate) fn no_such_field(ctx: &DiagnosticsContext<'_, '_>, d: &hir::NoSuchFie
         .with_fixes(fixes(ctx, d))
 }
 
-fn fixes(ctx: &DiagnosticsContext<'_, '_>, d: &hir::NoSuchField) -> Option<Vec<Assist>> {
+fn fixes(ctx: &DiagnosticsContext<'_, '_>, d: &hir::NoSuchField<'_>) -> Option<Vec<Assist>> {
     // FIXME: quickfix for pattern
     let root = d.field.file_id.parse_or_expand(ctx.sema.db);
     match &d.field.value.to_node(&root) {

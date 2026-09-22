@@ -175,11 +175,11 @@ pub enum WherePredicateEvaluation {
 pub fn where_predicate_must_hold<'db>(
     db: &'db dyn HirDatabase,
     resolver: &Resolver<'db>,
-    store: &ExpressionStore,
+    store: &ExpressionStore<'db>,
     def: ExpressionStoreOwnerId,
     generic_def: GenericDefId,
     env: ParamEnvAndCrate<'db>,
-    predicate: &WherePredicate,
+    predicate: &WherePredicate<'db>,
 ) -> WherePredicateEvaluation {
     let interner = DbInterner::new_with(db, env.krate);
     let infcx = interner.infer_ctxt().build(TypingMode::PostAnalysis);

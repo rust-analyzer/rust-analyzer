@@ -47,29 +47,29 @@ pub(crate) use hir_def::{
 
 pub enum BodyValidationDiagnostic<'db> {
     RecordMissingFields {
-        record: Either<ExprId, PatId>,
+        record: Either<ExprId<'db>, PatId<'db>>,
         variant: VariantId,
-        missed_fields: Vec<LocalFieldId>,
+        missed_fields: Vec<LocalFieldId<'db>>,
     },
     ReplaceFilterMapNextWithFindMap {
-        method_call_expr: ExprId,
+        method_call_expr: ExprId<'db>,
     },
     MissingMatchArms {
-        match_expr: ExprId,
+        match_expr: ExprId<'db>,
         uncovered_patterns: String,
     },
     NonExhaustiveLet {
-        pat: PatId,
+        pat: PatId<'db>,
         uncovered_patterns: String,
     },
     RemoveTrailingReturn {
-        return_expr: ExprId,
+        return_expr: ExprId<'db>,
     },
     RemoveUnnecessaryElse {
-        if_expr: ExprId,
+        if_expr: ExprId<'db>,
     },
     UnusedMustUse {
-        expr: ExprId,
+        expr: ExprId<'db>,
         message: Option<&'db str>,
     },
 }
@@ -103,7 +103,7 @@ impl<'db> BodyValidationDiagnostic<'db> {
 
 struct ExprValidator<'db> {
     owner: DefWithBodyId,
-    body: &'db Body,
+    body: &'db Body<'db>,
     infer: &'db InferenceResult<'db>,
     env: ParamEnv<'db>,
     diagnostics: Vec<BodyValidationDiagnostic<'db>>,
@@ -161,8 +161,8 @@ impl<'db> ExprValidator<'db> {
 
     fn validate_call(
         &mut self,
-        call_id: ExprId,
-        expr: &Expr,
+        call_id: ExprId<'db>,
+        expr: &Expr<'db>,
         filter_map_next_checker: &mut Option<FilterMapNextChecker<'db>>,
     ) {
         if !self.validate_lints {
@@ -195,7 +195,12 @@ impl<'db> ExprValidator<'db> {
         }
     }
 
-    fn validate_match(&mut self, match_expr: ExprId, scrutinee_expr: ExprId, arms: &[MatchArm]) {
+    fn validate_match(
+        &mut self,
+        match_expr: ExprId<'db>,
+        scrutinee_expr: ExprId<'db>,
+        arms: &[MatchArm<'db>],
+    ) {
         let Some(scrut_ty) = self.infer.type_of_expr_with_adjust(scrutinee_expr) else {
             return;
         };
@@ -281,7 +286,7 @@ impl<'db> ExprValidator<'db> {
     // While the above function in rustc uses thir exprs, r-a doesn't have them.
     // So, the logic here is getting same result as "hir lowering + match with lowered thir"
     // with "hir only"
-    fn is_known_valid_scrutinee(&self, scrutinee_expr: ExprId) -> bool {
+    fn is_known_valid_scrutinee(&self, scrutinee_expr: ExprId<'db>) -> bool {
         let db = self.db();
 
         if self
@@ -314,7 +319,7 @@ impl<'db> ExprValidator<'db> {
         }
     }
 
-    fn validate_block(&mut self, statements: &[Statement]) {
+    fn validate_block(&mut self, statements: &[Statement<'db>]) {
         let pattern_arena = Arena::new();
         let cx = MatchCheckCtx::new(self.owner.module(self.db()), &self.infcx, self.env);
         for stmt in statements {
@@ -340,8 +345,8 @@ impl<'db> ExprValidator<'db> {
         &self,
         cx: &MatchCheckCtx<'a, 'db>,
         pattern_arena: &'a Arena<DeconstructedPat<'a, 'db>>,
-        pat: PatId,
-        initializer: Option<ExprId>,
+        pat: PatId<'db>,
+        initializer: Option<ExprId<'db>>,
     ) -> Option<BodyValidationDiagnostic<'db>> {
         // Bail out if any subpattern has a type mismatch: the pattern isn't well-formed then, and
         // deconstructing it can produce constructors with mismatching arities, which the
@@ -394,7 +399,7 @@ impl<'db> ExprValidator<'db> {
     fn lower_pattern<'a>(
         &self,
         cx: &MatchCheckCtx<'a, 'db>,
-        pat: PatId,
+        pat: PatId<'db>,
         have_errors: &mut bool,
     ) -> DeconstructedPat<'a, 'db> {
         let mut patcx = match_check::PatCtxt::new(self.db(), self.infer, self.body);
@@ -408,7 +413,7 @@ impl<'db> ExprValidator<'db> {
 
     fn check_unused_must_use(
         &self,
-        mut expr: ExprId,
+        mut expr: ExprId<'db>,
         acc: &mut Vec<BodyValidationDiagnostic<'db>>,
     ) {
         // Walk through container expressions so that the value-producing leaf is
@@ -464,7 +469,7 @@ impl<'db> ExprValidator<'db> {
         }
     }
 
-    fn check_for_trailing_return(&mut self, body_expr: ExprId, body: &Body) {
+    fn check_for_trailing_return(&mut self, body_expr: ExprId<'db>, body: &Body<'db>) {
         if !self.validate_lints {
             return;
         }
@@ -499,7 +504,7 @@ impl<'db> ExprValidator<'db> {
         }
     }
 
-    fn check_for_unnecessary_else(&mut self, id: ExprId, expr: &Expr) {
+    fn check_for_unnecessary_else(&mut self, id: ExprId<'db>, expr: &Expr<'db>) {
         if !self.validate_lints {
             return;
         }
@@ -559,7 +564,7 @@ impl<'db> ExprValidator<'db> {
 struct FilterMapNextChecker<'db> {
     filter_map_function_id: Option<hir_def::FunctionId>,
     next_function_id: Option<hir_def::FunctionId>,
-    prev_filter_map_expr_id: Option<ExprId>,
+    prev_filter_map_expr_id: Option<ExprId<'db>>,
     prev_receiver_ty: Option<Ty<'db>>,
 }
 
@@ -593,8 +598,8 @@ impl<'db> FilterMapNextChecker<'db> {
     // check for instances of .filter_map(..).next()
     fn check(
         &mut self,
-        current_expr_id: ExprId,
-        receiver_expr_id: &ExprId,
+        current_expr_id: ExprId<'db>,
+        receiver_expr_id: &ExprId<'db>,
         function_id: &hir_def::FunctionId,
     ) -> Option<()> {
         if *function_id == self.filter_map_function_id? {
@@ -622,9 +627,9 @@ impl<'db> FilterMapNextChecker<'db> {
 pub fn record_literal_missing_fields<'db>(
     db: &'db dyn HirDatabase,
     infer: &InferenceResult<'db>,
-    id: ExprId,
-    expr: &Expr,
-) -> Option<(VariantId, Vec<LocalFieldId>)> {
+    id: ExprId<'db>,
+    expr: &Expr<'db>,
+) -> Option<(VariantId, Vec<LocalFieldId<'db>>)> {
     let (fields, spread) = match expr {
         Expr::RecordLit { fields, spread, .. } => (fields, spread),
         _ => return None,
@@ -642,7 +647,7 @@ pub fn record_literal_missing_fields<'db>(
     // - has ..expr
     // - or has default value + ..
     // - or already in code
-    let missed_fields: Vec<LocalFieldId> = variant_data
+    let missed_fields: Vec<LocalFieldId<'_>> = variant_data
         .fields()
         .iter()
         .filter_map(|(f, d)| {
@@ -665,9 +670,9 @@ pub fn record_literal_missing_fields<'db>(
 pub fn record_pattern_missing_fields<'db>(
     db: &'db dyn HirDatabase,
     infer: &InferenceResult<'db>,
-    id: PatId,
-    pat: &Pat,
-) -> Option<(VariantId, Vec<LocalFieldId>)> {
+    id: PatId<'db>,
+    pat: &Pat<'db>,
+) -> Option<(VariantId, Vec<LocalFieldId<'db>>)> {
     let (fields, ellipsis) = match pat {
         Pat::Record { path: _, args, ellipsis } => (args, *ellipsis),
         _ => return None,
@@ -684,7 +689,7 @@ pub fn record_pattern_missing_fields<'db>(
     // don't show missing fields if:
     // - in code
     // - or has ..
-    let missed_fields: Vec<LocalFieldId> = variant_data
+    let missed_fields: Vec<LocalFieldId<'db>> = variant_data
         .fields()
         .iter()
         .filter_map(
@@ -699,8 +704,17 @@ pub fn record_pattern_missing_fields<'db>(
     Some((variant_def, missed_fields))
 }
 
-fn types_of_subpatterns_do_match(pat: PatId, body: &Body, infer: &InferenceResult<'_>) -> bool {
-    fn walk(pat: PatId, body: &Body, infer: &InferenceResult<'_>, has_type_mismatches: &mut bool) {
+fn types_of_subpatterns_do_match<'db>(
+    pat: PatId<'db>,
+    body: &Body<'db>,
+    infer: &InferenceResult<'_>,
+) -> bool {
+    fn walk<'db>(
+        pat: PatId<'db>,
+        body: &Body<'db>,
+        infer: &InferenceResult<'_>,
+        has_type_mismatches: &mut bool,
+    ) {
         match infer.pat_has_type_mismatch(pat) {
             true => *has_type_mismatches = true,
             false if *has_type_mismatches => (),

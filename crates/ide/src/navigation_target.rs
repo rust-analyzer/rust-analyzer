@@ -547,7 +547,7 @@ impl TryToNav<'_> for hir::ExternCrateDecl {
     }
 }
 
-impl TryToNav<'_> for hir::Field {
+impl<'db> TryToNav<'_> for hir::Field<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -627,7 +627,7 @@ impl<'db> TryToNav<'db> for hir::AssocItem<'db> {
     }
 }
 
-impl TryToNav<'_> for hir::GenericParam {
+impl<'db> TryToNav<'_> for hir::GenericParam<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -705,7 +705,7 @@ impl TryToNav<'_> for hir::Label {
     }
 }
 
-impl TryToNav<'_> for hir::TypeParam {
+impl<'db> TryToNav<'_> for hir::TypeParam<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -744,7 +744,7 @@ impl TryToNav<'_> for hir::TypeParam {
     }
 }
 
-impl TryToNav<'_> for hir::TypeOrConstParam {
+impl<'db> TryToNav<'_> for hir::TypeOrConstParam<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -777,7 +777,7 @@ impl TryToNav<'_> for hir::LifetimeParam {
     }
 }
 
-impl TryToNav<'_> for hir::ConstParam {
+impl<'db> TryToNav<'_> for hir::ConstParam<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -809,7 +809,7 @@ impl TryToNav<'_> for hir::ConstParam {
     }
 }
 
-impl TryToNav<'_> for hir::InlineAsmOperand {
+impl<'db> TryToNav<'_> for hir::InlineAsmOperand<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,

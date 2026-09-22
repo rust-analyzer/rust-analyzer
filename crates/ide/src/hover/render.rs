@@ -443,9 +443,9 @@ pub(super) fn path(
     crate_name.into_iter().chain(module_path).chain(item_name).join("::")
 }
 
-pub(super) fn definition(
+pub(super) fn definition<'db>(
     db: &RootDatabase,
-    def: Definition<'_>,
+    def: Definition<'db>,
     famous_defs: Option<&FamousDefs<'_, '_>>,
     notable_traits: &[(Trait, Vec<(Option<Type<'_>>, Name)>)],
     macro_arm: Option<u32>,

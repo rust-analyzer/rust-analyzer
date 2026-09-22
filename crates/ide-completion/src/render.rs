@@ -139,11 +139,11 @@ impl<'a, 'db> RenderContext<'a, 'db> {
     }
 }
 
-pub(crate) fn render_field(
-    ctx: RenderContext<'_, '_>,
+pub(crate) fn render_field<'db>(
+    ctx: RenderContext<'_, 'db>,
     dot_access: &DotAccess<'_>,
     receiver: Option<SmolStr>,
-    field: hir::Field,
+    field: hir::Field<'db>,
     ty: &hir::Type<'_>,
 ) -> CompletionItem {
     let db = ctx.db();
@@ -617,7 +617,7 @@ fn scope_def_docs<'db>(
     }
 }
 
-fn scope_def_is_deprecated(ctx: &RenderContext<'_, '_>, resolution: ScopeDef<'_>) -> bool {
+fn scope_def_is_deprecated<'db>(ctx: &RenderContext<'_, 'db>, resolution: ScopeDef<'db>) -> bool {
     let db = ctx.db();
     match resolution {
         ScopeDef::ModuleDef(hir::ModuleDef::EnumVariant(it)) => ctx.is_variant_deprecated(it),

@@ -606,7 +606,7 @@ fn signature_help_for_record_<'db>(
     sema: &Semantics<'db, RootDatabase>,
     field_list_children: SyntaxElementChildren,
     path: &ast::Path,
-    fields2: impl Iterator<Item = (hir::Field, hir::Type<'db>)>,
+    fields2: impl Iterator<Item = (hir::Field<'db>, hir::Type<'db>)>,
     token: SyntaxToken,
     edition: Edition,
     display_target: DisplayTarget,

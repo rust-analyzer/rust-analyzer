@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-fn coerce_pointee_new_type_param(trait_id: TraitId) -> TypeParamId {
+fn coerce_pointee_new_type_param<'db>(trait_id: TraitId) -> TypeParamId<'db> {
     // HACK: Fake the param.
     // We cannot use a dummy param here, because it can leak into the IDE layer and that'll cause panics
     // when e.g. trying to display it. So we use an existing param.
@@ -287,7 +287,7 @@ fn replace_pointee<'db, T: TypeFoldable<DbInterner<'db>>>(
 fn simple_trait_predicates<'db>(
     interner: DbInterner<'db>,
     loc: &BuiltinDeriveImplLoc,
-    generic_params: &GenericParams,
+    generic_params: &GenericParams<'db>,
     adt_predicates: &GenericPredicates,
     trait_id: TraitId,
 ) -> GenericPredicates {
@@ -350,7 +350,7 @@ fn simple_trait_predicates<'db>(
 fn extend_assoc_type_bounds<'db>(
     interner: DbInterner<'db>,
     assoc_type_bounds: &mut Vec<Clause<'db>>,
-    fields: &ArenaMap<LocalFieldId, FieldType>,
+    fields: &ArenaMap<LocalFieldId<'db>, FieldType>,
     trait_id: TraitId,
     trait_: BuiltinDeriveImplTrait,
 ) {
@@ -392,9 +392,9 @@ fn extend_assoc_type_bounds<'db>(
 fn coerce_pointee_params<'db>(
     interner: DbInterner<'db>,
     loc: &BuiltinDeriveImplLoc,
-    generic_params: &GenericParams,
+    generic_params: &GenericParams<'db>,
     trait_id: TraitId,
-) -> Option<(u32, TypeParamId, Ty<'db>)> {
+) -> Option<(u32, TypeParamId<'db>, Ty<'db>)> {
     let pointee_param = {
         if let Ok((pointee_param, _)) = generic_params
             .iter_type_or_consts()

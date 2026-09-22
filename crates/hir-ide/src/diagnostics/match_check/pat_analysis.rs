@@ -141,7 +141,7 @@ impl<'a, 'db> MatchCheckCtx<'a, 'db> {
         &self,
         ty: Ty<'db>,
         variant: VariantId,
-    ) -> impl Iterator<Item = (LocalFieldId, Ty<'db>)> {
+    ) -> impl Iterator<Item = (LocalFieldId<'db>, Ty<'db>)> {
         let (_, substs) = ty.as_adt().unwrap();
 
         let field_tys = self.db.field_types(variant);

@@ -150,7 +150,7 @@ pub fn test_related_attribute_syn(fn_def: &ast::Fn) -> Option<ast::Attr> {
     })
 }
 
-pub fn has_test_related_attribute(attrs: &hir::AttrsWithOwner) -> bool {
+pub fn has_test_related_attribute(attrs: &hir::AttrsWithOwner<'_>) -> bool {
     attrs.is_test()
 }
 

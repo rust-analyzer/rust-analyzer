@@ -41,7 +41,7 @@ pub(crate) enum PatternError {
 
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct FieldPat<'db> {
-    pub(crate) field: LocalFieldId,
+    pub(crate) field: LocalFieldId<'db>,
     pub(crate) pattern: Pat<'db>,
 }
 
@@ -97,7 +97,7 @@ pub(crate) enum PatKind<'db> {
 pub(crate) struct PatCtxt<'a, 'db> {
     db: &'db dyn HirDatabase,
     infer: &'db InferenceResult<'db>,
-    body: &'a Body,
+    body: &'a Body<'db>,
     pub(crate) errors: Vec<PatternError>,
 }
 
@@ -105,12 +105,12 @@ impl<'a, 'db> PatCtxt<'a, 'db> {
     pub(crate) fn new(
         db: &'db dyn HirDatabase,
         infer: &'db InferenceResult<'db>,
-        body: &'a Body,
+        body: &'a Body<'db>,
     ) -> Self {
         Self { db, infer, body, errors: Vec::new() }
     }
 
-    pub(crate) fn lower_pattern(&mut self, pat: PatId) -> Pat<'db> {
+    pub(crate) fn lower_pattern(&mut self, pat: PatId<'db>) -> Pat<'db> {
         // XXX(iDawer): Collecting pattern adjustments feels imprecise to me.
         // When lowering of & and box patterns are implemented this should be tested
         // in a manner of `match_ergonomics_issue_9095` test.
@@ -126,7 +126,7 @@ impl<'a, 'db> PatCtxt<'a, 'db> {
         )
     }
 
-    fn lower_pattern_unadjusted(&mut self, pat: PatId) -> Pat<'db> {
+    fn lower_pattern_unadjusted(&mut self, pat: PatId<'db>) -> Pat<'db> {
         let mut ty = self.infer.pat_ty(pat);
         let variant = self.infer.variant_resolution_for_pat(pat);
 
@@ -216,7 +216,7 @@ impl<'a, 'db> PatCtxt<'a, 'db> {
 
     fn lower_tuple_subpats(
         &mut self,
-        pats: &[PatId],
+        pats: &[PatId<'db>],
         expected_len: usize,
         ellipsis: Option<u32>,
     ) -> Vec<FieldPat<'db>> {
@@ -234,17 +234,17 @@ impl<'a, 'db> PatCtxt<'a, 'db> {
             .collect()
     }
 
-    fn lower_patterns(&mut self, pats: &[PatId]) -> Vec<Pat<'db>> {
+    fn lower_patterns(&mut self, pats: &[PatId<'db>]) -> Vec<Pat<'db>> {
         pats.iter().map(|&p| self.lower_pattern(p)).collect()
     }
 
-    fn lower_opt_pattern(&mut self, pat: Option<PatId>) -> Option<Pat<'db>> {
+    fn lower_opt_pattern(&mut self, pat: Option<PatId<'db>>) -> Option<Pat<'db>> {
         pat.map(|p| self.lower_pattern(p))
     }
 
     fn lower_variant_or_leaf(
         &mut self,
-        pat: PatId,
+        pat: PatId<'db>,
         ty: Ty<'db>,
         subpatterns: Vec<FieldPat<'db>>,
     ) -> PatKind<'db> {
@@ -275,7 +275,7 @@ impl<'a, 'db> PatCtxt<'a, 'db> {
         }
     }
 
-    fn lower_path(&mut self, pat: PatId, _path: &Path) -> Pat<'db> {
+    fn lower_path(&mut self, pat: PatId<'db>, _path: &Path<'db>) -> Pat<'db> {
         let ty = self.infer.pat_ty(pat);
 
         let pat_from_kind = |kind| Pat { ty, kind: Box::new(kind) };
@@ -289,7 +289,7 @@ impl<'a, 'db> PatCtxt<'a, 'db> {
         }
     }
 
-    fn lower_lit(&mut self, expr: hir_def::hir::ExprId) -> PatKind<'db> {
+    fn lower_lit(&mut self, expr: hir_def::hir::ExprId<'db>) -> PatKind<'db> {
         use hir_def::hir::{Expr, Literal::Bool};
 
         match self.body[expr] {

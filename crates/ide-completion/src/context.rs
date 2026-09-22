@@ -611,7 +611,7 @@ impl<'db> CompletionContext<'_, 'db> {
     }
 
     /// Check if an item is `#[doc(hidden)]`.
-    pub(crate) fn is_item_hidden(&self, item: &hir::ItemInNs<'_>) -> bool {
+    pub(crate) fn is_item_hidden(&self, item: &hir::ItemInNs<'db>) -> bool {
         let attrs = item.attrs(self.db);
         let krate = item.krate(self.db);
         match (attrs, krate) {
@@ -621,7 +621,7 @@ impl<'db> CompletionContext<'_, 'db> {
     }
 
     /// Checks whether this item should be listed in regards to stability. Returns `true` if we should.
-    pub(crate) fn check_stability(&self, attrs: Option<&hir::AttrsWithOwner>) -> bool {
+    pub(crate) fn check_stability(&self, attrs: Option<&hir::AttrsWithOwner<'db>>) -> bool {
         let Some(attrs) = attrs else {
             return true;
         };
@@ -715,7 +715,7 @@ impl<'db> CompletionContext<'_, 'db> {
     fn is_visible_impl(
         &self,
         vis: &hir::Visibility,
-        attrs: &hir::AttrsWithOwner,
+        attrs: &hir::AttrsWithOwner<'db>,
         defining_crate: hir::Crate,
     ) -> Visible {
         if !self.check_stability(Some(attrs)) {
@@ -739,7 +739,7 @@ impl<'db> CompletionContext<'_, 'db> {
 
     pub(crate) fn is_doc_hidden(
         &self,
-        attrs: &hir::AttrsWithOwner,
+        attrs: &hir::AttrsWithOwner<'db>,
         defining_crate: hir::Crate,
     ) -> bool {
         // `doc(hidden)` items are only completed within the defining crate.

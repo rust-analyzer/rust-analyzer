@@ -285,7 +285,7 @@ pub(super) fn free_function<'a, 'lt, 'db, DB: HirDatabase>(
                     .type_or_const_params(db)
                     .into_iter()
                     .map(|it| it.as_type_param(db))
-                    .collect::<Option<Vec<TypeParam>>>()?;
+                    .collect::<Option<Vec<TypeParam<'db>>>>()?;
 
                 // Ignore lifetimes as we do not check them
                 if !generics.lifetime_params(db).is_empty() {

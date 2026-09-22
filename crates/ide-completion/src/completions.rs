@@ -464,12 +464,12 @@ impl Completions {
         }
     }
 
-    pub(crate) fn add_field(
+    pub(crate) fn add_field<'db>(
         &mut self,
-        ctx: &CompletionContext<'_, '_>,
+        ctx: &CompletionContext<'_, 'db>,
         dot_access: &DotAccess<'_>,
         receiver: Option<SmolStr>,
-        field: hir::Field,
+        field: hir::Field<'db>,
         ty: &hir::Type<'_>,
     ) {
         let is_private_editable = match ctx.is_visible(&field) {

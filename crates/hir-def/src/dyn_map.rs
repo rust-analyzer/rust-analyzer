@@ -73,10 +73,10 @@ pub mod keys {
         pub const USE<ast::Use, UseId>;
 
         pub const ENUM_VARIANT<ast::Variant, EnumVariantId>;
-        pub const TUPLE_FIELD<ast::TupleField, FieldId>;
-        pub const RECORD_FIELD<ast::RecordField, FieldId>;
-        pub const TYPE_PARAM<ast::TypeParam, TypeOrConstParamId>;
-        pub const CONST_PARAM<ast::ConstParam, TypeOrConstParamId>;
+        pub const TUPLE_FIELD<ast::TupleField, for<'db> FieldId<'db>>;
+        pub const RECORD_FIELD<ast::RecordField, for<'db> FieldId<'db>>;
+        pub const TYPE_PARAM<ast::TypeParam, for<'db> TypeOrConstParamId<'db>>;
+        pub const CONST_PARAM<ast::ConstParam, for<'db> TypeOrConstParamId<'db>>;
         pub const LIFETIME_PARAM<ast::LifetimeParam, LifetimeParamId>;
 
         pub const MACRO_RULES<ast::MacroRules, MacroRulesId>;

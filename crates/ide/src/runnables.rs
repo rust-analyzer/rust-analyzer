@@ -559,7 +559,7 @@ fn module_def_doctest<'db>(
     Some(res)
 }
 
-fn has_runnable_doc_test(db: &RootDatabase, attrs: &hir::AttrsWithOwner) -> bool {
+fn has_runnable_doc_test(db: &RootDatabase, attrs: &hir::AttrsWithOwner<'_>) -> bool {
     const RUSTDOC_FENCES: [&str; 2] = ["```", "~~~"];
     const RUSTDOC_CODE_BLOCK_ATTRIBUTES_RUNNABLE: &[&str] =
         &["", "rust", "should_panic", "edition2015", "edition2018", "edition2021"];

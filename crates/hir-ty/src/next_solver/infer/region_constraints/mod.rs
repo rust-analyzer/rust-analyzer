@@ -25,7 +25,7 @@ use crate::{
 #[derive(Debug, Clone, Default)]
 pub struct RegionConstraintStorage<'db> {
     /// For each `RegionVid`, the corresponding `RegionVariableOrigin`.
-    pub(super) var_infos: IndexVec<RegionVid, RegionVariableInfo>,
+    pub(super) var_infos: IndexVec<RegionVid, RegionVariableInfo<'db>>,
 
     pub(super) data: RegionConstraintData<'db>,
 
@@ -59,7 +59,7 @@ pub struct RegionConstraintCollector<'db, 'a> {
     undo_log: &'a mut InferCtxtUndoLogs<'db>,
 }
 
-pub type VarInfos = IndexVec<RegionVid, RegionVariableInfo>;
+pub type VarInfos<'db> = IndexVec<RegionVid, RegionVariableInfo<'db>>;
 
 /// The full set of region constraints gathered up by the collector.
 /// Describes constraints between the region variables and other
@@ -124,7 +124,7 @@ pub struct Verify<'db> {
 
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub enum GenericKind<'db> {
-    Param(ParamTy),
+    Param(ParamTy<'db>),
     Placeholder(PlaceholderType<'db>),
     Alias(AliasTy<'db>),
 }
@@ -270,7 +270,7 @@ pub(crate) enum CombineMapType {
 type CombineMap<'db> = FxHashMap<TwoRegions<'db>, RegionVid>;
 
 #[derive(Debug, Clone)]
-pub struct RegionVariableInfo {
+pub struct RegionVariableInfo<'db> {
     // FIXME: This is only necessary for `fn take_and_reset_data` and
     // `lexical_region_resolve`. We should rework `lexical_region_resolve`
     // in the near/medium future anyways and could move the unverse info
@@ -284,7 +284,7 @@ pub struct RegionVariableInfo {
     // This would be currently unsound as it would cause us to drop the universe
     // changes in `lexical_region_resolve`.
     pub universe: UniverseIndex,
-    pub span: Span,
+    pub span: Span<'db>,
 }
 
 pub(crate) struct RegionSnapshot {
@@ -380,7 +380,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
         self.storage.any_unifications = snapshot.any_unifications;
     }
 
-    pub(super) fn new_region_var(&mut self, universe: UniverseIndex, span: Span) -> RegionVid {
+    pub(super) fn new_region_var(&mut self, universe: UniverseIndex, span: Span<'db>) -> RegionVid {
         let vid = self.storage.var_infos.push(RegionVariableInfo { universe, span });
 
         let u_vid =
@@ -468,7 +468,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
     pub(super) fn lub_regions(
         &mut self,
         db: DbInterner<'db>,
-        origin: Span,
+        origin: Span<'db>,
         a: Region<'db>,
         b: Region<'db>,
     ) -> Region<'db> {
@@ -487,7 +487,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
     pub(super) fn glb_regions(
         &mut self,
         db: DbInterner<'db>,
-        origin: Span,
+        origin: Span<'db>,
         a: Region<'db>,
         b: Region<'db>,
     ) -> Region<'db> {
@@ -540,7 +540,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
         t: CombineMapType,
         a: Region<'db>,
         b: Region<'db>,
-        origin: Span,
+        origin: Span<'db>,
     ) -> Region<'db> {
         let vars = TwoRegions { a, b };
         if let Some(c) = self.combine_map(t.clone()).get(&vars) {
@@ -579,7 +579,7 @@ impl<'db> RegionConstraintCollector<'db, '_> {
         }
     }
 
-    pub fn vars_since_snapshot(&self, value_count: usize) -> (Range<RegionVid>, Vec<Span>) {
+    pub fn vars_since_snapshot(&self, value_count: usize) -> (Range<RegionVid>, Vec<Span<'db>>) {
         let range =
             RegionVid::from(value_count)..RegionVid::from(self.storage.unification_table.len());
         (

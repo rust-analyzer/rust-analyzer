@@ -4,6 +4,7 @@ use std::mem;
 use base_db::SourceDatabase;
 use hir_expand::{MacroDefId, name::Name};
 use la_arena::{Arena, ArenaMap, Idx, IdxRange, RawIdx};
+use salsa::SalsaValue;
 
 use crate::{
     BlockId, DefWithBodyId, ExpressionStoreOwnerId, GenericDefId, VariantId,
@@ -18,11 +19,11 @@ use crate::{
 
 pub type ScopeId = Idx<ScopeData>;
 
-#[derive(Debug, PartialEq, Eq)]
-pub struct ExprScopes {
+#[derive(Debug, PartialEq, Eq, SalsaValue)]
+pub struct ExprScopes<'db> {
     scopes: Arena<ScopeData>,
     scope_entries: Arena<ScopeEntry>,
-    scope_by_expr: ArenaMap<ExprId, ScopeId>,
+    scope_by_expr: ArenaMap<ExprId<'db>, ScopeId>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -62,9 +63,9 @@ enum ScopeKind {
 }
 
 #[salsa::tracked]
-impl ExprScopes {
+impl<'db> ExprScopes<'db> {
     #[salsa::tracked(returns(ref))]
-    pub fn body_expr_scopes(db: &dyn SourceDatabase, def: DefWithBodyId) -> ExprScopes {
+    pub fn body_expr_scopes(db: &dyn SourceDatabase, def: DefWithBodyId) -> ExprScopes<'db> {
         let body = Body::of(db, def);
         let mut scopes = ExprScopes::new_body(body);
         scopes.shrink_to_fit();
@@ -72,7 +73,7 @@ impl ExprScopes {
     }
 
     #[salsa::tracked(returns(ref))]
-    pub fn sig_expr_scopes(db: &dyn SourceDatabase, def: GenericDefId) -> ExprScopes {
+    pub fn sig_expr_scopes(db: &dyn SourceDatabase, def: GenericDefId) -> ExprScopes<'db> {
         let (_, store) = GenericParams::with_store(db, def);
         let roots = store.expr_roots();
         let mut scopes = ExprScopes::new_store(store, roots);
@@ -81,7 +82,7 @@ impl ExprScopes {
     }
 
     #[salsa::tracked(returns(ref))]
-    pub fn variant_scopes(db: &dyn SourceDatabase, def: VariantId) -> ExprScopes {
+    pub fn variant_scopes(db: &dyn SourceDatabase, def: VariantId) -> ExprScopes<'db> {
         let fields = VariantFields::of(db, def);
         let roots = fields.store.expr_roots();
         let mut scopes = ExprScopes::new_store(&fields.store, roots);
@@ -90,9 +91,12 @@ impl ExprScopes {
     }
 }
 
-impl ExprScopes {
+impl<'db> ExprScopes<'db> {
     #[inline]
-    pub fn of(db: &dyn SourceDatabase, def: impl Into<ExpressionStoreOwnerId>) -> &ExprScopes {
+    pub fn of(
+        db: &'db dyn SourceDatabase,
+        def: impl Into<ExpressionStoreOwnerId>,
+    ) -> &'db ExprScopes<'db> {
         match def.into() {
             ExpressionStoreOwnerId::Body(def) => Self::body_expr_scopes(db, def),
             ExpressionStoreOwnerId::Signature(def) => Self::sig_expr_scopes(db, def),
@@ -145,11 +149,11 @@ impl ExprScopes {
             .find_map(|scope| self.entries(scope).iter().find(|it| it.name == *name))
     }
 
-    pub fn scope_for(&self, expr: ExprId) -> Option<ScopeId> {
+    pub fn scope_for(&self, expr: ExprId<'db>) -> Option<ScopeId> {
         self.scope_by_expr.get(expr).copied()
     }
 
-    pub fn scope_by_expr(&self) -> &ArenaMap<ExprId, ScopeId> {
+    pub fn scope_by_expr(&self) -> &ArenaMap<ExprId<'db>, ScopeId> {
         &self.scope_by_expr
     }
 }
@@ -158,8 +162,8 @@ fn empty_entries(idx: usize) -> IdxRange<ScopeEntry> {
     IdxRange::new(Idx::from_raw(RawIdx::from(idx as u32))..Idx::from_raw(RawIdx::from(idx as u32)))
 }
 
-impl ExprScopes {
-    fn new_body(body: &Body) -> ExprScopes {
+impl<'db> ExprScopes<'db> {
+    fn new_body(body: &Body<'db>) -> ExprScopes<'db> {
         let mut scopes = ExprScopes {
             scopes: Arena::default(),
             scope_entries: Arena::default(),
@@ -178,7 +182,10 @@ impl ExprScopes {
         scopes
     }
 
-    fn new_store(store: &ExpressionStore, roots: impl IntoIterator<Item = ExprId>) -> ExprScopes {
+    fn new_store(
+        store: &ExpressionStore<'db>,
+        roots: impl IntoIterator<Item = ExprId<'db>>,
+    ) -> ExprScopes<'db> {
         let mut scopes = ExprScopes {
             scopes: Arena::default(),
             scope_entries: Arena::default(),
@@ -251,7 +258,7 @@ impl ExprScopes {
 
     fn add_bindings(
         &mut self,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
         scope: ScopeId,
         binding: BindingId,
         hygiene: HygieneId,
@@ -262,7 +269,7 @@ impl ExprScopes {
             IdxRange::new_inclusive(self.scopes[scope].entries.start()..=entry);
     }
 
-    fn set_scope(&mut self, node: ExprId, scope: ScopeId) {
+    fn set_scope(&mut self, node: ExprId<'db>, scope: ScopeId) {
         self.scope_by_expr.insert(node, scope);
     }
 
@@ -274,14 +281,14 @@ impl ExprScopes {
     }
 }
 
-struct ExprScopeVisitor<'a> {
-    store: &'a ExpressionStore,
-    scopes: &'a mut ExprScopes,
+struct ExprScopeVisitor<'a, 'db> {
+    store: &'a ExpressionStore<'db>,
+    scopes: &'a mut ExprScopes<'db>,
     scope: ScopeId,
     const_scope: ScopeId,
 }
 
-impl ExprScopeVisitor<'_> {
+impl<'db> ExprScopeVisitor<'_, 'db> {
     fn with_scope(&mut self, scope: ScopeId, f: impl FnOnce(&mut Self)) {
         let old_scope = mem::replace(&mut self.scope, scope);
         f(self);
@@ -290,10 +297,10 @@ impl ExprScopeVisitor<'_> {
 
     fn visit_block(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         id: Option<BlockId>,
-        statements: &[Statement],
-        tail: Option<ExprId>,
+        statements: &[Statement<'db>],
+        tail: Option<ExprId<'db>>,
         label: Option<LabelId>,
     ) {
         let scope = self.scopes.new_block_scope(self.scope, id, label);
@@ -319,7 +326,7 @@ impl ExprScopeVisitor<'_> {
                         this.on_pat(*pat);
                     }
                     Statement::Expr { expr, has_semi: _ } => this.on_expr(*expr),
-                    Statement::Item(Item::MacroDef(macro_id)) => {
+                    Statement::Item(Item::MacroDef(macro_id, std::marker::PhantomData)) => {
                         this.scope = this.scopes.new_macro_def_scope(this.scope, macro_id.clone());
                         this.const_scope =
                             this.scopes.new_macro_def_scope(this.const_scope, macro_id.clone());
@@ -334,8 +341,8 @@ impl ExprScopeVisitor<'_> {
     }
 }
 
-impl StoreVisitor for ExprScopeVisitor<'_> {
-    fn on_expr(&mut self, expr: ExprId) {
+impl<'db> StoreVisitor<'db> for ExprScopeVisitor<'_, 'db> {
+    fn on_expr(&mut self, expr: ExprId<'db>) {
         self.scopes.set_scope(expr, self.scope);
         match &self.store[expr] {
             Expr::Block { statements, tail, id, label, unsafe_: _ } => {
@@ -382,11 +389,11 @@ impl StoreVisitor for ExprScopeVisitor<'_> {
         }
     }
 
-    fn on_anon_const_expr(&mut self, expr: ExprId) {
+    fn on_anon_const_expr(&mut self, expr: ExprId<'db>) {
         self.with_scope(self.const_scope, |this| this.on_expr(expr));
     }
 
-    fn on_pat(&mut self, pat: PatId) {
+    fn on_pat(&mut self, pat: PatId<'db>) {
         if let Pat::Bind { id, .. } = self.store[pat] {
             self.scopes.add_bindings(self.store, self.scope, id, self.store.binding_hygiene(id));
         }
@@ -394,7 +401,7 @@ impl StoreVisitor for ExprScopeVisitor<'_> {
         self.store.visit_pat_children(pat, self);
     }
 
-    fn on_type(&mut self, ty: TypeRefId) {
+    fn on_type(&mut self, ty: TypeRefId<'db>) {
         self.with_scope(self.const_scope, |this| self.store.visit_type_ref_children(ty, this));
     }
 }

@@ -25,9 +25,9 @@ macro_rules! not_supported {
     };
 }
 
-pub(super) enum AdtPatternShape<'a> {
-    Tuple { args: &'a [PatId], ellipsis: Option<u32> },
-    Record { args: &'a [RecordFieldPat] },
+pub(super) enum AdtPatternShape<'a, 'db> {
+    Tuple { args: &'a [PatId<'db>], ellipsis: Option<u32> },
+    Record { args: &'a [RecordFieldPat<'db>] },
     Unit,
 }
 
@@ -65,11 +65,11 @@ impl<'db> MirLowerCtx<'_, 'db> {
     /// so it should be an empty block.
     pub(super) fn pattern_match(
         &mut self,
-        current: BasicBlockId,
-        current_else: Option<BasicBlockId>,
+        current: BasicBlockId<'db>,
+        current_else: Option<BasicBlockId<'db>>,
         cond_place: Place<'db>,
-        pattern: PatId,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+        pattern: PatId<'db>,
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let (current, current_else) = self.pattern_match_inner(
             current,
             current_else,
@@ -89,10 +89,10 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     pub(super) fn pattern_match_assignment(
         &mut self,
-        current: BasicBlockId,
+        current: BasicBlockId<'db>,
         value: Place<'db>,
-        pattern: PatId,
-    ) -> Result<'db, BasicBlockId> {
+        pattern: PatId<'db>,
+    ) -> Result<'db, BasicBlockId<'db>> {
         let (current, _) =
             self.pattern_match_inner(current, None, value, pattern, MatchingMode::Assign)?;
         Ok(current)
@@ -101,9 +101,9 @@ impl<'db> MirLowerCtx<'_, 'db> {
     pub(super) fn match_self_param(
         &mut self,
         id: BindingId,
-        current: BasicBlockId,
+        current: BasicBlockId<'db>,
         local: LocalId,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         self.pattern_match_binding(
             id,
             BindingMode(ByRef::No, rustc_ast_ir::Mutability::Not),
@@ -116,12 +116,12 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn pattern_match_inner(
         &mut self,
-        mut current: BasicBlockId,
-        mut current_else: Option<BasicBlockId>,
+        mut current: BasicBlockId<'db>,
+        mut current_else: Option<BasicBlockId<'db>>,
         mut cond_place: Place<'db>,
-        pattern: PatId,
+        pattern: PatId<'db>,
         mode: MatchingMode,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let cnt = self.infer.pat_adjustments.get(&pattern).map(|x| x.len()).unwrap_or_default();
         cond_place.projection = Projection::new_from_iter(
             cond_place
@@ -206,7 +206,7 @@ impl<'db> MirLowerCtx<'_, 'db> {
                 )?
             }
             Pat::Range { start, end, range_type: _ } => {
-                let mut add_check = |l: &ExprId, binop| -> Result<'db, ()> {
+                let mut add_check = |l: &ExprId<'db>, binop| -> Result<'db, ()> {
                     let lv =
                         self.lower_literal_or_const_to_operand(self.infer.pat_ty(pattern), l)?;
                     let else_target = *current_else.get_or_insert_with(|| self.new_basic_block());
@@ -522,10 +522,10 @@ impl<'db> MirLowerCtx<'_, 'db> {
         id: BindingId,
         mode: BindingMode,
         cond_place: Place<'db>,
-        span: MirSpan,
-        current: BasicBlockId,
-        current_else: Option<BasicBlockId>,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+        span: MirSpan<'db>,
+        current: BasicBlockId<'db>,
+        current_else: Option<BasicBlockId<'db>>,
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let target_place = self.binding_local(id)?;
         self.push_storage_live(id, current)?;
         self.push_match_assignment(current, target_place, mode, cond_place, span);
@@ -534,11 +534,11 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn push_match_assignment(
         &mut self,
-        current: BasicBlockId,
+        current: BasicBlockId<'db>,
         target_place: LocalId,
         mode: BindingMode,
         cond_place: Place<'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) {
         self.push_assignment(
             current,
@@ -561,12 +561,12 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn pattern_match_const(
         &mut self,
-        current_else: Option<BasicBlockId>,
-        current: BasicBlockId,
-        c: Operand,
+        current_else: Option<BasicBlockId<'db>>,
+        current: BasicBlockId<'db>,
+        c: Operand<'db>,
         cond_place: Place<'db>,
-        pattern: Idx<Pat>,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+        pattern: Idx<Pat<'db>>,
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let then_target = self.new_basic_block();
         let else_target = current_else.unwrap_or_else(|| self.new_basic_block());
         let discr = self.temp(Ty::new_bool(self.interner()), current, pattern.into())?.into();
@@ -596,12 +596,12 @@ impl<'db> MirLowerCtx<'_, 'db> {
         &mut self,
         cond_place: Place<'db>,
         variant: VariantId,
-        mut current: BasicBlockId,
-        span: MirSpan,
-        mut current_else: Option<BasicBlockId>,
-        shape: AdtPatternShape<'_>,
+        mut current: BasicBlockId<'db>,
+        span: MirSpan<'db>,
+        mut current_else: Option<BasicBlockId<'db>>,
+        shape: AdtPatternShape<'_, 'db>,
         mode: MatchingMode,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let place_ty = cond_place.ty(&self.result, &self.infcx, self.env).ty;
         let Some((place_adt, _)) = place_ty.as_adt() else {
             return Err(MirLowerError::TypeError("non ADT type matched with ADT pattern"));
@@ -660,14 +660,14 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn pattern_matching_variant_fields(
         &mut self,
-        shape: AdtPatternShape<'_>,
-        variant_data: &VariantFields,
+        shape: AdtPatternShape<'_, 'db>,
+        variant_data: &VariantFields<'db>,
         v: VariantId,
-        current: BasicBlockId,
-        current_else: Option<BasicBlockId>,
+        current: BasicBlockId<'db>,
+        current_else: Option<BasicBlockId<'db>>,
         cond_place: &Place<'db>,
         mode: MatchingMode,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let downcast_place = if matches!(v, VariantId::EnumVariantId(_)) {
             cond_place.project(ProjectionElem::Downcast(v))
         } else {
@@ -709,12 +709,12 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn pattern_match_adt(
         &mut self,
-        mut current: BasicBlockId,
-        mut current_else: Option<BasicBlockId>,
-        args: impl Iterator<Item = (PlaceElem, PatId)>,
+        mut current: BasicBlockId<'db>,
+        mut current_else: Option<BasicBlockId<'db>>,
+        args: impl Iterator<Item = (PlaceElem, PatId<'db>)>,
         cond_place: &Place<'db>,
         mode: MatchingMode,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         for (proj, arg) in args {
             let cond_place = cond_place.project(proj);
             (current, current_else) =
@@ -725,14 +725,14 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn pattern_match_tuple_like(
         &mut self,
-        current: BasicBlockId,
-        current_else: Option<BasicBlockId>,
-        args: &[PatId],
+        current: BasicBlockId<'db>,
+        current_else: Option<BasicBlockId<'db>>,
+        args: &[PatId<'db>],
         ellipsis: Option<u32>,
         fields: impl DoubleEndedIterator<Item = PlaceElem> + Clone,
         cond_place: &Place<'db>,
         mode: MatchingMode,
-    ) -> Result<'db, (BasicBlockId, Option<BasicBlockId>)> {
+    ) -> Result<'db, (BasicBlockId<'db>, Option<BasicBlockId<'db>>)> {
         let (al, ar) = args.split_at(ellipsis.map_or(args.len(), |it| it as usize));
         let it = al
             .iter()

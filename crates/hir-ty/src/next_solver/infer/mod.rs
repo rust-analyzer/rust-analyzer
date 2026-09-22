@@ -290,7 +290,7 @@ impl<'db> ValuePairs<'db> {
 /// See the `error_reporting` module for more details.
 #[derive(Clone, Debug)]
 pub struct TypeTrace<'db> {
-    pub cause: ObligationCause,
+    pub cause: ObligationCause<'db>,
     pub values: ValuePairs<'db>,
 }
 
@@ -339,7 +339,7 @@ impl<'db> InferCtxtBuilder<'db> {
     /// (in other words, `S(C) = V`).
     pub fn build_with_canonical<T>(
         mut self,
-        span: Span,
+        span: Span<'db>,
         input: &CanonicalQueryInput<'db, T>,
     ) -> (InferCtxt<'db>, T, CanonicalVarValues<'db>)
     where
@@ -653,7 +653,7 @@ impl<'db> InferCtxt<'db> {
     /// the coercion, and we don't currently have a way to manage that.)
     pub fn coerce_predicate(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         predicate: PolyCoercePredicate<'db>,
     ) -> Result<InferResult<'db, ()>, (TyVid, TyVid)> {
@@ -667,7 +667,7 @@ impl<'db> InferCtxt<'db> {
 
     pub fn subtype_predicate(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         predicate: PolySubtypePredicate<'db>,
     ) -> Result<InferResult<'db, ()>, (TyVid, TyVid)> {
@@ -704,7 +704,7 @@ impl<'db> InferCtxt<'db> {
 
     pub fn region_outlives_predicate(
         &self,
-        _cause: &traits::ObligationCause,
+        _cause: &traits::ObligationCause<'db>,
         predicate: PolyRegionOutlivesPredicate<'db>,
     ) {
         self.enter_forall(predicate, |OutlivesPredicate(r_a, r_b)| {
@@ -717,34 +717,34 @@ impl<'db> InferCtxt<'db> {
         self.inner.borrow_mut().type_variables().num_vars()
     }
 
-    pub fn next_ty_var(&self, span: Span) -> Ty<'db> {
+    pub fn next_ty_var(&self, span: Span<'db>) -> Ty<'db> {
         let vid = self.next_ty_vid(span);
         Ty::new_var(self.interner, vid)
     }
 
-    pub fn next_ty_vid(&self, span: Span) -> TyVid {
+    pub fn next_ty_vid(&self, span: Span<'db>) -> TyVid {
         self.next_ty_var_id_in_universe(self.universe(), span)
     }
 
-    pub fn next_ty_var_id_in_universe(&self, universe: UniverseIndex, span: Span) -> TyVid {
+    pub fn next_ty_var_id_in_universe(&self, universe: UniverseIndex, span: Span<'db>) -> TyVid {
         self.inner.borrow_mut().type_variables().new_var(universe, span)
     }
 
-    pub fn next_ty_var_in_universe(&self, universe: UniverseIndex, span: Span) -> Ty<'db> {
+    pub fn next_ty_var_in_universe(&self, universe: UniverseIndex, span: Span<'db>) -> Ty<'db> {
         let vid = self.next_ty_var_id_in_universe(universe, span);
         Ty::new_var(self.interner, vid)
     }
 
-    pub fn next_const_var(&self, span: Span) -> Const<'db> {
+    pub fn next_const_var(&self, span: Span<'db>) -> Const<'db> {
         let vid = self.next_const_vid(span);
         Const::new_var(self.interner, vid)
     }
 
-    pub fn next_const_vid(&self, span: Span) -> ConstVid {
+    pub fn next_const_vid(&self, span: Span<'db>) -> ConstVid {
         self.next_const_vid_in_universe(self.universe(), span)
     }
 
-    pub fn next_const_vid_in_universe(&self, universe: UniverseIndex, span: Span) -> ConstVid {
+    pub fn next_const_vid_in_universe(&self, universe: UniverseIndex, span: Span<'db>) -> ConstVid {
         self.inner
             .borrow_mut()
             .const_unification_table()
@@ -752,7 +752,11 @@ impl<'db> InferCtxt<'db> {
             .vid
     }
 
-    pub fn next_const_var_in_universe(&self, universe: UniverseIndex, span: Span) -> Const<'db> {
+    pub fn next_const_var_in_universe(
+        &self,
+        universe: UniverseIndex,
+        span: Span<'db>,
+    ) -> Const<'db> {
         let vid = self.next_const_vid_in_universe(universe, span);
         Const::new_var(self.interner, vid)
     }
@@ -777,24 +781,28 @@ impl<'db> InferCtxt<'db> {
     /// Creates a fresh region variable with the next available index.
     /// The variable will be created in the maximum universe created
     /// thus far, allowing it to name any region created thus far.
-    pub fn next_region_var(&self, span: Span) -> Region<'db> {
+    pub fn next_region_var(&self, span: Span<'db>) -> Region<'db> {
         self.next_region_var_in_universe(self.universe(), span)
     }
 
-    pub fn next_region_vid(&self, span: Span) -> RegionVid {
+    pub fn next_region_vid(&self, span: Span<'db>) -> RegionVid {
         self.inner.borrow_mut().unwrap_region_constraints().new_region_var(self.universe(), span)
     }
 
     /// Creates a fresh region variable with the next available index
     /// in the given universe; typically, you can use
     /// `next_region_var` and just use the maximal universe.
-    pub fn next_region_var_in_universe(&self, universe: UniverseIndex, span: Span) -> Region<'db> {
+    pub fn next_region_var_in_universe(
+        &self,
+        universe: UniverseIndex,
+        span: Span<'db>,
+    ) -> Region<'db> {
         let region_var =
             self.inner.borrow_mut().unwrap_region_constraints().new_region_var(universe, span);
         Region::new_var(self.interner, region_var)
     }
 
-    pub fn next_term_var_of_kind(&self, term: Term<'db>, span: Span) -> Term<'db> {
+    pub fn next_term_var_of_kind(&self, term: Term<'db>, span: Span<'db>) -> Term<'db> {
         match term.kind() {
             TermKind::Ty(_) => self.next_ty_var(span).into(),
             TermKind::Const(_) => self.next_const_var(span).into(),
@@ -815,7 +823,7 @@ impl<'db> InferCtxt<'db> {
         self.inner.borrow_mut().unwrap_region_constraints().num_region_vars()
     }
 
-    pub fn var_for_def(&self, id: GenericParamId, span: Span) -> GenericArg<'db> {
+    pub fn var_for_def(&self, id: GenericParamId<'db>, span: Span<'db>) -> GenericArg<'db> {
         match id {
             GenericParamId::LifetimeParamId(_) => {
                 // Create a region inference variable for the given
@@ -839,7 +847,11 @@ impl<'db> InferCtxt<'db> {
 
     /// Given a set of generics defined on a type or impl, returns the generic parameters mapping
     /// each type/region parameter to a fresh inference variable.
-    pub fn fresh_args_for_item(&self, span: Span, def_id: SolverDefId<'db>) -> GenericArgs<'db> {
+    pub fn fresh_args_for_item(
+        &self,
+        span: Span<'db>,
+        def_id: SolverDefId<'db>,
+    ) -> GenericArgs<'db> {
         GenericArgs::for_item(self.interner, def_id, |_index, kind, _, _| {
             self.var_for_def(kind, span)
         })
@@ -848,7 +860,7 @@ impl<'db> InferCtxt<'db> {
     /// Like [`Self::fresh_args_for_item`], but first uses the args from `first`.
     pub fn fill_rest_fresh_args(
         &self,
-        span: Span,
+        span: Span<'db>,
         def_id: SolverDefId<'db>,
         first: impl IntoIterator<Item = GenericArg<'db>>,
     ) -> GenericArgs<'db> {
@@ -1080,12 +1092,12 @@ impl<'db> InferCtxt<'db> {
     /// Returns the span of the type variable identified by `vid`.
     ///
     /// No attempt is made to resolve `vid` to its root variable.
-    pub fn type_var_span(&self, vid: TyVid) -> Span {
+    pub fn type_var_span(&self, vid: TyVid) -> Span<'db> {
         self.inner.borrow_mut().type_variables().var_span(vid)
     }
 
     /// Returns the span of the const variable identified by `vid`
-    pub fn const_var_span(&self, vid: ConstVid) -> Option<Span> {
+    pub fn const_var_span(&self, vid: ConstVid) -> Option<Span<'db>> {
         match self.inner.borrow_mut().const_unification_table().probe_value(vid) {
             ConstVariableValue::Known { .. } => None,
             ConstVariableValue::Unknown { span, .. } => Some(span),
@@ -1101,7 +1113,7 @@ impl<'db> InferCtxt<'db> {
     // use [`InferCtxt::enter_forall`] instead.
     pub fn instantiate_binder_with_fresh_vars<T>(
         &self,
-        span: Span,
+        span: Span<'db>,
         _lbrct: BoundRegionConversionTime<'db>,
         value: Binder<'db, T>,
     ) -> T
@@ -1327,7 +1339,7 @@ impl TyOrConstInferVar {
 }
 
 impl<'db> TypeTrace<'db> {
-    pub fn types(cause: &ObligationCause, a: Ty<'db>, b: Ty<'db>) -> TypeTrace<'db> {
+    pub fn types(cause: &ObligationCause<'db>, a: Ty<'db>, b: Ty<'db>) -> TypeTrace<'db> {
         TypeTrace {
             cause: *cause,
             values: ValuePairs::Terms(ExpectedFound::new(a.into(), b.into())),
@@ -1335,14 +1347,14 @@ impl<'db> TypeTrace<'db> {
     }
 
     pub fn trait_refs(
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         a: TraitRef<'db>,
         b: TraitRef<'db>,
     ) -> TypeTrace<'db> {
         TypeTrace { cause: *cause, values: ValuePairs::TraitRefs(ExpectedFound::new(a, b)) }
     }
 
-    pub fn consts(cause: &ObligationCause, a: Const<'db>, b: Const<'db>) -> TypeTrace<'db> {
+    pub fn consts(cause: &ObligationCause<'db>, a: Const<'db>, b: Const<'db>) -> TypeTrace<'db> {
         TypeTrace {
             cause: *cause,
             values: ValuePairs::Terms(ExpectedFound::new(a.into(), b.into())),

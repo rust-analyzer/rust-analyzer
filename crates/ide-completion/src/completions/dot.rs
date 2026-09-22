@@ -182,11 +182,11 @@ pub(crate) fn complete_undotted_self<'db>(
     });
 }
 
-fn complete_fields(
+fn complete_fields<'db>(
     acc: &mut Completions,
-    ctx: &CompletionContext<'_, '_>,
-    receiver: &hir::Type<'_>,
-    mut named_field: impl FnMut(&mut Completions, hir::Field, hir::Type<'_>),
+    ctx: &CompletionContext<'_, 'db>,
+    receiver: &hir::Type<'db>,
+    mut named_field: impl FnMut(&mut Completions, hir::Field<'db>, hir::Type<'_>),
     mut tuple_index: impl FnMut(&mut Completions, usize, hir::Type<'_>),
     has_parens: bool,
 ) {

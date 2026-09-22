@@ -90,10 +90,10 @@ pub enum CastError {
 impl CastError {
     fn into_diagnostic<'db>(
         self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         expr_ty: Ty<'db>,
         cast_ty: Ty<'db>,
-    ) -> InferenceDiagnostic {
+    ) -> InferenceDiagnostic<'db> {
         InferenceDiagnostic::InvalidCast {
             expr,
             error: self,
@@ -105,16 +105,16 @@ impl CastError {
 
 #[derive(Clone, Debug)]
 pub(super) struct CastCheck<'db> {
-    expr: ExprId,
-    source_expr: ExprId,
+    expr: ExprId<'db>,
+    source_expr: ExprId<'db>,
     expr_ty: Ty<'db>,
     cast_ty: Ty<'db>,
 }
 
 impl<'db> CastCheck<'db> {
     pub(super) fn new(
-        expr: ExprId,
-        source_expr: ExprId,
+        expr: ExprId<'db>,
+        source_expr: ExprId<'db>,
         expr_ty: Ty<'db>,
         cast_ty: Ty<'db>,
     ) -> Self {
@@ -124,7 +124,7 @@ impl<'db> CastCheck<'db> {
     pub(super) fn check(
         &mut self,
         ctx: &mut InferenceContext<'db>,
-    ) -> Result<(), InferenceDiagnostic> {
+    ) -> Result<(), InferenceDiagnostic<'db>> {
         self.expr_ty =
             ctx.table.try_structurally_resolve_type(self.source_expr.into(), self.expr_ty);
         self.cast_ty = ctx.table.try_structurally_resolve_type(self.expr.into(), self.cast_ty);
@@ -511,12 +511,12 @@ enum PointerKind<'db> {
     /// The unsize info of this projection or opaque type
     OfAlias,
     /// The unsize info of this parameter
-    OfParam(ParamTy),
+    OfParam(ParamTy<'db>),
     Error,
 }
 
 fn pointer_kind<'db>(
-    expr: ExprId,
+    expr: ExprId<'db>,
     ty: Ty<'db>,
     ctx: &mut InferenceContext<'db>,
 ) -> Result<Option<PointerKind<'db>>, ()> {

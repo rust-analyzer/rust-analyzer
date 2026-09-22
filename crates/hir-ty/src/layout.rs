@@ -51,8 +51,10 @@ impl rustc_index::Idx for RustcEnumVariantIdx {
     }
 }
 
+// FIXME: relax `rustc_index::Idx` to not require `'static` so that we can use `LocalFieldId<'db>`
+// here?
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct RustcFieldIdx(pub LocalFieldId);
+pub struct RustcFieldIdx(pub LocalFieldId<'static>);
 
 impl RustcFieldIdx {
     pub fn new(idx: usize) -> Self {
@@ -560,12 +562,12 @@ fn struct_tail_erasing_lifetimes<'a>(db: &'a dyn HirDatabase, pointee: Ty<'a>) -
     }
 }
 
-fn field_ty<'a>(
-    db: &'a dyn HirDatabase,
+fn field_ty<'db>(
+    db: &'db dyn HirDatabase,
     def: hir_def::VariantId,
-    fd: LocalFieldId,
-    args: GenericArgs<'a>,
-) -> Ty<'a> {
+    fd: LocalFieldId<'db>,
+    args: GenericArgs<'db>,
+) -> Ty<'db> {
     db.field_types(def)[fd].ty().instantiate(DbInterner::new_no_crate(db), args).skip_norm_wip()
 }
 

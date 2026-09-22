@@ -246,7 +246,7 @@ pub(crate) fn resolve_doc_path_for_def<'db>(
 pub(crate) fn doc_attributes<'db>(
     sema: &Semantics<'db, RootDatabase>,
     node: &SyntaxNode,
-) -> Option<(hir::AttrsWithOwner, Definition<'db>)> {
+) -> Option<(hir::AttrsWithOwner<'db>, Definition<'db>)> {
     match_ast! {
         match node {
             ast::SourceFile(it)  => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
@@ -362,7 +362,7 @@ impl DocCommentToken {
         sema: &Semantics<'db, RootDatabase>,
         node: &SyntaxNode,
         is_inner_doc: bool,
-    ) -> Option<(AttrsWithOwner, Definition<'db>)> {
+    ) -> Option<(AttrsWithOwner<'db>, Definition<'db>)> {
         if is_inner_doc && node.kind() != SOURCE_FILE {
             let parent = node.parent()?;
             doc_attributes(sema, &parent).or(doc_attributes(sema, &parent.parent()?))

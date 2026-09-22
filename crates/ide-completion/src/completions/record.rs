@@ -125,10 +125,10 @@ pub(crate) fn add_default_update(
     }
 }
 
-fn complete_fields(
+fn complete_fields<'db>(
     acc: &mut Completions,
-    ctx: &CompletionContext<'_, '_>,
-    missing_fields: Vec<(hir::Field, hir::Type<'_>)>,
+    ctx: &CompletionContext<'_, 'db>,
+    missing_fields: Vec<(hir::Field<'db>, hir::Type<'_>)>,
 ) {
     for (field, ty) in missing_fields {
         // This should call something else, we shouldn't be synthesizing a DotAccess here

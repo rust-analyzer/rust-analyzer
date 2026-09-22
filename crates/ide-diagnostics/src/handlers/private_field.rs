@@ -10,7 +10,10 @@ use crate::{Diagnostic, DiagnosticCode, DiagnosticsContext, fix};
 // Diagnostic: private-field
 //
 // This diagnostic is triggered if the accessed field is not visible from the current module.
-pub(crate) fn private_field(ctx: &DiagnosticsContext<'_, '_>, d: &hir::PrivateField) -> Diagnostic {
+pub(crate) fn private_field(
+    ctx: &DiagnosticsContext<'_, '_>,
+    d: &hir::PrivateField<'_>,
+) -> Diagnostic {
     Diagnostic::new_with_syntax_node_ptr(
         ctx,
         DiagnosticCode::RustcHardError("E0616"),
@@ -33,7 +36,7 @@ pub(crate) fn private_field(ctx: &DiagnosticsContext<'_, '_>, d: &hir::PrivateFi
 pub(crate) fn field_is_private_fixes(
     sema: &Semantics<'_, RootDatabase>,
     usage_file_id: EditionedFileId,
-    private_field: hir::Field,
+    private_field: hir::Field<'_>,
     fix_range: TextRange,
 ) -> Option<Vec<Assist>> {
     let def_crate = private_field.krate(sema.db);

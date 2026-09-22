@@ -271,14 +271,14 @@ impl<'db> InferCtxt<'db> {
     }
 }
 
-struct Select {
-    span: Span,
+struct Select<'db> {
+    span: Span<'db>,
 }
 
-impl<'db> ProofTreeVisitor<'db> for Select {
+impl<'db> ProofTreeVisitor<'db> for Select<'db> {
     type Result = ControlFlow<SelectionResult<'db, Selection<'db>>>;
 
-    fn span(&self) -> Span {
+    fn span(&self) -> Span<'db> {
         self.span
     }
 
@@ -378,7 +378,7 @@ fn candidate_should_be_dropped_in_favor_of<'db>(
     }
 }
 
-fn to_selection<'db>(span: Span, cand: InspectCandidate<'_, 'db>) -> Option<Selection<'db>> {
+fn to_selection<'db>(span: Span<'db>, cand: InspectCandidate<'_, 'db>) -> Option<Selection<'db>> {
     if let Certainty::Maybe { .. } = cand.shallow_certainty() {
         return None;
     }

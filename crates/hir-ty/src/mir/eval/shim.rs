@@ -35,7 +35,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         generic_args: GenericArgs<'db>,
         locals: &Locals<'a, 'db>,
         destination: Interval,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, bool> {
         if self.not_special_fn_cache.borrow().contains(&def) {
             return Ok(false);
@@ -134,7 +134,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         self_ty: Ty<'db>,
         locals: &Locals<'a, 'db>,
         destination: Interval,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         match self_ty.kind() {
             TyKind::FnPtr(..) => {
@@ -192,7 +192,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         def: FunctionId,
         locals: &Locals<'a, 'db>,
         destination: Interval,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         for (i, ty) in ty_iter.enumerate() {
             let size = self.layout(ty)?.size.bytes_usize();
@@ -297,7 +297,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         generic_args: GenericArgs<'db>,
         args: &[IntervalAndTy<'db>],
         locals: &Locals<'a, 'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, Vec<u8>> {
         use EvalLangItem::*;
         let mut args = args.iter();
@@ -369,7 +369,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         args: &[IntervalAndTy<'db>],
         destination: Interval,
         _locals: &Locals<'a, 'db>,
-        _span: MirSpan,
+        _span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         match id {
             318 => {
@@ -400,7 +400,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         _generic_args: GenericArgs<'db>,
         destination: Interval,
         locals: &Locals<'a, 'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         match as_str {
             "memcmp" => {
@@ -564,7 +564,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         generic_args: GenericArgs<'db>,
         destination: Interval,
         locals: &Locals<'a, 'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
         needs_override: bool,
     ) -> Result<'db, bool> {
         if let Some(name) = name.strip_prefix("atomic_") {
@@ -1515,7 +1515,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         generic_args: GenericArgs<'db>,
         destination: Interval,
         locals: &Locals<'a, 'db>,
-        _span: MirSpan,
+        _span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         // We are a single threaded runtime with no UB checking and no optimization, so
         // we can implement atomic intrinsics as normal functions.

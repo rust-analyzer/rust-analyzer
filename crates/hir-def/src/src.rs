@@ -74,12 +74,12 @@ impl HasChildSource<'_, la_arena::Idx<ast::UseTree>> for UseId {
     }
 }
 
-impl HasChildSource<'_, LocalTypeOrConstParamId> for GenericDefId {
+impl<'db> HasChildSource<'db, LocalTypeOrConstParamId<'db>> for GenericDefId {
     type Value = Either<ast::TypeOrConstParam, ast::Trait>;
     fn child_source(
         &self,
-        db: &dyn SourceDatabase,
-    ) -> InFile<ArenaMap<LocalTypeOrConstParamId, Self::Value>> {
+        db: &'db dyn SourceDatabase,
+    ) -> InFile<ArenaMap<LocalTypeOrConstParamId<'db>, Self::Value>> {
         let generic_params = GenericParams::of(db, *self);
         let mut idx_iter = generic_params.iter_type_or_consts().map(|(idx, _)| idx);
 
@@ -131,10 +131,13 @@ impl HasChildSource<'_, LocalLifetimeParamId> for GenericDefId {
     }
 }
 
-impl HasChildSource<'_, LocalFieldId> for VariantId {
+impl<'db> HasChildSource<'_, LocalFieldId<'db>> for VariantId {
     type Value = Either<ast::TupleField, ast::RecordField>;
 
-    fn child_source(&self, db: &dyn SourceDatabase) -> InFile<ArenaMap<LocalFieldId, Self::Value>> {
+    fn child_source(
+        &self,
+        db: &dyn SourceDatabase,
+    ) -> InFile<ArenaMap<LocalFieldId<'db>, Self::Value>> {
         let (src, container) = match *self {
             VariantId::EnumVariantId(it) => {
                 let lookup = it.lookup(db);

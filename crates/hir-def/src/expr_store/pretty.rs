@@ -65,9 +65,9 @@ where
     source.value.name().map_or_else(|| default.to_owned(), |name| name.to_string())
 }
 
-pub fn print_body_hir(
-    db: &dyn SourceDatabase,
-    body: &Body,
+pub fn print_body_hir<'db>(
+    db: &'db dyn SourceDatabase,
+    body: &Body<'db>,
     owner: DefWithBodyId,
     edition: Edition,
 ) -> String {
@@ -196,10 +196,10 @@ pub fn print_signature(db: &dyn SourceDatabase, owner: GenericDefId, edition: Ed
     }
 }
 
-pub fn print_path(
-    db: &dyn SourceDatabase,
-    store: &ExpressionStore,
-    path: &Path,
+pub fn print_path<'db>(
+    db: &'db dyn SourceDatabase,
+    store: &ExpressionStore<'db>,
+    path: &Path<'db>,
     edition: Edition,
 ) -> String {
     let mut p = Printer {
@@ -214,10 +214,10 @@ pub fn print_path(
     p.buf
 }
 
-pub fn print_struct(
-    db: &dyn SourceDatabase,
+pub fn print_struct<'db>(
+    db: &'db dyn SourceDatabase,
     id: StructId,
-    StructSignature { name, generic_params, store, flags, shape }: &StructSignature,
+    StructSignature { name, generic_params, store, flags, shape }: &StructSignature<'db>,
     edition: Edition,
 ) -> String {
     let mut p = Printer {
@@ -262,8 +262,8 @@ pub fn print_struct(
     p.buf
 }
 
-pub fn print_function(
-    db: &dyn SourceDatabase,
+pub fn print_function<'db>(
+    db: &'db dyn SourceDatabase,
     id: FunctionId,
     signature @ FunctionSignature {
         name,
@@ -273,7 +273,7 @@ pub fn print_function(
         ret_type,
         abi,
         flags,
-    }: &FunctionSignature,
+    }: &FunctionSignature<'db>,
     edition: Edition,
 ) -> String {
     let legacy_const_generics_indices = signature.legacy_const_generics_indices(db, id);
@@ -325,10 +325,10 @@ pub fn print_function(
     p.buf
 }
 
-fn print_where_clauses(
+fn print_where_clauses<'db>(
     db: &dyn SourceDatabase,
-    generic_params: &GenericParams,
-    p: &mut Printer<'_, '_>,
+    generic_params: &GenericParams<'db>,
+    p: &mut Printer<'_, 'db>,
 ) {
     if !generic_params.where_predicates.is_empty() {
         w!(p, "\nwhere\n");
@@ -365,10 +365,10 @@ fn print_where_clauses(
     }
 }
 
-fn print_generic_params(
+fn print_generic_params<'db>(
     db: &dyn SourceDatabase,
-    generic_params: &GenericParams,
-    p: &mut Printer<'_, '_>,
+    generic_params: &GenericParams<'db>,
+    p: &mut Printer<'_, 'db>,
 ) {
     if !generic_params.is_empty() {
         w!(p, "<");
@@ -408,11 +408,11 @@ fn print_generic_params(
     }
 }
 
-pub fn print_expr_hir(
-    db: &dyn SourceDatabase,
-    store: &ExpressionStore,
+pub fn print_expr_hir<'db>(
+    db: &'db dyn SourceDatabase,
+    store: &ExpressionStore<'db>,
     _owner: ExpressionStoreOwnerId,
-    expr: ExprId,
+    expr: ExprId<'db>,
     edition: Edition,
 ) -> String {
     let mut p = Printer {
@@ -427,11 +427,11 @@ pub fn print_expr_hir(
     p.buf
 }
 
-pub fn print_pat_hir(
-    db: &dyn SourceDatabase,
-    store: &ExpressionStore,
+pub fn print_pat_hir<'db>(
+    db: &'db dyn SourceDatabase,
+    store: &ExpressionStore<'db>,
     _owner: ExpressionStoreOwnerId,
-    pat: PatId,
+    pat: PatId<'db>,
     oneline: bool,
     edition: Edition,
 ) -> String {
@@ -449,7 +449,7 @@ pub fn print_pat_hir(
 
 struct Printer<'a, 'db> {
     db: &'db dyn SourceDatabase,
-    store: &'a ExpressionStore,
+    store: &'a ExpressionStore<'db>,
     buf: String,
     indent_level: usize,
     line_format: LineFormat,
@@ -482,7 +482,7 @@ impl Write for Printer<'_, '_> {
     }
 }
 
-impl Printer<'_, '_> {
+impl<'db> Printer<'_, 'db> {
     fn indented(&mut self, f: impl FnOnce(&mut Self)) {
         self.indent_level += 1;
         wln!(self);
@@ -524,11 +524,11 @@ impl Printer<'_, '_> {
         }
     }
 
-    fn print_expr(&mut self, expr: ExprId) {
+    fn print_expr(&mut self, expr: ExprId<'db>) {
         self.print_expr_in(None, expr);
     }
 
-    fn print_expr_in(&mut self, prec: Option<ast::prec::ExprPrecedence>, expr: ExprId) {
+    fn print_expr_in(&mut self, prec: Option<ast::prec::ExprPrecedence>, expr: ExprId<'db>) {
         let expr = &self.store[expr];
         let needs_parens = match (prec, expr.precedence()) {
             (Some(ast::prec::ExprPrecedence::LOr), ast::prec::ExprPrecedence::LOr) => false,
@@ -868,8 +868,8 @@ impl Printer<'_, '_> {
         &mut self,
         label: Option<&str>,
         unsafe_: Unsafe,
-        statements: &[Statement],
-        tail: &Option<la_arena::Idx<Expr>>,
+        statements: &[Statement<'db>],
+        tail: &Option<la_arena::Idx<Expr<'db>>>,
     ) {
         self.whitespace();
         if let Some(lbl) = label {
@@ -893,7 +893,7 @@ impl Printer<'_, '_> {
         w!(self, "}}");
     }
 
-    fn print_pat(&mut self, pat: PatId) {
+    fn print_pat(&mut self, pat: PatId<'db>) {
         let prec = Some(ast::prec::ExprPrecedence::Shift);
         let pat = &self.store[pat];
 
@@ -1039,7 +1039,7 @@ impl Printer<'_, '_> {
         }
     }
 
-    fn print_stmt(&mut self, stmt: &Statement) {
+    fn print_stmt(&mut self, stmt: &Statement<'db>) {
         match stmt {
             Statement::Let { pat, type_ref, initializer, else_branch } => {
                 w!(self, "let ");
@@ -1108,7 +1108,7 @@ impl Printer<'_, '_> {
         w!(self, "{}{}", mode, name.display(self.db, self.edition));
     }
 
-    fn print_path(&mut self, path: &Path) {
+    fn print_path(&mut self, path: &Path<'db>) {
         if let Path::LangItem(it, s) = path {
             w!(self, "builtin#lang(");
             macro_rules! write_name {
@@ -1185,7 +1185,7 @@ impl Printer<'_, '_> {
         }
     }
 
-    pub(crate) fn print_generic_args(&mut self, generics: &GenericArgs) {
+    pub(crate) fn print_generic_args(&mut self, generics: &GenericArgs<'db>) {
         let mut first = true;
         let args = if generics.has_self_type {
             let (self_ty, args) = generics.args.split_first().unwrap();
@@ -1220,7 +1220,7 @@ impl Printer<'_, '_> {
         }
     }
 
-    pub(crate) fn print_generic_arg(&mut self, arg: &GenericArg) {
+    pub(crate) fn print_generic_arg(&mut self, arg: &GenericArg<'db>) {
         match arg {
             GenericArg::Type(ty) => self.print_type_ref(*ty),
             GenericArg::Const(ConstRef { expr }) => {
@@ -1230,7 +1230,7 @@ impl Printer<'_, '_> {
         }
     }
 
-    pub(crate) fn print_type_param(&mut self, param: TypeParamId) {
+    pub(crate) fn print_type_param(&mut self, param: TypeParamId<'db>) {
         let generic_params = GenericParams::of(self.db, param.parent());
 
         match generic_params[param.local_id()].name() {
@@ -1256,7 +1256,7 @@ impl Printer<'_, '_> {
         }
     }
 
-    pub(crate) fn print_type_ref(&mut self, type_ref: TypeRefId) {
+    pub(crate) fn print_type_ref(&mut self, type_ref: TypeRefId<'db>) {
         // FIXME: deduplicate with `HirDisplay` impl
         match &self.store[type_ref] {
             TypeRef::Never => w!(self, "!"),
@@ -1361,7 +1361,7 @@ impl Printer<'_, '_> {
         }
     }
 
-    pub(crate) fn print_type_bounds(&mut self, bounds: &[TypeBound]) {
+    pub(crate) fn print_type_bounds(&mut self, bounds: &[TypeBound<'db>]) {
         for (i, bound) in bounds.iter().enumerate() {
             if i != 0 {
                 w!(self, " + ");

@@ -203,7 +203,7 @@ impl<'db> MemoryMap<'db> {
 }
 
 /// Returns the index of a parameter in the generic type parameter list by its id.
-pub fn type_or_const_param_idx(db: &dyn HirDatabase, id: TypeOrConstParamId) -> u32 {
+pub fn type_or_const_param_idx(db: &dyn HirDatabase, id: TypeOrConstParamId<'_>) -> u32 {
     generics::generics(db, id.parent).type_or_const_param_idx(id)
 }
 
@@ -355,7 +355,7 @@ where
 pub fn associated_type_shorthand_candidates(
     db: &dyn HirDatabase,
     def: GenericDefId,
-    res: TypeNs,
+    res: TypeNs<'_>,
     mut cb: impl FnMut(&Name, TypeAliasId) -> bool,
 ) -> Option<TypeAliasId> {
     let interner = DbInterner::new_no_crate(db);
@@ -458,11 +458,11 @@ pub fn callable_sig_from_fn_trait<'db>(
     Some((trait_, sig))
 }
 
-struct ParamCollector {
-    params: FxHashSet<TypeOrConstParamId>,
+struct ParamCollector<'db> {
+    params: FxHashSet<TypeOrConstParamId<'db>>,
 }
 
-impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector {
+impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector<'db> {
     type Result = ();
 
     fn visit_ty(&mut self, ty: Ty<'db>) -> Self::Result {
@@ -483,7 +483,7 @@ impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector {
 }
 
 /// Returns unique params for types and consts contained in `value`.
-pub fn collect_params<'db, T>(value: &T) -> Vec<TypeOrConstParamId>
+pub fn collect_params<'db, T>(value: &T) -> Vec<TypeOrConstParamId<'db>>
 where
     T: ?Sized + rustc_type_ir::TypeVisitable<DbInterner<'db>>,
 {
@@ -497,18 +497,18 @@ where
 /// It has no meaning outside its body therefore it should not exit the pass it was created in
 /// (e.g. inference). It is usually associated with a solver obligation or an infer var, which
 /// should also not cross the pass they were created in.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Span {
-    ExprId(ExprId),
-    PatId(PatId),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
+pub enum Span<'db> {
+    ExprId(ExprId<'db>),
+    PatId(PatId<'db>),
     BindingId(BindingId),
-    TypeRefId(TypeRefId),
+    TypeRefId(TypeRefId<'db>),
     /// An unimportant location. Errors on this will be suppressed.
     Dummy,
 }
-impl_from!(ExprId, PatId, BindingId, TypeRefId for Span);
+impl_from!(impl<'db> ExprId<'db>, PatId<'db>, BindingId, TypeRefId<'db> for Span<'db>);
 
-impl From<ExprOrPatIdPacked> for Span {
+impl<'db> From<ExprOrPatIdPacked> for Span<'db> {
     fn from(value: ExprOrPatIdPacked) -> Self {
         match value.unpack() {
             ExprOrPatId::ExprId(idx) => idx.into(),
@@ -517,8 +517,8 @@ impl From<ExprOrPatIdPacked> for Span {
     }
 }
 
-impl Span {
-    pub(crate) fn pick_best(a: Span, b: Span) -> Span {
+impl<'db> Span<'db> {
+    pub(crate) fn pick_best(a: Span<'db>, b: Span<'db>) -> Span<'db> {
         // We prefer dummy spans to minimize the risk of false errors.
         if b.is_dummy() { b } else { a }
     }
@@ -567,7 +567,7 @@ impl HasResolver for InferBodyId<'_> {
     }
 }
 
-impl InferBodyId<'_> {
+impl<'db> InferBodyId<'db> {
     pub fn expression_store_owner(self, db: &dyn HirDatabase) -> ExpressionStoreOwnerId {
         match self {
             InferBodyId::DefWithBodyId(id) => id.into(),
@@ -598,7 +598,10 @@ impl InferBodyId<'_> {
         }
     }
 
-    pub fn store_and_root_expr(self, db: &dyn HirDatabase) -> (&ExpressionStore, ExprId) {
+    pub fn store_and_root_expr(
+        self,
+        db: &'db dyn HirDatabase,
+    ) -> (&'db ExpressionStore<'db>, ExprId<'db>) {
         match self {
             InferBodyId::DefWithBodyId(id) => {
                 let body = Body::of(db, id);

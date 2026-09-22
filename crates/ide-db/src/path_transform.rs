@@ -28,7 +28,7 @@ enum TypeOrConst {
 }
 
 type LifetimeName = String;
-type DefaultedParam = Either<hir::TypeParam, hir::ConstParam>;
+type DefaultedParam<'db> = Either<hir::TypeParam<'db>, hir::ConstParam<'db>>;
 
 /// `PathTransform` substitutes path in SyntaxNodes in bulk.
 ///
@@ -171,9 +171,9 @@ impl<'a, 'db> PathTransform<'a, 'db> {
             Some(hir::GenericDef::Trait(_)) => 1,
             _ => 0,
         };
-        let mut type_substs: FxHashMap<hir::TypeParam, ast::Type> = Default::default();
-        let mut const_substs: FxHashMap<hir::ConstParam, SyntaxNode> = Default::default();
-        let mut defaulted_params: Vec<DefaultedParam> = Default::default();
+        let mut type_substs: FxHashMap<hir::TypeParam<'_>, ast::Type> = Default::default();
+        let mut const_substs: FxHashMap<hir::ConstParam<'_>, SyntaxNode> = Default::default();
+        let mut defaulted_params: Vec<DefaultedParam<'_>> = Default::default();
         let target_edition = target_module.krate(db).edition(self.source_scope.db);
         self.generic_def
             .into_iter()
@@ -252,8 +252,8 @@ impl<'a, 'db> PathTransform<'a, 'db> {
 }
 
 struct Ctx<'a, 'db> {
-    type_substs: FxHashMap<hir::TypeParam, ast::Type>,
-    const_substs: FxHashMap<hir::ConstParam, SyntaxNode>,
+    type_substs: FxHashMap<hir::TypeParam<'db>, ast::Type>,
+    const_substs: FxHashMap<hir::ConstParam<'db>, SyntaxNode>,
     lifetime_substs: FxHashMap<LifetimeName, ast::Lifetime>,
     target_module: hir::Module,
     source_scope: &'a SemanticsScope<'db>,
@@ -272,7 +272,7 @@ fn preorder_rev(item: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> {
     x.into_iter().rev()
 }
 
-impl Ctx<'_, '_> {
+impl<'db> Ctx<'_, 'db> {
     fn apply(&self, item: &SyntaxNode) -> SyntaxNode {
         // `transform_path` may update a node's parent and that would break the
         // tree traversal. Thus all paths in the tree are collected into a vec
@@ -287,7 +287,7 @@ impl Ctx<'_, '_> {
         editor.finish().new_root().clone()
     }
 
-    fn transform_default_values(&mut self, defaulted_params: Vec<DefaultedParam>) {
+    fn transform_default_values(&mut self, defaulted_params: Vec<DefaultedParam<'db>>) {
         // By now the default values are simply copied from where they are declared
         // and should be transformed. As any value is allowed to refer to previous
         // generic (both type and const) parameters, they should be all iterated left-to-right.
@@ -635,7 +635,7 @@ fn get_type_args_from_arg_list(generic_arg_list: ast::GenericArgList) -> Option<
 
 fn find_trait_for_assoc_item(
     scope: &SemanticsScope<'_>,
-    type_param: hir::TypeParam,
+    type_param: hir::TypeParam<'_>,
     assoc_item: ast::NameRef,
 ) -> Option<hir::Trait> {
     let db = scope.db;

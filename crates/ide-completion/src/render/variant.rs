@@ -16,10 +16,10 @@ pub(crate) struct RenderedLiteral {
 
 /// Render a record type (or sub-type) to a `RenderedCompound`. Use `None` for
 /// the `name` argument for an anonymous type.
-pub(crate) fn render_record_lit(
-    ctx: &CompletionContext<'_, '_>,
+pub(crate) fn render_record_lit<'db>(
+    ctx: &CompletionContext<'_, 'db>,
     snippet_cap: Option<SnippetCap>,
-    fields: &[hir::Field],
+    fields: &[hir::Field<'db>],
     path: &str,
 ) -> RenderedLiteral {
     if snippet_cap.is_none() {
@@ -65,7 +65,7 @@ pub(crate) fn render_record_lit(
 pub(crate) fn render_tuple_lit(
     ctx: &CompletionContext<'_, '_>,
     snippet_cap: Option<SnippetCap>,
-    fields: &[hir::Field],
+    fields: &[hir::Field<'_>],
     path: &str,
 ) -> RenderedLiteral {
     if snippet_cap.is_none() {
@@ -94,9 +94,9 @@ pub(crate) fn render_tuple_lit(
 /// private fields and its item is not marked `#[non_exhaustive]`).
 pub(crate) fn visible_fields<'db>(
     ctx: &CompletionContext<'_, 'db>,
-    fields: &[hir::Field],
+    fields: &[hir::Field<'db>],
     item: impl HasAttrs<'db> + HasCrate<'db> + Copy,
-) -> Option<(Vec<hir::Field>, bool)> {
+) -> Option<(Vec<hir::Field<'db>>, bool)> {
     let module = ctx.module;
     let n_fields = fields.len();
     let fields = fields

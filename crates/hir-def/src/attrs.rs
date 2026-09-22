@@ -30,6 +30,7 @@ use itertools::Itertools;
 use la_arena::ArenaMap;
 use rustc_abi::ReprOptions;
 use rustc_hash::FxHashSet;
+use salsa::SalsaValue;
 use smallvec::SmallVec;
 use syntax::{
     AstNode, AstToken, NodeOrToken, SmolStr, SourceFile, T,
@@ -285,7 +286,7 @@ fn match_attr_flags(attr_flags: &mut AttrFlags, attr: ast::Meta) -> ControlFlow<
 }
 
 bitflags::bitflags! {
-    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+    #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
     pub struct AttrFlags: u64 {
         const RUST_ANALYZER_SKIP = 1 << 0;
 
@@ -504,11 +505,11 @@ fn collect_attrs<BreakValue>(
     )
 }
 
-fn collect_field_attrs<T>(
+fn collect_field_attrs<'db, T>(
     db: &dyn SourceDatabase,
     variant: VariantId,
     mut field_attrs: impl FnMut(&CfgOptions, InFile<ast::AnyHasAttrs>) -> T,
-) -> ArenaMap<LocalFieldId, T> {
+) -> ArenaMap<LocalFieldId<'db>, T> {
     let (variant_syntax, krate) = match variant {
         VariantId::EnumVariantId(it) => attrs_from_ast_id_loc(db, it),
         VariantId::StructId(it) => attrs_from_ast_id_loc(db, it),
@@ -598,7 +599,7 @@ fn extract_cfgs(result: &mut Vec<CfgExpr>, attr: ast::Meta) -> ControlFlow<Infal
 }
 
 #[salsa::tracked]
-impl AttrFlags {
+impl<'db> AttrFlags {
     #[salsa::tracked(returns(copy))]
     pub fn query(db: &dyn SourceDatabase, owner: AttrDefId) -> AttrFlags {
         let mut attr_flags = AttrFlags::empty();
@@ -607,7 +608,7 @@ impl AttrFlags {
     }
 
     #[inline]
-    pub fn query_field(db: &dyn SourceDatabase, field: FieldId) -> AttrFlags {
+    pub fn query_field(db: &dyn SourceDatabase, field: FieldId<'db>) -> AttrFlags {
         return field_attr_flags(db, field.parent)
             .get(field.local_id)
             .copied()
@@ -617,7 +618,7 @@ impl AttrFlags {
         fn field_attr_flags(
             db: &dyn SourceDatabase,
             variant: VariantId,
-        ) -> ArenaMap<LocalFieldId, AttrFlags> {
+        ) -> ArenaMap<LocalFieldId<'_>, AttrFlags> {
             collect_field_attrs(db, variant, |cfg_options, field| {
                 let mut attr_flags = AttrFlags::empty();
                 expand_cfg_attr(
@@ -632,10 +633,12 @@ impl AttrFlags {
 
     #[inline]
     pub fn query_generic_params(
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         def: GenericDefId,
-    ) -> &(ArenaMap<LocalLifetimeParamId, AttrFlags>, ArenaMap<LocalTypeOrConstParamId, AttrFlags>)
-    {
+    ) -> &'db (
+        ArenaMap<LocalLifetimeParamId, AttrFlags>,
+        ArenaMap<LocalTypeOrConstParamId<'db>, AttrFlags>,
+    ) {
         let generic_params = GenericParams::of(db, def);
         let params_count_excluding_self =
             generic_params.len() - usize::from(generic_params.trait_self_param().is_some());
@@ -645,11 +648,13 @@ impl AttrFlags {
         return generic_params_attr_flags(db, def);
 
         #[salsa::tracked(returns(ref))]
-        fn generic_params_attr_flags(
-            db: &dyn SourceDatabase,
+        fn generic_params_attr_flags<'db>(
+            db: &'db dyn SourceDatabase,
             def: GenericDefId,
-        ) -> (ArenaMap<LocalLifetimeParamId, AttrFlags>, ArenaMap<LocalTypeOrConstParamId, AttrFlags>)
-        {
+        ) -> (
+            ArenaMap<LocalLifetimeParamId, AttrFlags>,
+            ArenaMap<LocalTypeOrConstParamId<'db>, AttrFlags>,
+        ) {
             let mut lifetimes = ArenaMap::new();
             let mut type_and_consts = ArenaMap::new();
 
@@ -669,7 +674,7 @@ impl AttrFlags {
             }
 
             let type_and_consts_source =
-                HasChildSource::<LocalTypeOrConstParamId>::child_source(&def, db);
+                HasChildSource::<LocalTypeOrConstParamId<'_>>::child_source(&def, db);
             for (type_or_const_id, type_or_const) in type_and_consts_source.value.iter() {
                 let mut attr_flags = AttrFlags::empty();
                 expand_cfg_attr(type_or_const.attrs(), &mut cfg_options, |attr, _| {
@@ -697,7 +702,7 @@ impl AttrFlags {
     #[inline]
     pub fn query_type_or_const_param(
         db: &dyn SourceDatabase,
-        owner: TypeOrConstParamId,
+        owner: TypeOrConstParamId<'db>,
     ) -> AttrFlags {
         AttrFlags::query_generic_params(db, owner.parent)
             .1
@@ -960,9 +965,9 @@ impl AttrFlags {
     #[inline]
     pub fn doc_aliases(
         self,
-        db: &dyn SourceDatabase,
-        owner: Either<AttrDefId, FieldId>,
-    ) -> &[Symbol] {
+        db: &'db dyn SourceDatabase,
+        owner: Either<AttrDefId, FieldId<'db>>,
+    ) -> &'db [Symbol] {
         if !self.contains(AttrFlags::HAS_DOC_ALIASES) {
             return &[];
         }
@@ -985,7 +990,7 @@ impl AttrFlags {
         fn fields_doc_aliases(
             db: &dyn SourceDatabase,
             variant: VariantId,
-        ) -> ArenaMap<LocalFieldId, Box<[Symbol]>> {
+        ) -> ArenaMap<LocalFieldId<'_>, Box<[Symbol]>> {
             collect_field_attrs(db, variant, |cfg_options, field| {
                 let mut result = Vec::new();
                 expand_cfg_attr(
@@ -1001,9 +1006,9 @@ impl AttrFlags {
     #[inline]
     pub fn cfgs(
         self,
-        db: &dyn SourceDatabase,
-        owner: Either<AttrDefId, FieldId>,
-    ) -> Option<&CfgExpr> {
+        db: &'db dyn SourceDatabase,
+        owner: Either<AttrDefId, FieldId<'db>>,
+    ) -> Option<&'db CfgExpr> {
         if !self.contains(AttrFlags::HAS_CFG) {
             return None;
         }
@@ -1028,10 +1033,10 @@ impl AttrFlags {
 
         // We LRU this query because it is only used by IDE.
         #[salsa::tracked(returns(ref), lru = 50)]
-        fn fields_cfgs(
-            db: &dyn SourceDatabase,
+        fn fields_cfgs<'db>(
+            db: &'db dyn SourceDatabase,
             variant: VariantId,
-        ) -> ArenaMap<LocalFieldId, Option<CfgExpr>> {
+        ) -> ArenaMap<LocalFieldId<'db>, Option<CfgExpr>> {
             collect_field_attrs(db, variant, |cfg_options, field| {
                 let mut result = Vec::new();
                 expand_cfg_attr(
@@ -1095,7 +1100,7 @@ impl AttrFlags {
     }
 
     #[inline]
-    pub fn field_docs(db: &dyn SourceDatabase, field: FieldId) -> Option<&Docs> {
+    pub fn field_docs(db: &'db dyn SourceDatabase, field: FieldId<'db>) -> Option<&'db Docs> {
         Self::fields_docs(db, field.parent).get(field.local_id).and_then(|it| it.as_deref())
     }
 
@@ -1104,7 +1109,7 @@ impl AttrFlags {
     pub fn fields_docs(
         db: &dyn SourceDatabase,
         variant: VariantId,
-    ) -> ArenaMap<LocalFieldId, Option<Box<Docs>>> {
+    ) -> ArenaMap<LocalFieldId<'db>, Option<Box<Docs>>> {
         let krate = variant.module(db).krate(db);
         collect_field_attrs(db, variant, |cfg_options, field| {
             self::docs::extract_docs(

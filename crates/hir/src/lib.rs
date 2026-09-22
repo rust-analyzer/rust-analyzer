@@ -516,7 +516,7 @@ impl<'db> ModuleDef<'db> {
         }
     }
 
-    pub fn attrs(&self, db: &dyn HirDatabase) -> Option<AttrsWithOwner> {
+    pub fn attrs(&self, db: &'db dyn HirDatabase) -> Option<AttrsWithOwner<'db>> {
         Some(match self {
             ModuleDef::Module(it) => it.attrs(db),
             ModuleDef::Function(it) => HasAttrs::attrs(*it, db),
@@ -541,8 +541,8 @@ impl<'db> HasCrate<'db> for ModuleDef<'_> {
     }
 }
 
-impl<'db> HasAttrs<'db> for ModuleDef<'_> {
-    fn attr_id(self, db: &dyn HirDatabase) -> attrs::AttrsOwner {
+impl<'db> HasAttrs<'db> for ModuleDef<'db> {
+    fn attr_id(self, db: &'db dyn HirDatabase) -> attrs::AttrsOwner<'db> {
         match self {
             ModuleDef::Module(it) => it.attr_id(db),
             ModuleDef::Function(it) => it.attr_id(db),
@@ -791,9 +791,9 @@ impl HasVisibility for Module {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Field {
+pub struct Field<'db> {
     pub(crate) parent: Variant,
-    pub(crate) id: LocalFieldId,
+    pub(crate) id: LocalFieldId<'db>,
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
@@ -855,7 +855,7 @@ impl AstNode for FieldSource {
     }
 }
 
-impl Field {
+impl<'db> Field<'db> {
     pub fn name(&self, db: &dyn HirDatabase) -> Name {
         VariantId::from(self.parent).fields(db).fields()[self.id].name.clone()
     }
@@ -866,13 +866,13 @@ impl Field {
 
     /// Returns the type as in the signature of the struct. Only use this in the
     /// context of the field definition.
-    pub fn ty<'db>(&self, db: &'db dyn HirDatabase) -> Type<'db> {
+    pub fn ty(&self, db: &'db dyn HirDatabase) -> Type<'db> {
         let var_id = self.parent.into();
         let ty = db.field_types(var_id)[self.id].ty().instantiate_identity().skip_norm_wip();
         Type::new(var_id.adt_id(db).into(), ty)
     }
 
-    pub fn layout<'db>(&self, db: &'db dyn HirDatabase) -> Result<Layout<'db>, LayoutError> {
+    pub fn layout(&self, db: &'db dyn HirDatabase) -> Result<Layout<'db>, LayoutError> {
         self.ty(db).layout(db)
     }
 
@@ -881,7 +881,7 @@ impl Field {
     }
 }
 
-impl HasVisibility for Field {
+impl<'db> HasVisibility for Field<'db> {
     fn visibility(&self, db: &dyn HirDatabase) -> Visibility {
         let variant_data = VariantId::from(self.parent).fields(db);
         let visibility = &variant_data.fields()[self.id].visibility;
@@ -905,7 +905,7 @@ impl Struct {
         StructSignature::of(db, self.id).name.clone()
     }
 
-    pub fn fields(self, db: &dyn HirDatabase) -> Vec<Field> {
+    pub fn fields<'db>(self, db: &'db dyn HirDatabase) -> Vec<Field<'db>> {
         self.id
             .fields(db)
             .fields()
@@ -934,7 +934,7 @@ impl Struct {
         }
     }
 
-    fn variant_fields(self, db: &dyn HirDatabase) -> &VariantFields {
+    fn variant_fields<'db>(self, db: &'db dyn HirDatabase) -> &'db VariantFields<'db> {
         self.id.fields(db)
     }
 
@@ -981,7 +981,7 @@ impl Union {
         }
     }
 
-    pub fn fields(self, db: &dyn HirDatabase) -> Vec<Field> {
+    pub fn fields<'db>(self, db: &'db dyn HirDatabase) -> Vec<Field<'db>> {
         self.id
             .fields(db)
             .fields()
@@ -1112,7 +1112,7 @@ impl EnumVariant {
         self.id.lookup(db).name.clone()
     }
 
-    pub fn fields(self, db: &dyn HirDatabase) -> Vec<Field> {
+    pub fn fields<'db>(self, db: &'db dyn HirDatabase) -> Vec<Field<'db>> {
         self.id
             .fields(db)
             .fields()
@@ -1266,7 +1266,7 @@ pub enum Variant {
 impl_from!(Struct, Union, EnumVariant for Variant);
 
 impl Variant {
-    pub fn fields(self, db: &dyn HirDatabase) -> Vec<Field> {
+    pub fn fields<'db>(self, db: &'db dyn HirDatabase) -> Vec<Field<'db>> {
         match self {
             Variant::Struct(it) => it.fields(db),
             Variant::Union(it) => it.fields(db),
@@ -2712,7 +2712,7 @@ impl<'db> ItemInNs<'db> {
         }
     }
 
-    pub fn attrs(&self, db: &dyn HirDatabase) -> Option<AttrsWithOwner> {
+    pub fn attrs(&self, db: &'db dyn HirDatabase) -> Option<AttrsWithOwner<'db>> {
         match self {
             ItemInNs::Types(it) | ItemInNs::Values(it) => it.attrs(db),
             ItemInNs::Macros(it) => Some(it.attrs(db)),
@@ -3057,7 +3057,7 @@ impl<'db> GenericDef<'db> {
         }
     }
 
-    pub fn params(self, db: &dyn HirDatabase) -> Vec<GenericParam> {
+    pub fn params(self, db: &'db dyn HirDatabase) -> Vec<GenericParam<'db>> {
         let Ok(id) = self.try_into() else {
             // Let's pretend builtin derive impls don't have generic parameters.
             return Vec::new();
@@ -3089,7 +3089,7 @@ impl<'db> GenericDef<'db> {
             .collect()
     }
 
-    pub fn type_or_const_params(self, db: &dyn HirDatabase) -> Vec<TypeOrConstParam> {
+    pub fn type_or_const_params(self, db: &'db dyn HirDatabase) -> Vec<TypeOrConstParam<'db>> {
         let Ok(id) = self.try_into() else {
             // Let's pretend builtin derive impls don't have generic parameters.
             return Vec::new();
@@ -3514,14 +3514,14 @@ impl Label {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum GenericParam {
-    TypeParam(TypeParam),
-    ConstParam(ConstParam),
+pub enum GenericParam<'db> {
+    TypeParam(TypeParam<'db>),
+    ConstParam(ConstParam<'db>),
     LifetimeParam(LifetimeParam),
 }
-impl_from!(TypeParam, ConstParam, LifetimeParam for GenericParam);
+impl_from!(impl<'db> TypeParam<'db>, ConstParam<'db>, LifetimeParam for GenericParam<'db>);
 
-impl GenericParam {
+impl<'db> GenericParam<'db> {
     pub fn module(self, db: &dyn HirDatabase) -> Module {
         match self {
             GenericParam::TypeParam(it) => it.module(db),
@@ -3595,12 +3595,12 @@ impl fmt::Display for Variance {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TypeParam {
-    pub(crate) id: TypeParamId,
+pub struct TypeParam<'db> {
+    pub(crate) id: TypeParamId<'db>,
 }
 
-impl TypeParam {
-    pub fn merge(self) -> TypeOrConstParam {
+impl<'db> TypeParam<'db> {
+    pub fn merge(self) -> TypeOrConstParam<'db> {
         TypeOrConstParam { id: self.id.into() }
     }
 
@@ -3627,7 +3627,7 @@ impl TypeParam {
         }
     }
 
-    pub fn ty(self, db: &dyn HirDatabase) -> Type<'_> {
+    pub fn ty(self, db: &'db dyn HirDatabase) -> Type<'db> {
         let interner = DbInterner::new_no_crate(db);
         let index = hir_ide::type_or_const_param_idx(db, self.id.into());
         let ty = Ty::new_param(interner, self.id, index);
@@ -3650,7 +3650,7 @@ impl TypeParam {
             .collect()
     }
 
-    pub fn default(self, db: &dyn HirDatabase) -> Option<Type<'_>> {
+    pub fn default(self, db: &'db dyn HirDatabase) -> Option<Type<'db>> {
         let ty = generic_arg_from_param(db, self.id.into())?;
         match ty.kind() {
             rustc_type_ir::GenericArgKind::Type(it) if !it.is_ty_error() => {
@@ -3686,12 +3686,12 @@ impl LifetimeParam {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct ConstParam {
-    pub(crate) id: ConstParamId,
+pub struct ConstParam<'db> {
+    pub(crate) id: ConstParamId<'db>,
 }
 
-impl ConstParam {
-    pub fn merge(self) -> TypeOrConstParam {
+impl<'db> ConstParam<'db> {
+    pub fn merge(self) -> TypeOrConstParam<'db> {
         TypeOrConstParam { id: self.id.into() }
     }
 
@@ -3714,7 +3714,7 @@ impl ConstParam {
         self.id.parent().into()
     }
 
-    pub fn ty(self, db: &dyn HirDatabase) -> Type<'_> {
+    pub fn ty(self, db: &'db dyn HirDatabase) -> Type<'db> {
         Type::new(self.id.parent(), db.const_param_ty(self.id))
     }
 
@@ -3733,7 +3733,10 @@ impl ConstParam {
     }
 }
 
-fn generic_arg_from_param(db: &dyn HirDatabase, id: TypeOrConstParamId) -> Option<GenericArg<'_>> {
+fn generic_arg_from_param<'db>(
+    db: &'db dyn HirDatabase,
+    id: TypeOrConstParamId<'db>,
+) -> Option<GenericArg<'db>> {
     let local_idx = hir_ide::type_or_const_param_idx(db, id);
     let defaults = db.generic_defaults(id.parent);
     let ty = defaults.get(local_idx as usize)?;
@@ -3742,11 +3745,11 @@ fn generic_arg_from_param(db: &dyn HirDatabase, id: TypeOrConstParamId) -> Optio
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct TypeOrConstParam {
-    pub(crate) id: TypeOrConstParamId,
+pub struct TypeOrConstParam<'db> {
+    pub(crate) id: TypeOrConstParamId<'db>,
 }
 
-impl TypeOrConstParam {
+impl<'db> TypeOrConstParam<'db> {
     pub fn name(self, db: &dyn HirDatabase) -> Name {
         let params = GenericParams::of(db, self.id.parent);
         match params[self.id.local_id].name() {
@@ -3763,7 +3766,7 @@ impl TypeOrConstParam {
         self.id.parent.into()
     }
 
-    pub fn split(self, db: &dyn HirDatabase) -> Either<ConstParam, TypeParam> {
+    pub fn split(self, db: &dyn HirDatabase) -> Either<ConstParam<'db>, TypeParam<'db>> {
         let params = GenericParams::of(db, self.id.parent);
         match &params[self.id.local_id] {
             TypeOrConstParamData::TypeParamData(_) => {
@@ -3775,14 +3778,14 @@ impl TypeOrConstParam {
         }
     }
 
-    pub fn ty(self, db: &dyn HirDatabase) -> Type<'_> {
+    pub fn ty(self, db: &'db dyn HirDatabase) -> Type<'db> {
         match self.split(db) {
             Either::Left(it) => it.ty(db),
             Either::Right(it) => it.ty(db),
         }
     }
 
-    pub fn as_type_param(self, db: &dyn HirDatabase) -> Option<TypeParam> {
+    pub fn as_type_param(self, db: &dyn HirDatabase) -> Option<TypeParam<'db>> {
         let params = GenericParams::of(db, self.id.parent);
         match &params[self.id.local_id] {
             TypeOrConstParamData::TypeParamData(_) => {
@@ -3792,7 +3795,7 @@ impl TypeOrConstParam {
         }
     }
 
-    pub fn as_const_param(self, db: &dyn HirDatabase) -> Option<ConstParam> {
+    pub fn as_const_param(self, db: &dyn HirDatabase) -> Option<ConstParam<'db>> {
         let params = GenericParams::of(db, self.id.parent);
         match &params[self.id.local_id] {
             TypeOrConstParamData::TypeParamData(_) => None,
@@ -4194,8 +4197,8 @@ impl FnTrait {
 pub struct ClosureCapture<'db> {
     owner: ExpressionStoreOwnerId,
     infer_owner: InferBodyId<'db>,
-    closure: ExprId,
-    capture: &'db hir_ide::closure_analysis::CapturedPlace,
+    closure: ExprId<'db>,
+    capture: &'db hir_ide::closure_analysis::CapturedPlace<'db>,
 }
 
 impl<'db> ClosureCapture<'db> {
@@ -4326,8 +4329,8 @@ pub struct CaptureUsages<'db> {
     sources: &'db [hir_ide::closure_analysis::CaptureSourceStack],
 }
 
-impl CaptureUsages<'_> {
-    fn is_ref(store: &ExpressionStore, id: ExprOrPatId) -> bool {
+impl<'db> CaptureUsages<'db> {
+    fn is_ref(store: &ExpressionStore<'db>, id: ExprOrPatId<'db>) -> bool {
         match id {
             ExprOrPatId::ExprId(expr) => matches!(store[expr], Expr::Ref { .. }),
             // FIXME: Figure out if this is correct wrt. match ergonomics.
@@ -4341,7 +4344,7 @@ impl CaptureUsages<'_> {
         }
     }
 
-    pub fn sources(&self, db: &dyn HirDatabase) -> Vec<CaptureUsageSource> {
+    pub fn sources(&self, db: &'db dyn HirDatabase) -> Vec<CaptureUsageSource> {
         let (store, source_map) = ExpressionStore::with_source_map(db, self.parent);
         let mut result = Vec::with_capacity(self.sources.len());
         for source in self.sources {
@@ -5160,7 +5163,7 @@ impl<'db> Type<'db> {
         self.ty.skip_binder().references_non_lt_error()
     }
 
-    pub fn fields(&self, db: &'db dyn HirDatabase) -> Vec<(Field, Self)> {
+    pub fn fields(&self, db: &'db dyn HirDatabase) -> Vec<(Field<'db>, Self)> {
         let interner = DbInterner::new_no_crate(db);
         let (variant_id, substs) = match self.ty.skip_binder().kind() {
             TyKind::Adt(adt_def, substs) => {
@@ -5777,7 +5780,7 @@ impl<'db> Type<'db> {
         hir_ide::could_coerce(db, env, &tys)
     }
 
-    pub fn as_type_param(&self, _db: &'db dyn HirDatabase) -> Option<TypeParam> {
+    pub fn as_type_param(&self, _db: &'db dyn HirDatabase) -> Option<TypeParam<'db>> {
         match self.ty.skip_binder().kind() {
             TyKind::Param(param) => Some(TypeParam { id: param.id }),
             _ => None,
@@ -5785,7 +5788,7 @@ impl<'db> Type<'db> {
     }
 
     /// Returns unique `GenericParam`s contained in this type.
-    pub fn generic_params(&self, db: &'db dyn HirDatabase) -> FxHashSet<GenericParam> {
+    pub fn generic_params(&self, db: &'db dyn HirDatabase) -> FxHashSet<GenericParam<'db>> {
         hir_ide::collect_params(&self.ty.skip_binder())
             .into_iter()
             .map(|id| TypeOrConstParam { id }.split(db).either_into())
@@ -5807,13 +5810,13 @@ impl<'db> Type<'db> {
 }
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
-pub struct InlineAsmOperand {
+pub struct InlineAsmOperand<'db> {
     owner: ExpressionStoreOwnerId,
-    expr: ExprId,
+    expr: ExprId<'db>,
     index: usize,
 }
 
-impl InlineAsmOperand {
+impl<'db> InlineAsmOperand<'db> {
     pub fn parent(self, _db: &dyn HirDatabase) -> ExpressionStoreOwner<'static> {
         self.owner.into()
     }
@@ -5945,7 +5948,7 @@ impl<'db> Layout<'db> {
         Some(self.0.largest_niche?.available(self.1))
     }
 
-    pub fn field_offset(&self, field: Field) -> Option<u64> {
+    pub fn field_offset(&self, field: Field<'db>) -> Option<u64> {
         match self.0.fields {
             layout::FieldsShape::Primitive => None,
             layout::FieldsShape::Union(_) => Some(0),
@@ -5954,7 +5957,11 @@ impl<'db> Layout<'db> {
                 (i < count).then_some((stride * i).bytes())
             }
             layout::FieldsShape::Arbitrary { ref offsets, .. } => {
-                Some(offsets.get(RustcFieldIdx(field.id))?.bytes())
+                // FIXME: Ideally we'd just do `RustcFieldIdx(field_id.id)`, but that doesn't work,
+                // as `RustcFieldIdx` currently requires the inner `LocalFieldId` to be `'static`.
+                // See the FIXME on `RustcFieldIdx`.
+                let field_idx = RustcFieldIdx::new(field.id.into_raw().into_u32() as usize);
+                Some(offsets.get(field_idx)?.bytes())
             }
         }
     }
@@ -6051,7 +6058,7 @@ pub enum BindingMode {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ScopeDef<'db> {
     ModuleDef(ModuleDef<'db>),
-    GenericParam(GenericParam),
+    GenericParam(GenericParam<'db>),
     ImplSelfType(Impl<'db>),
     AdtSelfType(Adt),
     Local(Local<'db>),
@@ -6059,7 +6066,7 @@ pub enum ScopeDef<'db> {
     Unknown,
 }
 
-impl ScopeDef<'_> {
+impl<'db> ScopeDef<'db> {
     pub fn all_items(def: PerNs) -> ArrayVec<Self, 3> {
         let mut items = ArrayVec::new();
 
@@ -6091,7 +6098,7 @@ impl ScopeDef<'_> {
         items
     }
 
-    pub fn attrs(&self, db: &dyn HirDatabase) -> Option<AttrsWithOwner> {
+    pub fn attrs(&self, db: &'db dyn HirDatabase) -> Option<AttrsWithOwner<'db>> {
         match self {
             ScopeDef::ModuleDef(it) => it.attrs(db),
             ScopeDef::GenericParam(it) => Some(it.attrs(db)),
@@ -6221,7 +6228,7 @@ impl<'db> HasCrate<'db> for Enum {
     }
 }
 
-impl<'db> HasCrate<'db> for Field {
+impl<'db> HasCrate<'db> for Field<'db> {
     fn krate(&self, db: &'db dyn HirDatabase) -> Crate {
         self.parent_def(db).module(db).krate(db)
     }
@@ -6398,7 +6405,7 @@ macro_rules! impl_has_name {
 impl_has_name!(
     ModuleDef<'_>,
     Module,
-    Field,
+    Field<'_>,
     Struct,
     Union,
     Enum,
@@ -6419,12 +6426,12 @@ impl_has_name!(
     ToolModule,
     Label,
     Local<'_>,
-    GenericParam,
-    TypeParam,
+    GenericParam<'_>,
+    TypeParam<'_>,
     LifetimeParam,
-    ConstParam,
-    TypeOrConstParam,
-    InlineAsmOperand,
+    ConstParam<'_>,
+    TypeOrConstParam<'_>,
+    InlineAsmOperand<'_>,
     Param<'_>,
 );
 
@@ -6463,7 +6470,7 @@ pub enum ItemContainer<'db> {
 /// Subset of `ide_db::Definition` that doc links can resolve to.
 pub enum DocLinkDef<'db> {
     ModuleDef(ModuleDef<'db>),
-    Field(Field),
+    Field(Field<'db>),
     SelfType(Trait),
 }
 

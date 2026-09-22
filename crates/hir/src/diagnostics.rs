@@ -163,7 +163,7 @@ diagnostics![AnyDiagnostic<'db> ->
     MethodCallIllegalSizedBound,
     MismatchedArgCount,
     MismatchedTupleStructPatArgCount,
-    MissingFields,
+    MissingFields<'db>,
     MissingMatchArms,
     MissingUnsafe,
     MutRefInImmRefPat,
@@ -171,12 +171,12 @@ diagnostics![AnyDiagnostic<'db> ->
     NonExhaustiveLet,
     NonExhaustiveRecordExpr,
     NonExhaustiveRecordPat,
-    NoSuchField,
+    NoSuchField<'db>,
     MismatchedArrayPatLen,
     DuplicateField,
     PatternArgInExternFn,
     PrivateAssocItem<'db>,
-    PrivateField,
+    PrivateField<'db>,
     RemoveTrailingReturn,
     RemoveUnnecessaryElse,
     UnusedMustUse<'db>,
@@ -310,9 +310,9 @@ pub struct MalformedDerive {
 }
 
 #[derive(Debug)]
-pub struct NoSuchField {
+pub struct NoSuchField<'db> {
     pub field: InFile<AstPtr<Either<ast::RecordExprField, ast::RecordPatField>>>,
-    pub private: Option<Field>,
+    pub private: Option<Field<'db>>,
     pub variant: VariantId,
 }
 
@@ -444,9 +444,9 @@ pub struct UnresolvedIdent {
 }
 
 #[derive(Debug)]
-pub struct PrivateField {
+pub struct PrivateField<'db> {
     pub expr: InFile<ExprOrPatPtr>,
-    pub field: Field,
+    pub field: Field<'db>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -464,11 +464,11 @@ pub struct MissingUnsafe {
 }
 
 #[derive(Debug)]
-pub struct MissingFields {
+pub struct MissingFields<'db> {
     pub file: HirFileId,
     pub field_list_parent: AstPtr<Either<ast::RecordExpr, ast::RecordPat>>,
     pub field_list_parent_path: Option<AstPtr<ast::Path>>,
-    pub missed_fields: Vec<(Name, Field)>,
+    pub missed_fields: Vec<(Name, Field<'db>)>,
 }
 
 #[derive(Debug)]
@@ -645,7 +645,7 @@ pub enum GenericArgKind {
 }
 
 impl GenericArgKind {
-    fn from_id(id: GenericParamId) -> Self {
+    fn from_id(id: GenericParamId<'_>) -> Self {
         match id {
             GenericParamId::TypeParamId(_) => GenericArgKind::Type,
             GenericParamId::ConstParamId(_) => GenericArgKind::Const,
@@ -1197,7 +1197,11 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
         }
     }
 
-    fn collect_anon_const(&mut self, source_map: &ExpressionStoreSourceMap, def: AnonConstId<'db>) {
+    fn collect_anon_const(
+        &mut self,
+        source_map: &ExpressionStoreSourceMap<'db>,
+        def: AnonConstId<'db>,
+    ) {
         self.emit_inference_errors(
             def.into(),
             source_map,
@@ -1235,9 +1239,9 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
 
     fn collect_anon_consts_and_ty_diagnostics(
         &mut self,
-        source_map: &ExpressionStoreSourceMap,
+        source_map: &ExpressionStoreSourceMap<'db>,
         anon_consts: &[AnonConstId<'db>],
-        diagnostics: &[TyLoweringDiagnostic],
+        diagnostics: &[TyLoweringDiagnostic<'db>],
     ) {
         anon_consts.iter().for_each(|&anon_const| self.collect_anon_const(source_map, anon_const));
 
@@ -1249,8 +1253,8 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
 
     fn collect_generic_def(
         &mut self,
-        store: &ExpressionStore,
-        source_map: &ExpressionStoreSourceMap,
+        store: &ExpressionStore<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
         def: GenericDefId,
     ) {
         self.collect_expr_store(store, source_map);
@@ -1310,7 +1314,7 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
     fn emit_inference_errors(
         &mut self,
         def: InferBodyId<'db>,
-        source_map: &ExpressionStoreSourceMap,
+        source_map: &ExpressionStoreSourceMap<'db>,
         type_owner: TypeOwnerId<'db>,
     ) {
         let infer = InferenceResult::of(self.db, def);
@@ -1391,8 +1395,8 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
 
     fn collect_expr_store(
         &mut self,
-        store: &ExpressionStore,
-        source_map: &ExpressionStoreSourceMap,
+        store: &ExpressionStore<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
     ) {
         for (_, def_map) in store.blocks(self.db) {
             self.collect_module(def_map.root_module_id());
@@ -1440,7 +1444,7 @@ impl<'db> AnyDiagnostic<'db> {
     fn body_validation_diagnostic(
         db: &'db dyn HirDatabase,
         diagnostic: BodyValidationDiagnostic<'db>,
-        source_map: &hir_def::expr_store::BodySourceMap,
+        source_map: &hir_def::expr_store::BodySourceMap<'db>,
     ) -> Option<AnyDiagnostic<'db>> {
         match diagnostic {
             BodyValidationDiagnostic::RecordMissingFields { record, variant, missed_fields } => {
@@ -1573,8 +1577,8 @@ impl<'db> AnyDiagnostic<'db> {
         db: &'db dyn HirDatabase,
         krate: base_db::Crate,
         edition: Edition,
-        d: &'db InferenceDiagnostic,
-        source_map: &ExpressionStoreSourceMap,
+        d: &'db InferenceDiagnostic<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
         type_owner: TypeOwnerId<'db>,
     ) -> Option<AnyDiagnostic<'db>> {
         let expr_syntax = |expr| Self::expr_syntax(expr, source_map);
@@ -1984,7 +1988,7 @@ impl<'db> AnyDiagnostic<'db> {
     }
 
     fn path_diagnostic(
-        diag: &PathLoweringDiagnostic,
+        diag: &PathLoweringDiagnostic<'db>,
         path: InFile<ast::Path>,
     ) -> Option<AnyDiagnostic<'db>> {
         Some(match *diag {
@@ -2082,8 +2086,8 @@ impl<'db> AnyDiagnostic<'db> {
     }
 
     fn expr_syntax(
-        expr: ExprId,
-        source_map: &ExpressionStoreSourceMap,
+        expr: ExprId<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
     ) -> Option<InFile<ExprOrPatPtr>> {
         source_map
             .expr_syntax(expr)
@@ -2092,8 +2096,8 @@ impl<'db> AnyDiagnostic<'db> {
     }
 
     fn pat_syntax(
-        pat: PatId,
-        source_map: &ExpressionStoreSourceMap,
+        pat: PatId<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
     ) -> Option<InFile<ExprOrPatPtr>> {
         source_map
             .pat_syntax(pat)
@@ -2102,8 +2106,8 @@ impl<'db> AnyDiagnostic<'db> {
     }
 
     fn type_syntax(
-        type_ref: TypeRefId,
-        source_map: &ExpressionStoreSourceMap,
+        type_ref: TypeRefId<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
     ) -> Option<InFile<AstPtr<ast::Type>>> {
         source_map
             .type_syntax(type_ref)
@@ -2112,8 +2116,8 @@ impl<'db> AnyDiagnostic<'db> {
     }
 
     fn span_syntax(
-        span: hir_ide::Span,
-        source_map: &ExpressionStoreSourceMap,
+        span: hir_ide::Span<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
     ) -> Option<InFile<AstPtr<SpanAst>>> {
         Some(match span {
             hir_ide::Span::ExprId(idx) => Self::expr_syntax(idx, source_map)?.map(|it| it.upcast()),
@@ -2133,8 +2137,8 @@ impl<'db> AnyDiagnostic<'db> {
     }
 
     fn ty_diagnostic(
-        diag: &TyLoweringDiagnostic,
-        source_map: &ExpressionStoreSourceMap,
+        diag: &TyLoweringDiagnostic<'db>,
+        source_map: &ExpressionStoreSourceMap<'db>,
         db: &'db dyn HirDatabase,
     ) -> Option<AnyDiagnostic<'db>> {
         Some(match diag {

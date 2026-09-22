@@ -1193,7 +1193,7 @@ impl<'a, 'db> FindUsages<'a, 'db> {
         file_id: EditionedFileId,
         range: TextRange,
         token: ast::String,
-        res: Either<PathResolution<'db>, InlineAsmOperand>,
+        res: Either<PathResolution<'db>, InlineAsmOperand<'db>>,
         sink: &mut dyn FnMut(EditionedFileId, FileReference) -> bool,
     ) -> bool {
         let def = res.either(Definition::from, Definition::from);

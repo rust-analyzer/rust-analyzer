@@ -70,8 +70,8 @@ pub struct MethodResolutionContext<'a, 'db> {
     pub traits_in_scope: &'a FxHashSet<TraitId>,
     pub edition: Edition,
     pub features: &'a UnstableFeatures,
-    pub call_span: Span,
-    pub receiver_span: Span,
+    pub call_span: Span<'db>,
+    pub receiver_span: Span<'db>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
@@ -137,9 +137,9 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         self_ty: Ty<'db>,
         name: Name,
-        generic_args: Option<&HirGenericArgs>,
-        receiver: ExprId,
-        call_expr: ExprId,
+        generic_args: Option<&HirGenericArgs<'db>>,
+        receiver: ExprId<'db>,
+        call_expr: ExprId<'db>,
     ) -> Result<(MethodCallee<'db>, bool), MethodError<'db>> {
         let (pick, is_visible) = match self.lookup_probe(call_expr, receiver, name, self_ty) {
             Ok(it) => (it, true),
@@ -166,8 +166,8 @@ impl<'db> InferenceContext<'db> {
     #[instrument(level = "debug", skip(self))]
     pub(crate) fn lookup_probe(
         &self,
-        call_expr: ExprId,
-        receiver: ExprId,
+        call_expr: ExprId<'db>,
+        receiver: ExprId<'db>,
         method_name: Name,
         self_ty: Ty<'db>,
     ) -> probe::PickResult<'db> {
@@ -179,8 +179,8 @@ impl<'db> InferenceContext<'db> {
 
     pub(crate) fn with_method_resolution<R>(
         &self,
-        call_span: Span,
-        receiver_span: Span,
+        call_span: Span<'db>,
+        receiver_span: Span<'db>,
         f: impl FnOnce(&MethodResolutionContext<'_, 'db>) -> R,
     ) -> R {
         let traits_in_scope = self.get_traits_in_scope();
@@ -228,7 +228,7 @@ impl<'db> InferenceTable<'db> {
     #[instrument(level = "debug", skip(self))]
     pub(super) fn lookup_method_for_operator(
         &self,
-        cause: ObligationCause,
+        cause: ObligationCause<'db>,
         trait_def_id: TraitId,
         method_item: FunctionId,
         self_ty: Ty<'db>,

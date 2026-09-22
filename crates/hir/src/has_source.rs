@@ -102,7 +102,7 @@ impl Module {
     }
 }
 
-impl HasSource for Field {
+impl<'db> HasSource for Field<'db> {
     type Ast = FieldSource;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         let var = VariantId::from(self.parent);
@@ -249,7 +249,7 @@ impl HasSource for Impl<'_> {
     }
 }
 
-impl HasSource for TypeOrConstParam {
+impl<'db> HasSource for TypeOrConstParam<'db> {
     type Ast = Either<ast::TypeOrConstParam, ast::Trait>;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         let child_source = self.id.parent.child_source(db);
@@ -343,7 +343,7 @@ impl HasSource for ExternCrateDecl {
     }
 }
 
-impl HasSource for InlineAsmOperand {
+impl<'db> HasSource for InlineAsmOperand<'db> {
     type Ast = ast::AsmOperandNamed;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         let (_, source_map) = ExpressionStore::with_source_map(db, self.owner);

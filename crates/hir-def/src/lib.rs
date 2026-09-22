@@ -72,7 +72,7 @@ use hir_expand::{
 use intern::{Interned, sym};
 use nameres::DefMap;
 use rustc_abi::ExternAbi;
-use salsa::{Durability, Setter};
+use salsa::{Durability, SalsaValue, Setter};
 use span::{AstIdNode, Edition, FileAstId, SyntaxContext};
 use stdx::impl_from;
 use syntax::{AstNode, ast};
@@ -264,15 +264,15 @@ impl_intern!(FunctionId, FunctionLoc);
 type StructLoc = ItemLoc<ast::Struct>;
 impl_intern!(StructId, StructLoc);
 
-impl StructId {
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+impl<'db> StructId {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self.into())
     }
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self.into());
         (&r.0, &r.1)
     }
@@ -281,15 +281,15 @@ impl StructId {
 pub type UnionLoc = ItemLoc<ast::Union>;
 impl_intern!(UnionId, UnionLoc);
 
-impl UnionId {
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+impl<'db> UnionId {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self.into())
     }
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self.into());
         (&r.0, &r.1)
     }
@@ -400,8 +400,8 @@ impl EnumVariantLoc {
     }
 }
 
-impl EnumVariantId {
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+impl<'db> EnumVariantId {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self.into())
     }
 
@@ -411,8 +411,8 @@ impl EnumVariantId {
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self.into());
         (&r.0, &r.1)
     }
@@ -630,10 +630,10 @@ impl<'db> HasModule<'db> for ModuleId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
-pub struct FieldId {
+pub struct FieldId<'db> {
     // FIXME: Store this as an erased `salsa::Id` to save space
     pub parent: VariantId,
-    pub local_id: LocalFieldId,
+    pub local_id: LocalFieldId<'db>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
@@ -645,30 +645,30 @@ pub struct TupleFieldId {
     pub index: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TypeOrConstParamId {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, SalsaValue)]
+pub struct TypeOrConstParamId<'db> {
     // FIXME: Store this as an erased `salsa::Id` to save space
     pub parent: GenericDefId,
-    pub local_id: LocalTypeOrConstParamId,
+    pub local_id: LocalTypeOrConstParamId<'db>,
 }
 
 /// A TypeOrConstParamId with an invariant that it actually belongs to a type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TypeParamId(TypeOrConstParamId);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
+pub struct TypeParamId<'db>(TypeOrConstParamId<'db>);
 
-impl TypeParamId {
+impl<'db> TypeParamId<'db> {
     #[inline]
     pub fn parent(&self) -> GenericDefId {
         self.0.parent
     }
 
     #[inline]
-    pub fn local_id(&self) -> LocalTypeOrConstParamId {
+    pub fn local_id(&self) -> LocalTypeOrConstParamId<'db> {
         self.0.local_id
     }
 
     #[inline]
-    pub fn trait_self(trait_: TraitId) -> TypeParamId {
+    pub fn trait_self(trait_: TraitId) -> TypeParamId<'db> {
         TypeParamId::from_unchecked(TypeOrConstParamId {
             parent: trait_.into(),
             local_id: GenericParams::SELF_PARAM_ID_IN_SELF,
@@ -677,39 +677,39 @@ impl TypeParamId {
 
     #[inline]
     /// Caller should check if this toc id really belongs to a type
-    pub fn from_unchecked(it: TypeOrConstParamId) -> Self {
+    pub fn from_unchecked(it: TypeOrConstParamId<'db>) -> Self {
         Self(it)
     }
 }
 
-impl From<TypeParamId> for TypeOrConstParamId {
-    fn from(it: TypeParamId) -> Self {
+impl<'db> From<TypeParamId<'db>> for TypeOrConstParamId<'db> {
+    fn from(it: TypeParamId<'db>) -> Self {
         it.0
     }
 }
 
 /// A TypeOrConstParamId with an invariant that it actually belongs to a const
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ConstParamId(TypeOrConstParamId);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
+pub struct ConstParamId<'db>(TypeOrConstParamId<'db>);
 
-impl ConstParamId {
+impl<'db> ConstParamId<'db> {
     pub fn parent(&self) -> GenericDefId {
         self.0.parent
     }
-    pub fn local_id(&self) -> LocalTypeOrConstParamId {
+    pub fn local_id(&self) -> LocalTypeOrConstParamId<'db> {
         self.0.local_id
     }
 }
 
-impl ConstParamId {
+impl<'db> ConstParamId<'db> {
     /// Caller should check if this toc id really belongs to a const
-    pub fn from_unchecked(it: TypeOrConstParamId) -> Self {
+    pub fn from_unchecked(it: TypeOrConstParamId<'db>) -> Self {
         Self(it)
     }
 }
 
-impl From<ConstParamId> for TypeOrConstParamId {
-    fn from(it: ConstParamId) -> Self {
+impl<'db> From<ConstParamId<'db>> for TypeOrConstParamId<'db> {
+    fn from(it: ConstParamId<'db>) -> Self {
         it.0
     }
 }
@@ -820,13 +820,13 @@ impl MacroId {
 }
 
 /// A generic param
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum GenericParamId {
-    TypeParamId(TypeParamId),
-    ConstParamId(ConstParamId),
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, SalsaValue)]
+pub enum GenericParamId<'db> {
+    TypeParamId(TypeParamId<'db>),
+    ConstParamId(ConstParamId<'db>),
     LifetimeParamId(LifetimeParamId),
 }
-impl_from!(TypeParamId, LifetimeParamId, ConstParamId for GenericParamId);
+impl_from!(impl<'db> TypeParamId<'db>, LifetimeParamId, ConstParamId<'db> for GenericParamId<'db>);
 
 /// The defs which can be visible in the module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1145,7 +1145,7 @@ pub enum VariantId {
 }
 impl_from!(EnumVariantId, StructId, UnionId for VariantId);
 
-impl VariantId {
+impl<'db> VariantId {
     pub fn from_non_enum(adt_id: AdtId) -> Option<Self> {
         Some(match adt_id {
             AdtId::StructId(struct_id) => struct_id.into(),
@@ -1154,14 +1154,14 @@ impl VariantId {
         })
     }
 
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self)
     }
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self);
         (&r.0, &r.1)
     }

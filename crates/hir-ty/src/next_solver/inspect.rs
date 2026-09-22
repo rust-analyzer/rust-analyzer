@@ -158,7 +158,7 @@ impl<'a, 'db> InspectCandidate<'a, 'db> {
     /// inference constraints. This function modifies the state of the `infcx`.
     ///
     /// See [`Self::instantiate_impl_args`] if you need the impl args too.
-    pub(crate) fn instantiate_nested_goals(&self, span: Span) -> Vec<InspectGoal<'a, 'db>> {
+    pub(crate) fn instantiate_nested_goals(&self, span: Span<'db>) -> Vec<InspectGoal<'a, 'db>> {
         let infcx = self.goal.infcx;
         let param_env = self.goal.goal.param_env;
         let mut orig_values = self.goal.orig_values.to_vec();
@@ -195,7 +195,7 @@ impl<'a, 'db> InspectCandidate<'a, 'db> {
     /// Instantiate the args of an impl if this candidate came from a
     /// `CandidateSource::Impl`. This function modifies the state of the
     /// `infcx`.
-    pub(crate) fn instantiate_impl_args(&self, span: Span) -> GenericArgs<'db> {
+    pub(crate) fn instantiate_impl_args(&self, span: Span<'db>) -> GenericArgs<'db> {
         let infcx = self.goal.infcx;
         let param_env = self.goal.goal.param_env;
         let mut orig_values = self.goal.orig_values.to_vec();
@@ -240,7 +240,7 @@ impl<'a, 'db> InspectCandidate<'a, 'db> {
         &self,
         source: GoalSource,
         goal: Goal<'db, Predicate<'db>>,
-        span: Span,
+        span: Span<'db>,
     ) -> InspectGoal<'a, 'db> {
         let infcx = self.goal.infcx;
         match goal.predicate.kind().no_bound_vars() {
@@ -470,7 +470,7 @@ impl<'a, 'db> InspectGoal<'a, 'db> {
 pub(crate) trait ProofTreeVisitor<'db> {
     type Result: VisitorResult;
 
-    fn span(&self) -> Span;
+    fn span(&self) -> Span<'db>;
 
     fn config(&self) -> InspectConfig {
         InspectConfig { max_depth: 10 }

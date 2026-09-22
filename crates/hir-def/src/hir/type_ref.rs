@@ -4,6 +4,7 @@
 use hir_expand::name::Name;
 use la_arena::Idx;
 use rustc_abi::ExternAbi;
+use salsa::SalsaValue;
 use thin_vec::ThinVec;
 
 use crate::{
@@ -70,84 +71,84 @@ impl Rawness {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, SalsaValue)]
 /// A `TypeRefId` that is guaranteed to always be `TypeRef::Path`. We use this for things like
 /// impl's trait, that are always paths but need to be traced back to source code.
-pub struct PathId(TypeRefId);
+pub struct PathId<'db>(TypeRefId<'db>);
 
-impl PathId {
+impl<'db> PathId<'db> {
     #[inline]
-    pub fn from_type_ref_unchecked(type_ref: TypeRefId) -> Self {
+    pub fn from_type_ref_unchecked(type_ref: TypeRefId<'db>) -> Self {
         Self(type_ref)
     }
 
     #[inline]
-    pub fn type_ref(self) -> TypeRefId {
+    pub fn type_ref(self) -> TypeRefId<'db> {
         self.0
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct TraitRef {
-    pub path: PathId,
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, SalsaValue)]
+pub struct TraitRef<'db> {
+    pub path: PathId<'db>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct FnType {
+#[derive(Clone, PartialEq, Eq, Hash, Debug, SalsaValue)]
+pub struct FnType<'db> {
     pub binder: Option<Box<[Name]>>,
-    pub params: Box<[(Option<Name>, TypeRefId)]>,
+    pub params: Box<[(Option<Name>, TypeRefId<'db>)]>,
     pub is_varargs: bool,
     pub is_unsafe: bool,
     pub abi: ExternAbi,
 }
 
-impl FnType {
+impl<'db> FnType<'db> {
     #[inline]
-    pub fn split_params_and_ret(&self) -> (&[(Option<Name>, TypeRefId)], TypeRefId) {
+    pub fn split_params_and_ret(&self) -> (&[(Option<Name>, TypeRefId<'db>)], TypeRefId<'db>) {
         let (ret, params) = self.params.split_last().expect("should have at least return type");
         (params, ret.1)
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct ArrayType {
-    pub ty: TypeRefId,
-    pub len: ConstRef,
+#[derive(Clone, PartialEq, Eq, Hash, Debug, SalsaValue)]
+pub struct ArrayType<'db> {
+    pub ty: TypeRefId<'db>,
+    pub len: ConstRef<'db>,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct RefType {
-    pub ty: TypeRefId,
+#[derive(Clone, PartialEq, Eq, Hash, Debug, SalsaValue)]
+pub struct RefType<'db> {
+    pub ty: TypeRefId<'db>,
     pub lifetime: Option<LifetimeRefId>,
     pub mutability: Mutability,
 }
 
 /// Compare ty::Ty
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum TypeRef {
+#[derive(Clone, PartialEq, Eq, Hash, Debug, SalsaValue)]
+pub enum TypeRef<'db> {
     Never,
     Placeholder,
-    Tuple(ThinVec<TypeRefId>),
-    Path(Path),
-    RawPtr(TypeRefId, Mutability),
+    Tuple(ThinVec<TypeRefId<'db>>),
+    Path(Path<'db>),
+    RawPtr(TypeRefId<'db>, Mutability),
     // FIXME: Unbox this once `Idx` has a niche,
     // as `RefType` should shrink by 4 bytes then
-    Reference(Box<RefType>),
-    Array(ArrayType),
-    Slice(TypeRefId),
+    Reference(Box<RefType<'db>>),
+    Array(ArrayType<'db>),
+    Slice(TypeRefId<'db>),
     /// A fn pointer. Last element of the vector is the return type.
-    Fn(Box<FnType>),
-    ImplTrait(ThinVec<TypeBound>),
-    DynTrait(ThinVec<TypeBound>),
-    TypeParam(TypeParamId),
-    PatternType(TypeRefId, PatId),
+    Fn(Box<FnType<'db>>),
+    ImplTrait(ThinVec<TypeBound<'db>>),
+    DynTrait(ThinVec<TypeBound<'db>>),
+    TypeParam(TypeParamId<'db>),
+    PatternType(TypeRefId<'db>, PatId<'db>),
     Error,
 }
 
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
-const _: () = assert!(size_of::<TypeRef>() == 24);
+const _: () = assert!(size_of::<TypeRef<'_>>() == 24);
 
-pub type TypeRefId = Idx<TypeRef>;
+pub type TypeRefId<'db> = Idx<TypeRef<'db>>;
 
 pub type LifetimeRefId = Idx<LifetimeRef>;
 
@@ -160,17 +161,17 @@ pub enum LifetimeRef {
     Error,
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub enum TypeBound {
-    Path(PathId, TraitBoundModifier),
-    ForLifetime(ThinVec<Name>, PathId),
+#[derive(Clone, PartialEq, Eq, Hash, Debug, SalsaValue)]
+pub enum TypeBound<'db> {
+    Path(PathId<'db>, TraitBoundModifier),
+    ForLifetime(ThinVec<Name>, PathId<'db>),
     Lifetime(LifetimeRefId),
     Use(ThinVec<UseArgRef>),
     Error,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: [(); 16] = [(); size_of::<TypeBound>()];
+const _: [(); 16] = [(); size_of::<TypeBound<'_>>()];
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub enum UseArgRef {
@@ -186,14 +187,17 @@ pub enum TraitBoundModifier {
     Maybe,
 }
 
-impl TypeRef {
-    pub(crate) fn unit() -> TypeRef {
+impl<'db> TypeRef<'db> {
+    pub(crate) fn unit() -> TypeRef<'db> {
         TypeRef::Tuple(ThinVec::new())
     }
 }
 
-impl TypeBound {
-    pub fn as_path<'a>(&self, map: &'a ExpressionStore) -> Option<(&'a Path, TraitBoundModifier)> {
+impl<'db> TypeBound<'db> {
+    pub fn as_path<'a>(
+        &self,
+        map: &'a ExpressionStore<'db>,
+    ) -> Option<(&'a Path<'db>, TraitBoundModifier)> {
         match self {
             &TypeBound::Path(p, m) => Some((&map[p], m)),
             &TypeBound::ForLifetime(_, p) => Some((&map[p], TraitBoundModifier::None)),
@@ -202,7 +206,7 @@ impl TypeBound {
     }
 }
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ConstRef {
-    pub expr: ExprId,
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, SalsaValue)]
+pub struct ConstRef<'db> {
+    pub expr: ExprId<'db>,
 }

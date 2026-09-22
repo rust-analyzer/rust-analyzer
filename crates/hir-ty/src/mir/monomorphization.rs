@@ -136,7 +136,7 @@ impl<'db> Filler<'db> {
         }
     }
 
-    fn fill_operand(&mut self, op: &mut Operand) -> Result<(), MirLowerError<'db>> {
+    fn fill_operand(&mut self, op: &mut Operand<'db>) -> Result<(), MirLowerError<'db>> {
         match &mut op.kind {
             OperandKind::Constant { konst, ty } => {
                 self.fill_const(konst)?;

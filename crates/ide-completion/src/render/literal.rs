@@ -146,7 +146,7 @@ enum Variant {
 }
 
 impl Variant {
-    fn fields(self, ctx: &CompletionContext<'_, '_>) -> Option<Vec<hir::Field>> {
+    fn fields<'db>(self, ctx: &CompletionContext<'_, 'db>) -> Option<Vec<hir::Field<'db>>> {
         let fields = match self {
             Variant::Struct(it) => it.fields(ctx.db),
             Variant::EnumVariant(it) => it.fields(ctx.db),

@@ -287,14 +287,14 @@ impl<'db> FulfillmentCtxt<'db> {
 /// so we want to keep this visitor *precise* too.
 pub struct StalledOnCoroutines<'a, 'db> {
     pub stalled_coroutines: &'a [SolverDefId<'db>],
-    pub span: Span,
+    pub span: Span<'db>,
     pub cache: FxHashSet<Ty<'db>>,
 }
 
 impl<'db> ProofTreeVisitor<'db> for StalledOnCoroutines<'_, 'db> {
     type Result = ControlFlow<()>;
 
-    fn span(&self) -> Span {
+    fn span(&self) -> Span<'db> {
         self.span
     }
 

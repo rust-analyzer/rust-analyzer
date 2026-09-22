@@ -241,7 +241,7 @@ impl<'infcx, 'db> LatticeOp<'infcx, 'db> {
 }
 
 impl<'db> PredicateEmittingRelation<InferCtxt<'db>> for LatticeOp<'_, 'db> {
-    fn span(&self) -> Span {
+    fn span(&self) -> Span<'db> {
         self.trace.cause.span()
     }
 

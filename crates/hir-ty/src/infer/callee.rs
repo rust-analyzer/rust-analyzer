@@ -28,7 +28,7 @@ use crate::{
 #[derive(Debug)]
 enum CallStep<'db> {
     Builtin(Ty<'db>),
-    DeferredClosure(ExprId, FnSig<'db>),
+    DeferredClosure(ExprId<'db>, FnSig<'db>),
     /// Call overloading when callee implements one of the Fn* traits.
     Overloaded(MethodCallee<'db>),
 }
@@ -36,9 +36,9 @@ enum CallStep<'db> {
 impl<'db> InferenceContext<'db> {
     pub(crate) fn infer_call(
         &mut self,
-        call_expr: ExprId,
-        callee_expr: ExprId,
-        arg_exprs: &[ExprId],
+        call_expr: ExprId<'db>,
+        callee_expr: ExprId<'db>,
+        arg_exprs: &[ExprId<'db>],
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
         let original_callee_ty = self.infer_expr_no_expect(callee_expr, ExprIsRead::Yes);
@@ -103,9 +103,9 @@ impl<'db> InferenceContext<'db> {
     }
 
     fn try_overloaded_call_step(
-        call_expr: ExprId,
-        callee_expr: ExprId,
-        arg_exprs: &[ExprId],
+        call_expr: ExprId<'db>,
+        callee_expr: ExprId<'db>,
+        arg_exprs: &[ExprId<'db>],
         autoderef: &mut InferenceContextAutoderef<'_, 'db>,
         error_reported: &mut bool,
     ) -> Option<CallStep<'db>> {
@@ -260,9 +260,9 @@ impl<'db> InferenceContext<'db> {
 
     fn try_overloaded_call_traits(
         &mut self,
-        call_expr: ExprId,
+        call_expr: ExprId<'db>,
         adjusted_ty: Ty<'db>,
-        opt_arg_exprs: Option<&[ExprId]>,
+        opt_arg_exprs: Option<&[ExprId<'db>]>,
     ) -> Option<(Option<Adjustment>, MethodCallee<'db>)> {
         // HACK(async_closures): For async closures, prefer `AsyncFn*`
         // over `Fn*`, since all async closures implement `FnOnce`, but
@@ -358,7 +358,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         callee: Option<CallableDefId>,
         callee_ty: Ty<'db>,
-        args: &[ExprId],
+        args: &[ExprId<'db>],
     ) -> Box<[u32]> {
         let (func, fn_generic_args) = match (callee, callee_ty.kind()) {
             (Some(CallableDefId::FunctionId(func)), TyKind::FnDef(_, fn_generic_args)) => {
@@ -425,10 +425,10 @@ impl<'db> InferenceContext<'db> {
 
     fn confirm_builtin_call(
         &mut self,
-        callee_expr: ExprId,
-        call_expr: ExprId,
+        callee_expr: ExprId<'db>,
+        call_expr: ExprId<'db>,
         callee_ty: Ty<'db>,
-        arg_exprs: &[ExprId],
+        arg_exprs: &[ExprId<'db>],
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
         let (fn_sig, def_id) = match callee_ty.kind() {
@@ -484,8 +484,8 @@ impl<'db> InferenceContext<'db> {
 
     fn confirm_deferred_closure_call(
         &mut self,
-        call_expr: ExprId,
-        arg_exprs: &[ExprId],
+        call_expr: ExprId<'db>,
+        arg_exprs: &[ExprId<'db>],
         expected: &Expectation<'db>,
         fn_sig: FnSig<'db>,
     ) -> Ty<'db> {
@@ -509,8 +509,8 @@ impl<'db> InferenceContext<'db> {
 
     fn confirm_overloaded_call(
         &mut self,
-        call_expr: ExprId,
-        arg_exprs: &[ExprId],
+        call_expr: ExprId<'db>,
+        arg_exprs: &[ExprId<'db>],
         expected: &Expectation<'db>,
         method: MethodCallee<'db>,
     ) -> Ty<'db> {
@@ -533,8 +533,8 @@ impl<'db> InferenceContext<'db> {
 
 #[derive(Debug, Clone)]
 pub(crate) struct DeferredCallResolution<'db> {
-    call_expr: ExprId,
-    callee_expr: ExprId,
+    call_expr: ExprId<'db>,
+    callee_expr: ExprId<'db>,
     closure_ty: Ty<'db>,
     adjustments: Vec<Adjustment>,
     fn_sig: FnSig<'db>,

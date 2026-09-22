@@ -21,6 +21,7 @@ use hir_expand::{
     mod_path::ModPath,
     span_map::SpanMap,
 };
+use salsa::SalsaValue;
 use span::AstIdMap;
 use syntax::{
     AstNode, SyntaxNode,
@@ -40,7 +41,7 @@ struct DocsSourceMapLine {
     ast_offset: Option<TextSize>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
 pub struct Docs {
     /// The concatenated string of all `#[doc = "..."]` attributes and documentation comments.
     docs: String,

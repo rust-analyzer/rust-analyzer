@@ -54,7 +54,7 @@ pub(crate) fn generics<'db>(interner: DbInterner<'db>, def: SolverDefId<'db>) ->
 pub struct Generics<'db> {
     generics: crate::generics::Generics<'db>,
     /// This is used for builtin derives, specifically `CoercePointee`.
-    additional_param: Option<GenericParamId>,
+    additional_param: Option<GenericParamId<'db>>,
     consider_late_bound: bool,
 }
 
@@ -74,7 +74,7 @@ impl<'db> Generics<'db> {
     pub(crate) fn from_generic_def_plus_one(
         db: &'db dyn HirDatabase,
         def: GenericDefId,
-        additional_param: TypeParamId,
+        additional_param: TypeParamId<'db>,
         consider_late_bound: bool,
     ) -> Generics<'db> {
         Generics {
@@ -86,7 +86,7 @@ impl<'db> Generics<'db> {
 
     pub(super) fn iter(
         &self,
-    ) -> impl Iterator<Item = (GenericParamId, Option<&LifetimeParamData>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, Option<&LifetimeParamData>)> {
         self.generics
             .iter(self.consider_late_bound)
             .map(|(id, data)| {

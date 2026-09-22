@@ -47,8 +47,8 @@ pub struct Generics<'db> {
 pub(crate) struct SingleGenerics<'db> {
     def: GenericDefId,
     preceding_params_len: u32,
-    params: &'db GenericParams,
-    store: &'db ExpressionStore,
+    params: &'db GenericParams<'db>,
+    store: &'db ExpressionStore<'db>,
 }
 
 impl<'db> SingleGenerics<'db> {
@@ -56,11 +56,11 @@ impl<'db> SingleGenerics<'db> {
         self.def
     }
 
-    pub(crate) fn store(&self) -> &'db ExpressionStore {
+    pub(crate) fn store(&self) -> &ExpressionStore<'db> {
         self.store
     }
 
-    pub(crate) fn where_predicates(&self) -> impl Iterator<Item = &WherePredicate> {
+    pub(crate) fn where_predicates(&self) -> impl Iterator<Item = &WherePredicate<'db>> {
         self.params.where_predicates().iter()
     }
 
@@ -95,7 +95,7 @@ impl<'db> SingleGenerics<'db> {
 
     pub(crate) fn iter_type_or_consts(
         &self,
-    ) -> impl Iterator<Item = (TypeOrConstParamId, &'db TypeOrConstParamData)> {
+    ) -> impl Iterator<Item = (TypeOrConstParamId<'db>, &'db TypeOrConstParamData<'db>)> {
         let parent = self.def;
         self.params
             .iter_type_or_consts()
@@ -104,7 +104,7 @@ impl<'db> SingleGenerics<'db> {
 
     fn iter_type_or_consts_as_generic(
         &self,
-    ) -> impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)> {
         self.iter_type_or_consts().map(|(id, data)| match data {
             TypeOrConstParamData::TypeParamData(data) => (
                 GenericParamId::TypeParamId(TypeParamId::from_unchecked(id)),
@@ -120,8 +120,8 @@ impl<'db> SingleGenerics<'db> {
     fn trait_self_and_others(
         &self,
     ) -> (
-        Option<(GenericParamId, GenericParamDataRef<'db>)>,
-        impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)>,
+        Option<(GenericParamId<'db>, GenericParamDataRef<'db>)>,
+        impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)>,
     ) {
         let mut iter = self.iter_type_or_consts_as_generic();
         let trait_self = if let GenericDefId::TraitId(_) = self.def { iter.next() } else { None };
@@ -131,7 +131,7 @@ impl<'db> SingleGenerics<'db> {
     pub(crate) fn iter(
         &self,
         consider_late_bound: bool,
-    ) -> impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)> {
         let lifetime_map = |(id, data)| {
             (GenericParamId::LifetimeParamId(id), GenericParamDataRef::LifetimeParamData(data))
         };
@@ -145,7 +145,7 @@ impl<'db> SingleGenerics<'db> {
 
     pub(crate) fn iter_with_idx(
         &self,
-    ) -> impl Iterator<Item = (u32, GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (u32, GenericParamId<'db>, GenericParamDataRef<'db>)> {
         std::iter::zip(self.preceding_params_len.., self.iter(false))
             .map(|(index, (id, data))| (index, id, data))
     }
@@ -153,13 +153,13 @@ impl<'db> SingleGenerics<'db> {
     pub(crate) fn iter_id(
         &self,
         consider_late_bound: bool,
-    ) -> impl Iterator<Item = GenericParamId> {
+    ) -> impl Iterator<Item = GenericParamId<'db>> {
         self.iter(consider_late_bound).map(|(id, _)| id)
     }
 
     pub(crate) fn iter_late_bound(
         &self,
-    ) -> impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)> {
         // we don't handle late bound types or const now, so it is ignored for now
         let parent = self.def;
         self.params.iter_late_bound_lt().map(move |(local_id, data)| {
@@ -195,35 +195,35 @@ impl<'db> Generics<'db> {
         self.owner().def
     }
 
-    pub(crate) fn store(&self) -> &'db ExpressionStore {
+    pub(crate) fn store(&self) -> &'db ExpressionStore<'db> {
         self.owner().store
     }
 
     pub(crate) fn iter_self(
         &self,
-    ) -> impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)> {
         self.owner().iter(false)
     }
 
     pub(crate) fn iter_self_with_idx(
         &self,
-    ) -> impl Iterator<Item = (u32, GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (u32, GenericParamId<'db>, GenericParamDataRef<'db>)> {
         self.owner().iter_with_idx()
     }
 
     pub(crate) fn iter_self_late_bound(
         &self,
-    ) -> impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)> {
         self.owner().iter_late_bound()
     }
 
-    pub(crate) fn iter_parent_id(&self) -> impl Iterator<Item = GenericParamId> {
+    pub(crate) fn iter_parent_id(&self) -> impl Iterator<Item = GenericParamId<'db>> {
         self.parent().into_iter().flat_map(move |parent| parent.iter_id(false))
     }
 
     pub(crate) fn iter_self_type_or_consts(
         &self,
-    ) -> impl Iterator<Item = (TypeOrConstParamId, &'db TypeOrConstParamData)> {
+    ) -> impl Iterator<Item = (TypeOrConstParamId<'db>, &'db TypeOrConstParamData<'db>)> {
         self.owner().iter_type_or_consts()
     }
 
@@ -231,14 +231,14 @@ impl<'db> Generics<'db> {
     pub fn iter(
         &self,
         consider_late_bound: bool,
-    ) -> impl Iterator<Item = (GenericParamId, GenericParamDataRef<'db>)> {
+    ) -> impl Iterator<Item = (GenericParamId<'db>, GenericParamDataRef<'db>)> {
         self.iter_owners().flat_map(move |owner| owner.iter(consider_late_bound))
     }
 
     pub(crate) fn iter_id(
         &self,
         consider_late_bound: bool,
-    ) -> impl Iterator<Item = GenericParamId> {
+    ) -> impl Iterator<Item = GenericParamId<'db>> {
         self.iter_owners().flat_map(move |owner| owner.iter_id(consider_late_bound))
     }
 
@@ -308,7 +308,7 @@ impl<'db> Generics<'db> {
         }
     }
 
-    pub(crate) fn type_or_const_param_idx(&self, param: TypeOrConstParamId) -> u32 {
+    pub(crate) fn type_or_const_param_idx(&self, param: TypeOrConstParamId<'db>) -> u32 {
         let owner = self.find_owner(param.parent);
         let has_trait_self = matches!(owner.def, GenericDefId::TraitId(_));
         if has_trait_self && param.local_id == GenericParams::SELF_PARAM_ID_IN_SELF {
