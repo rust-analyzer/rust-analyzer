@@ -33,6 +33,30 @@ fn test() {
 }
 
 #[test]
+fn atpit_gat_lifetime_before_type_and_const_params() {
+    check_no_mismatches(
+        r#"
+//- minicore: sized
+#![feature(impl_trait_in_assoc_type)]
+
+trait Tr {
+    type Out<'a, T, const N: usize>
+    where
+        Self: 'a;
+    fn m<T, const N: usize>(&self, t: T) -> Self::Out<'_, T, N>;
+}
+
+impl Tr for () {
+    type Out<'a, T, const N: usize> = impl Sized;
+    fn m<T, const N: usize>(&self, t: T) -> Self::Out<'_, T, N> {
+        (t, [(); N])
+    }
+}
+"#,
+    );
+}
+
+#[test]
 fn associated_type_impl_traits_complex() {
     check_types(
         r#"
