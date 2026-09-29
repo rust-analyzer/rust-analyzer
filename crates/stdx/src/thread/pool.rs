@@ -149,3 +149,135 @@ impl<'scope> Scope<'_, 'scope> {
         self.pool.job_sender.send(job).unwrap();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::{
+        sync::{
+            Arc,
+            atomic::{AtomicBool, AtomicUsize, Ordering},
+        },
+        thread,
+        time::Duration,
+    };
+
+    fn wait_for_empty(pool: &Pool) {
+        while !pool.is_empty() {
+            thread::sleep(Duration::from_millis(1));
+        }
+    }
+
+    #[test]
+    fn new_creates_empty_pool() {
+        let pool = Pool::new(2);
+        assert_eq!(pool.len(), 0);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn spawn_executes_function() {
+        let pool = Pool::new(1);
+        let executed = Arc::new(AtomicBool::new(false));
+        let executed_clone = Arc::clone(&executed);
+        pool.spawn(ThreadIntent::Worker, move || {
+            executed_clone.store(true, Ordering::SeqCst);
+        });
+        wait_for_empty(&pool);
+        assert!(executed.load(Ordering::SeqCst));
+        assert_eq!(pool.len(), 0);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn spawn_changes_thread_intent() {
+        let pool = Pool::new(1);
+        let executed = Arc::new(AtomicBool::new(false));
+        let first_executed = Arc::clone(&executed);
+        pool.spawn(ThreadIntent::Worker, move || {
+            first_executed.store(true, Ordering::SeqCst);
+        });
+        wait_for_empty(&pool);
+        let second_executed = Arc::clone(&executed);
+        pool.spawn(ThreadIntent::LatencySensitive, move || {
+            second_executed.store(true, Ordering::SeqCst);
+        });
+        wait_for_empty(&pool);
+        assert!(executed.load(Ordering::SeqCst));
+        assert_eq!(pool.len(), 0);
+    }
+
+    #[test]
+    fn spawn_handles_panicking_function() {
+        let pool = Pool::new(1);
+        pool.spawn(ThreadIntent::Worker, || panic!());
+        wait_for_empty(&pool);
+        assert_eq!(pool.len(), 0);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn scoped_executes_borrowing_function() {
+        let pool = Pool::new(1);
+        let value = 42;
+        let result = pool.scoped(|scope| {
+            scope.spawn(ThreadIntent::Worker, || {
+                assert_eq!(value, 42);
+            });
+            value + 1
+        });
+        assert_eq!(result, 43);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn scoped_executes_multiple_functions() {
+        let pool = Pool::new(2);
+        let value = Arc::new(AtomicUsize::new(0));
+        pool.scoped(|scope| {
+            let first = Arc::clone(&value);
+            let second = Arc::clone(&value);
+            scope.spawn(ThreadIntent::Worker, move || {
+                first.fetch_add(1, Ordering::SeqCst);
+            });
+            scope.spawn(ThreadIntent::LatencySensitive, move || {
+                second.fetch_add(1, Ordering::SeqCst);
+            });
+        });
+        assert_eq!(value.load(Ordering::SeqCst), 2);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn scoped_handles_panicking_function() {
+        let pool = Pool::new(1);
+        pool.scoped(|scope| {
+            scope.spawn(ThreadIntent::Worker, || panic!());
+        });
+        assert_eq!(pool.len(), 0);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn scoped_returns_result_after_tasks_finish() {
+        let pool = Pool::new(2);
+        let value = Arc::new(AtomicUsize::new(0));
+        let result = pool.scoped(|scope| {
+            let value_clone = Arc::clone(&value);
+            scope.spawn(ThreadIntent::Worker, move || {
+                value_clone.store(7, Ordering::SeqCst);
+            });
+            11
+        });
+        assert_eq!(result, 11);
+        assert_eq!(value.load(Ordering::SeqCst), 7);
+        assert!(pool.is_empty());
+    }
+
+    #[test]
+    fn zero_thread_pool_starts_empty() {
+        let pool = Pool::new(0);
+        assert_eq!(pool.len(), 0);
+        assert!(pool.is_empty());
+    }
+}
