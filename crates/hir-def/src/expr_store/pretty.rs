@@ -328,7 +328,7 @@ pub fn print_function(
 fn print_where_clauses(
     db: &dyn SourceDatabase,
     generic_params: &GenericParams,
-    p: &mut Printer<'_>,
+    p: &mut Printer<'_, '_>,
 ) {
     if !generic_params.where_predicates.is_empty() {
         w!(p, "\nwhere\n");
@@ -368,7 +368,7 @@ fn print_where_clauses(
 fn print_generic_params(
     db: &dyn SourceDatabase,
     generic_params: &GenericParams,
-    p: &mut Printer<'_>,
+    p: &mut Printer<'_, '_>,
 ) {
     if !generic_params.is_empty() {
         w!(p, "<");
@@ -447,8 +447,8 @@ pub fn print_pat_hir(
     p.buf
 }
 
-struct Printer<'a> {
-    db: &'a dyn SourceDatabase,
+struct Printer<'a, 'db> {
+    db: &'db dyn SourceDatabase,
     store: &'a ExpressionStore,
     buf: String,
     indent_level: usize,
@@ -456,7 +456,7 @@ struct Printer<'a> {
     edition: Edition,
 }
 
-impl Write for Printer<'_> {
+impl Write for Printer<'_, '_> {
     fn write_str(&mut self, s: &str) -> fmt::Result {
         for line in s.split_inclusive('\n') {
             if matches!(self.line_format, LineFormat::Indentation) {
@@ -482,7 +482,7 @@ impl Write for Printer<'_> {
     }
 }
 
-impl Printer<'_> {
+impl Printer<'_, '_> {
     fn indented(&mut self, f: impl FnOnce(&mut Self)) {
         self.indent_level += 1;
         wln!(self);
