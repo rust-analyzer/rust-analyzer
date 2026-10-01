@@ -32,9 +32,9 @@ where
     }
 }
 
-pub trait HasChildSource<ChildId> {
+pub trait HasChildSource<'db, ChildId> {
     type Value;
-    fn child_source(&self, db: &dyn SourceDatabase) -> InFile<ArenaMap<ChildId, Self::Value>>;
+    fn child_source(&self, db: &'db dyn SourceDatabase) -> InFile<ArenaMap<ChildId, Self::Value>>;
 }
 
 /// Maps a `UseTree` contained in this import back to its AST node.
@@ -63,7 +63,7 @@ fn use_tree_source_map(
     .1
 }
 
-impl HasChildSource<la_arena::Idx<ast::UseTree>> for UseId {
+impl HasChildSource<'_, la_arena::Idx<ast::UseTree>> for UseId {
     type Value = ast::UseTree;
     fn child_source(
         &self,
@@ -74,7 +74,7 @@ impl HasChildSource<la_arena::Idx<ast::UseTree>> for UseId {
     }
 }
 
-impl HasChildSource<LocalTypeOrConstParamId> for GenericDefId {
+impl HasChildSource<'_, LocalTypeOrConstParamId> for GenericDefId {
     type Value = Either<ast::TypeOrConstParam, ast::Trait>;
     fn child_source(
         &self,
@@ -108,7 +108,7 @@ impl HasChildSource<LocalTypeOrConstParamId> for GenericDefId {
     }
 }
 
-impl HasChildSource<LocalLifetimeParamId> for GenericDefId {
+impl HasChildSource<'_, LocalLifetimeParamId> for GenericDefId {
     type Value = ast::LifetimeParam;
     fn child_source(
         &self,
@@ -131,7 +131,7 @@ impl HasChildSource<LocalLifetimeParamId> for GenericDefId {
     }
 }
 
-impl HasChildSource<LocalFieldId> for VariantId {
+impl HasChildSource<'_, LocalFieldId> for VariantId {
     type Value = Either<ast::TupleField, ast::RecordField>;
 
     fn child_source(&self, db: &dyn SourceDatabase) -> InFile<ArenaMap<LocalFieldId, Self::Value>> {
