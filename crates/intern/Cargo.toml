@@ -19,6 +19,7 @@ hashbrown = { version = "0.14.*", features = [
     "inline-more",
 ], default-features = false }
 rustc-hash.workspace = true
+salsa = { workspace = true, optional = true }
 triomphe.workspace = true
 rayon.workspace = true
 arrayvec.workspace = true
@@ -27,4 +28,5 @@ arrayvec.workspace = true
 workspace = true
 
 [features]
+salsa = ["dep:salsa"]
 prevent-gc = []

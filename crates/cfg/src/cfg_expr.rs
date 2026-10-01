@@ -48,6 +48,7 @@ impl fmt::Display for CfgAtom {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(test, derive(arbitrary::Arbitrary))]
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub enum CfgExpr {
     Invalid,
     Atom(CfgAtom),

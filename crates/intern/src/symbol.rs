@@ -117,6 +117,7 @@ impl TaggedArcPtr {
 }
 
 #[derive(PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub struct Symbol {
     repr: TaggedArcPtr,
 }

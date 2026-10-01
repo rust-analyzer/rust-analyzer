@@ -14,6 +14,7 @@ doctest = false
 
 [dependencies]
 rustc-hash.workspace = true
+salsa = { workspace = true, optional = true }
 tracing.workspace = true
 
 # locals deps
@@ -34,6 +35,7 @@ cfg = { path = ".", default-features = false, features = ["tt", "syntax"] }
 
 [features]
 default = []
+salsa = ["dep:salsa"]
 syntax = ["dep:syntax"]
 tt = ["dep:tt"]
 in-rust-tree = []

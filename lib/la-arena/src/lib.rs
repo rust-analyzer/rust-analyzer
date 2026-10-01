@@ -57,6 +57,7 @@ impl fmt::Display for RawIdx {
 }
 
 /// The index of a value allocated in an arena that holds `T`s.
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub struct Idx<T> {
     raw: RawIdx,
     _ty: PhantomData<fn() -> T>,
@@ -250,6 +251,7 @@ impl<T> Eq for IdxRange<T> {}
 
 /// Yet another index-based arena.
 #[derive(Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub struct Arena<T> {
     data: Vec<T>,
 }

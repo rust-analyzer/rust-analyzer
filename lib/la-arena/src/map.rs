@@ -6,6 +6,7 @@ use crate::Idx;
 /// A map from arena indexes to some other type.
 /// Space requirement is O(highest index).
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub struct ArenaMap<IDX, V> {
     v: Vec<Option<V>>,
     _ty: PhantomData<IDX>,

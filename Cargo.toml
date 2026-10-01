@@ -38,7 +38,7 @@ debug = 2
 # rowan = { path = "../rowan" }
 
 # line-index = { path = "lib/line-index" }
-# la-arena = { path = "lib/la-arena" }
+la-arena = { path = "lib/la-arena" }
 # lsp-server = { path = "lib/lsp-server" }
 
 
@@ -50,7 +50,7 @@ debug = 2
 # local crates
 macros = { path = "./crates/macros", version = "0.0.0" }
 base-db = { path = "./crates/base-db", version = "0.0.0" }
-cfg = { path = "./crates/cfg", version = "0.0.0", features = ["tt", "syntax"] }
+cfg = { path = "./crates/cfg", version = "0.0.0", features = ["tt", "salsa", "syntax"] }
 hir = { path = "./crates/hir", version = "0.0.0" }
 hir-def = { path = "./crates/hir-def", version = "0.0.0" }
 hir-expand = { path = "./crates/hir-expand", version = "0.0.0" }
@@ -62,7 +62,7 @@ ide-completion = { path = "./crates/ide-completion", version = "0.0.0" }
 ide-db = { path = "./crates/ide-db", version = "0.0.0" }
 ide-diagnostics = { path = "./crates/ide-diagnostics", version = "0.0.0" }
 ide-ssr = { path = "./crates/ide-ssr", version = "0.0.0" }
-intern = { path = "./crates/intern", version = "0.0.0" }
+intern = { path = "./crates/intern", version = "0.0.0", features = ["salsa"] }
 load-cargo = { path = "./crates/load-cargo", version = "0.0.0" }
 mbe = { path = "./crates/mbe", version = "0.0.0" }
 parser = { path = "./crates/parser", version = "0.0.0" }
@@ -96,7 +96,7 @@ ra-ap-rustc_next_trait_solver = { version = "0.166", default-features = false }
 
 # in-tree crates that are published separately and follow semver. See lib/README.md
 line-index = { version = "0.1.2" }
-la-arena = { version = "0.3.1" }
+la-arena = { version = "0.3.1", features = ["salsa"] }
 lsp-server = { version = "0.7.9" }
 
 # non-local crates
