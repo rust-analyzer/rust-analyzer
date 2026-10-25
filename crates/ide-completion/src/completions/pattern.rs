@@ -75,6 +75,7 @@ pub(crate) fn complete_pattern(
         super::enum_variants_with_paths(
             acc,
             ctx,
+            &ctx.module,
             e,
             pattern_ctx.impl_or_trait.as_ref().and_then(|it| it.as_ref().left()),
             |acc, ctx, variant, path| {

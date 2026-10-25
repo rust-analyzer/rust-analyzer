@@ -100,7 +100,7 @@ pub(crate) fn complete_expr_path<'db>(
         hir::AssocItem::TypeAlias(ty) => acc.add_type_alias(ctx, ty),
     };
 
-    let add_direct_adt_literal = |acc: &mut Completions| {
+    let add_direct_adt_literal = |acc: &mut Completions, module: &hir::Module| {
         let adt = if let Some(adt) =
             ctx.expected.ty.as_ref().and_then(|ty| ty.strip_references().as_adt())
         {
@@ -119,7 +119,7 @@ pub(crate) fn complete_expr_path<'db>(
 
         match adt {
             hir::Adt::Struct(strukt) => {
-                let path = ctx.module.find_path(
+                let path = module.find_path(
                     ctx.db,
                     hir::ModuleDef::from(strukt),
                     ctx.config.find_path_config(ctx.is_nightly),
@@ -139,8 +139,7 @@ pub(crate) fn complete_expr_path<'db>(
                 }
             }
             hir::Adt::Union(un) => {
-                let path = ctx
-                    .module
+                let path = module
                     .find_path(
                         ctx.db,
                         hir::ModuleDef::from(un),
@@ -157,6 +156,7 @@ pub(crate) fn complete_expr_path<'db>(
                 super::enum_variants_with_paths(
                     acc,
                     ctx,
+                    module,
                     e,
                     impl_.as_ref(),
                     |acc, ctx, variant, path| {
@@ -214,6 +214,7 @@ pub(crate) fn complete_expr_path<'db>(
             });
             match resolution {
                 hir::PathResolution::Def(hir::ModuleDef::Module(module)) => {
+                    add_direct_adt_literal(acc, module);
                     let visible_from = if ctx.config.enable_private_editable {
                         // Set visible_from to None so private items are returned.
                         // They will be possibly filtered out in add_path_resolution()
@@ -311,7 +312,7 @@ pub(crate) fn complete_expr_path<'db>(
         Qualified::Absolute => acc.add_crate_roots(ctx, path_ctx),
         Qualified::No => {
             acc.add_nameref_keywords_with_colon(ctx);
-            add_direct_adt_literal(acc);
+            add_direct_adt_literal(acc, &ctx.module);
             ctx.process_all_names(&mut |name, def, doc_aliases| match def {
                 ScopeDef::ModuleDef(hir::ModuleDef::Trait(t)) => {
                     let assocs = t.items_with_supertraits(ctx.db);

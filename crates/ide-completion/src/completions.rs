@@ -640,6 +640,7 @@ impl Completions {
 fn enum_variants_with_paths(
     acc: &mut Completions,
     ctx: &CompletionContext<'_, '_>,
+    module: &hir::Module,
     enum_: hir::Enum,
     impl_: Option<&ast::Impl>,
     cb: impl Fn(&mut Completions, &CompletionContext<'_, '_>, hir::EnumVariant, hir::ModPath),
@@ -662,7 +663,7 @@ fn enum_variants_with_paths(
     }
 
     for variant in variants {
-        if let Some(path) = ctx.module.find_path(
+        if let Some(path) = module.find_path(
             ctx.db,
             hir::ModuleDef::from(variant),
             ctx.config.find_path_config(ctx.is_nightly),
