@@ -1866,9 +1866,8 @@ pub(crate) fn const_param_ty<'db>(db: &'db dyn HirDatabase, def: ConstParamId) -
     const_param_types(db, def.parent()).get(def.local_id())
 }
 
-/// Wrapper struct around `ArenaMap` which implements [`SalsaValue`].
-///
-/// Required to make the `SalsaValue` derive for [`TyLoweringResult`] work.
+/// This used to be required to make the `SalsaValue` derive for [`TyLoweringResult`] work;
+/// it no longer is, but we still kept it, as it's a nice semantic wrapper.
 #[derive(Debug, Default, PartialEq, Eq, SalsaValue)]
 pub struct ConstParamTypes {
     map: ArenaMap<LocalTypeOrConstParamId, StoredTy>,
@@ -1925,9 +1924,8 @@ fn const_param_types_with_diagnostics_cycle_result<'db>(
     TyLoweringResult::empty(ConstParamTypes::default())
 }
 
-/// Wrapper struct around `ArenaMap` which implements [`SalsaValue`].
-///
-/// Required to make the `SalsaValue` derive for [`TyLoweringResult`] work.
+/// This used to be required to make the `SalsaValue` derive for [`TyLoweringResult`] work;
+/// it no longer is, but we still kept it, as it's a nice semantic wrapper.
 #[derive(Default, PartialEq, Eq, SalsaValue)]
 pub struct FieldTypes {
     map: ArenaMap<LocalFieldId, FieldType>,
