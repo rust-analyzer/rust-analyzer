@@ -152,8 +152,8 @@ fn consume() -> Option<()> {
 }
 
 #[test]
-fn invalid_mismatch_reported() {
-    check(
+fn no_mismatches_with_unresolved_value_constrained_by_coercion() {
+    check_no_mismatches(
         r#"
 struct Token { id: u32 }
 
@@ -163,7 +163,6 @@ fn main() {
     let id = nothing();
     take(&id);
     Token { id };
-          //^^ expected u32, got i64
 }
 "#,
     );
