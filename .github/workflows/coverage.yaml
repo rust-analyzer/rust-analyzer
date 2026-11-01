@@ -34,6 +34,11 @@ jobs:
         with:
           tool: nextest
 
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-workspace-crates: true
+
       - name: Generate code coverage
         run: cargo llvm-cov --workspace --lcov --output-path lcov.info
 

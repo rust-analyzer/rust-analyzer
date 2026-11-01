@@ -5,6 +5,9 @@ name: CI
 on:
   pull_request:
   merge_group:
+  push:
+    branches:
+      - master
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -109,12 +112,13 @@ jobs:
         if: matrix.os == 'macos-latest'
         run: echo "::add-matcher::.github/rust.json"
 
-      # - name: Cache Dependencies
-      #   uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-      #   with:
-      #     workspaces: |
-      #       . -> target
-      #       ./crates/proc-macro-srv/proc-macro-test/imp -> target
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-workspace-crates: true
+          workspaces: |
+            . -> target
+            ./crates/proc-macro-srv/proc-macro-test/imp -> target
 
       - name: Install nextest
         uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
@@ -152,8 +156,11 @@ jobs:
           rustup default stable
           rustup component add rustfmt
 
-      # - name: Cache Dependencies
-      #   uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
+      - name: Cache Dependencies
+        uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4 # v2.9.1
+        with:
+          cache-workspace-crates: "true"
+          key: wip2
 
       - name: Bump opt-level
         run: sed -i '/\[profile.dev]/a opt-level=1' Cargo.toml
@@ -218,9 +225,6 @@ jobs:
           rustup default nightly
           rustup component add miri
 
-      # - name: Cache Dependencies
-      #   uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
-
       - run: cargo miri test -p intern
 
   # Weird targets to catch non-portable code
@@ -247,8 +251,6 @@ jobs:
           rustup update --no-self-update stable
           rustup target add ${{ matrix.target }}
 
-      # - name: Cache Dependencies
-      #   uses: Swatinem/rust-cache@9d47c6ad4b02e050fd481d890b2ea34778fd09d6
 
       - run: cargo check --target=${{ matrix.target }} --all-targets -p ide
         if: ${{ matrix.ide-only }}
