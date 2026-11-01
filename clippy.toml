@@ -6,4 +6,7 @@ disallowed-types = [
 
 disallowed-methods = [
     { path = "std::process::Command::new", replacement = "toolchain::command", reason = "the latter forces the choice of a working directory" },
+    { path = "std::process::Command::spawn", reason = "use `stdx::process::JodChild::spawn` instead to prevent processes leaking on exit" },
+    { path = "std::process::Command::output", reason = "use `stdx::process::output` instead to prevent processes leaking on exit" },
+    { path = "std::process::Command::status", reason = "use `stdx::process` instead to prevent processes leaking on exit" },
 ]

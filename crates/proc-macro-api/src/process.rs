@@ -4,7 +4,7 @@ use std::{
     fmt::Debug,
     io::{self, BufRead, BufReader, Read, Write},
     panic::AssertUnwindSafe,
-    process::{Child, ChildStdin, ChildStdout, Command, Stdio},
+    process::{ChildStdin, ChildStdout, Command, Stdio},
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicU32, Ordering},
@@ -14,7 +14,7 @@ use std::{
 use paths::AbsPath;
 use semver::Version;
 use span::Span;
-use stdx::JodChild;
+use stdx::process::JodChild;
 
 use crate::{
     ProcMacro, ProcMacroKind, ProtocolFormat, ServerError,
@@ -66,7 +66,7 @@ impl ProcessExit for Process {
             Ok(Some(status)) => {
                 let mut msg = String::new();
                 if !status.success()
-                    && let Some(stderr) = self.child.stderr.as_mut()
+                    && let Some(stderr) = self.child.stderr().as_mut()
                 {
                     _ = stderr.read_to_string(&mut msg);
                 }
@@ -112,9 +112,9 @@ impl ProcMacroServerProcess {
             version,
             || {
                 #[expect(clippy::disallowed_methods)]
-                Command::new(process_path)
-                    .arg("--version")
-                    .output()
+                let mut cmd = Command::new(process_path);
+                cmd.arg("--version");
+                stdx::process::output(&mut cmd)
                     .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
                     .unwrap_or_else(|_| "unknown version".to_owned())
             },
@@ -390,14 +390,14 @@ impl Process {
         >,
         format: Option<&str>,
     ) -> io::Result<Process> {
-        let child = JodChild(mk_child(path, env, format)?);
+        let child = mk_child(path, env, format)?;
         Ok(Process { child })
     }
 
     /// Retrieves stdin and stdout handles for the process.
     fn stdio(&mut self) -> Option<(ChildStdin, BufReader<ChildStdout>)> {
-        let stdin = self.child.stdin.take()?;
-        let stdout = self.child.stdout.take()?;
+        let stdin = self.child.stdin().take()?;
+        let stdout = self.child.stdout().take()?;
         let read = BufReader::new(stdout);
 
         Some((stdin, read))
@@ -411,7 +411,7 @@ fn mk_child<'a>(
         Item = (impl AsRef<std::ffi::OsStr>, &'a Option<impl 'a + AsRef<std::ffi::OsStr>>),
     >,
     format: Option<&str>,
-) -> io::Result<Child> {
+) -> io::Result<JodChild> {
     #[allow(clippy::disallowed_methods)]
     let mut cmd = Command::new(path);
     for env in extra_env {
@@ -435,5 +435,5 @@ fn mk_child<'a>(
         path_var.push(std::env::var_os("PATH").unwrap_or_default());
         cmd.env("PATH", path_var);
     }
-    cmd.spawn()
+    JodChild::spawn(&mut cmd)
 }

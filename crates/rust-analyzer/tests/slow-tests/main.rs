@@ -672,10 +672,10 @@ fn test_format_document_range() {
 
     // This test requires a nightly toolchain, so skip if it's not available.
     let cwd = std::env::current_dir().unwrap_or_default();
-    let has_nightly_rustfmt = toolchain::command("rustfmt", cwd, &FxHashMap::default())
-        .args(["+nightly", "--version"])
-        .output()
-        .is_ok_and(|out| out.status.success());
+    let mut rustfmt = toolchain::command("rustfmt", cwd, &FxHashMap::default());
+    rustfmt.args(["+nightly", "--version"]);
+    let has_nightly_rustfmt =
+        stdx::process::output(&mut rustfmt).is_ok_and(|out| out.status.success());
     if !has_nightly_rustfmt {
         tracing::warn!("skipping test_format_document_range: nightly rustfmt not available");
         return;

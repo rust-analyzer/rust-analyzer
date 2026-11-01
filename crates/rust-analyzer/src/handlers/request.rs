@@ -2524,14 +2524,11 @@ fn run_rustfmt(
     let output = {
         let _p = tracing::info_span!("rustfmt", ?command).entered();
 
-        let mut rustfmt = command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut rustfmt = stdx::process::JodChild::spawn(&mut command)
             .context(format!("Failed to spawn {command:?}"))?;
 
-        rustfmt.stdin.as_mut().unwrap().write_all(file.as_bytes())?;
+        rustfmt.stdin().as_mut().unwrap().write_all(file.as_bytes())?;
 
         rustfmt.wait_with_output()?
     };

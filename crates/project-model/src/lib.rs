@@ -213,7 +213,7 @@ impl fmt::Display for ProjectManifest {
 }
 
 fn utf8_stdout(cmd: &mut Command) -> anyhow::Result<String> {
-    let output = cmd.output().with_context(|| format!("{cmd:?} failed"))?;
+    let output = stdx::process::output(cmd).with_context(|| format!("{cmd:?} failed"))?;
     if !output.status.success() {
         match String::from_utf8(output.stderr) {
             Ok(stderr) if !stderr.is_empty() => {

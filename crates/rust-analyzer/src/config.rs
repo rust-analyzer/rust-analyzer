@@ -4319,7 +4319,10 @@ mod tests {
         }
 
         let package_json_path = project_root().join("editors/code/package.json");
-        let mut package_json = fs::read_to_string(&package_json_path).unwrap();
+        // Normalize line endings for the marker search below, in case the working
+        // tree was checked out with CRLF line endings.
+        let mut package_json =
+            fs::read_to_string(&package_json_path).unwrap().replace("\r\n", "\n");
 
         let start_marker =
             "            {\n                \"title\": \"$generated-start\"\n            },\n";

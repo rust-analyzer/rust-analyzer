@@ -1,8 +1,6 @@
 //! Missing batteries for standard libraries.
 
 use std::borrow::Cow;
-use std::io as sio;
-use std::process::Command;
 use std::{cmp::Ordering, ops, time::Instant};
 
 mod macros;
@@ -11,6 +9,7 @@ pub mod anymap;
 pub mod assert;
 pub mod non_empty_vec;
 pub mod panic_context;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod process;
 pub mod rand;
 pub mod tempfile;
@@ -290,44 +289,6 @@ pub fn defer<F: FnOnce()>(f: F) -> impl Drop {
         }
     }
     D(Some(f))
-}
-
-/// A [`std::process::Child`] wrapper that will kill the child on drop.
-#[cfg_attr(not(target_arch = "wasm32"), repr(transparent))]
-#[derive(Debug)]
-pub struct JodChild(pub std::process::Child);
-
-impl ops::Deref for JodChild {
-    type Target = std::process::Child;
-    fn deref(&self) -> &std::process::Child {
-        &self.0
-    }
-}
-
-impl ops::DerefMut for JodChild {
-    fn deref_mut(&mut self) -> &mut std::process::Child {
-        &mut self.0
-    }
-}
-
-impl Drop for JodChild {
-    fn drop(&mut self) {
-        _ = self.0.kill();
-        _ = self.0.wait();
-    }
-}
-
-impl JodChild {
-    pub fn spawn(mut command: Command) -> sio::Result<Self> {
-        command.spawn().map(Self)
-    }
-
-    #[must_use]
-    #[cfg(not(target_arch = "wasm32"))]
-    pub fn into_inner(self) -> std::process::Child {
-        // SAFETY: repr transparent, except on WASM
-        unsafe { std::mem::transmute::<Self, std::process::Child>(self) }
-    }
 }
 
 // feature: iter_order_by

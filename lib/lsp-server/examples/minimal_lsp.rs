@@ -276,6 +276,7 @@ fn publish_dummy_diag(conn: &Connection, uri: &Uri) -> Result<()> {
 
 fn run_rustfmt(input: &str) -> Result<String> {
     let cwd = std::env::current_dir().expect("can't determine CWD");
+    #[allow(clippy::disallowed_methods, reason = "example code outside the rust-analyzer server")]
     let mut child = command("rustfmt", &cwd, &FxHashMap::default())
         .arg("--emit")
         .arg("stdout")

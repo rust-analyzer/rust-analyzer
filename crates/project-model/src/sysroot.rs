@@ -194,7 +194,9 @@ impl Sysroot {
                 cmd.arg(tool.name());
                 (|| {
                     Some(Utf8PathBuf::from(
-                        String::from_utf8(cmd.output().ok()?.stdout).ok()?.trim_end(),
+                        String::from_utf8(stdx::process::output(&mut cmd).ok()?.stdout)
+                            .ok()?
+                            .trim_end(),
                     ))
                 })()
                 .unwrap_or_else(|| Utf8PathBuf::from(tool.name()))

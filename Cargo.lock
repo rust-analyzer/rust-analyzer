@@ -2379,7 +2379,6 @@ dependencies = [
  "parser",
  "paths",
  "proc-macro-api",
- "process-wrap",
  "profile",
  "project-model",
  "ra-ap-rustc_type_ir",
@@ -2717,6 +2716,7 @@ dependencies = [
  "jod-thread",
  "libc",
  "miow",
+ "process-wrap",
  "tracing",
  "windows-sys",
 ]

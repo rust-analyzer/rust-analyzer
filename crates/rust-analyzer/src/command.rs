@@ -13,8 +13,7 @@ use std::{
 use anyhow::Context;
 use crossbeam_channel::Sender;
 use paths::Utf8PathBuf;
-use process_wrap::std::{ChildWrapper, CommandWrap};
-use stdx::process::streaming_output;
+use stdx::process::{JodChild, streaming_output};
 
 /// This trait abstracts parsing one line of JSON output into a Rust
 /// data type.
@@ -119,23 +118,11 @@ impl<T: Sized + Send + 'static> CommandActor<T> {
     }
 }
 
-/// 'Join On Drop' wrapper for a child process.
-///
-/// This wrapper kills the process when the wrapper is dropped.
-struct JodGroupChild(Box<dyn ChildWrapper>);
-
-impl Drop for JodGroupChild {
-    fn drop(&mut self) {
-        _ = self.0.kill();
-        _ = self.0.wait();
-    }
-}
-
 /// A handle to a shell command, such as cargo for diagnostics (flycheck).
 pub(crate) struct CommandHandle<T> {
     /// The handle to the actual child process. As we cannot cancel directly from with
     /// a read syscall dropping and therefore terminating the process is our best option.
-    child: JodGroupChild,
+    child: JodChild,
     thread: stdx::thread::JoinHandle<io::Result<(bool, String)>>,
     program: OsString,
     arguments: Vec<OsString>,
@@ -166,18 +153,11 @@ impl<T: Sized + Send + 'static> CommandHandle<T> {
         let arguments = command.get_args().map(|arg| arg.into()).collect::<Vec<OsString>>();
         let current_dir = command.get_current_dir().map(|arg| arg.to_path_buf());
 
-        let mut child = CommandWrap::from(command);
-        #[cfg(unix)]
-        child.wrap(process_wrap::std::ProcessSession);
-        #[cfg(windows)]
-        child.wrap(process_wrap::std::JobObject);
-        let mut child = child
-            .spawn()
-            .map(JodGroupChild)
-            .with_context(|| format!("Failed to spawn command: {child:?}"))?;
+        let mut child = JodChild::spawn_grouped(command)
+            .with_context(|| format!("Failed to spawn command: {program:?}"))?;
 
-        let stdout = child.0.stdout().take().unwrap();
-        let stderr = child.0.stderr().take().unwrap();
+        let stdout = child.stdout().take().unwrap();
+        let stderr = child.stderr().take().unwrap();
 
         let actor = CommandActor::<T>::new(parser, sender, stdout, stderr);
         let thread =
@@ -188,12 +168,12 @@ impl<T: Sized + Send + 'static> CommandHandle<T> {
     }
 
     pub(crate) fn cancel(mut self) {
-        let _ = self.child.0.kill();
-        let _ = self.child.0.wait();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
     }
 
     pub(crate) fn join(mut self) -> io::Result<()> {
-        let exit_status = self.child.0.wait()?;
+        let exit_status = self.child.wait()?;
         let (read_at_least_one_message, error) = self.thread.join()?;
         if read_at_least_one_message || exit_status.success() {
             Ok(())
@@ -205,7 +185,7 @@ impl<T: Sized + Send + 'static> CommandHandle<T> {
     }
 
     pub(crate) fn has_exited(&mut self) -> bool {
-        match self.child.0.try_wait() {
+        match self.child.try_wait() {
             Ok(Some(_exit_code)) => {
                 // We have an exit code.
                 true

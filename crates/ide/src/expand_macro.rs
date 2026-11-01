@@ -259,14 +259,12 @@ fn _format(
     cmd.arg("--edition");
     cmd.arg(edition.to_string());
 
-    let mut rustfmt = cmd
-        .stdin(std::process::Stdio::piped())
+    cmd.stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .ok()?;
+        .stderr(std::process::Stdio::piped());
+    let mut rustfmt = stdx::process::JodChild::spawn(&mut cmd).ok()?;
 
-    std::io::Write::write_all(&mut rustfmt.stdin.as_mut()?, expansion.as_bytes()).ok()?;
+    std::io::Write::write_all(&mut rustfmt.stdin().as_mut()?, expansion.as_bytes()).ok()?;
 
     let output = rustfmt.wait_with_output().ok()?;
     let captured_stdout = String::from_utf8(output.stdout).ok()?;

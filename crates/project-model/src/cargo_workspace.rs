@@ -1,6 +1,6 @@
 //! See [`CargoWorkspace`].
 
-use std::{borrow::Cow, ops, str::from_utf8};
+use std::{borrow::Cow, ops, process::Command, str::from_utf8};
 
 use anyhow::Context;
 use base_db::{Env, TargetKind};
@@ -712,12 +712,12 @@ impl FetchMetadata {
         let no_deps_result = if no_deps {
             command.no_deps();
             cargo_command = command.cargo_command();
-            command.exec()
+            exec_cargo_metadata(command.cargo_command())
         } else {
             let mut no_deps_command = command.clone();
             no_deps_command.no_deps();
             cargo_command = no_deps_command.cargo_command();
-            no_deps_command.exec()
+            exec_cargo_metadata(no_deps_command.cargo_command())
         }
         .with_context(|| format!("Failed to run `{cargo_command:?}`"));
 
@@ -826,4 +826,20 @@ impl FetchMetadata {
         progress("cargo metadata: finished".to_owned());
         res
     }
+}
+
+fn exec_cargo_metadata(mut cmd: Command) -> anyhow::Result<cargo_metadata::Metadata> {
+    let output = stdx::process::output(&mut cmd)?;
+    if !output.status.success() {
+        return Err(cargo_metadata::Error::CargoMetadata {
+            stderr: String::from_utf8(output.stderr)
+                .unwrap_or_else(|_| String::from("Couldn't read `stderr` output")),
+        }
+        .into());
+    }
+    let stdout = from_utf8(&output.stdout)?
+        .lines()
+        .find(|line| line.starts_with('{'))
+        .ok_or(cargo_metadata::Error::NoJson)?;
+    Ok(MetadataCommand::parse(stdout)?)
 }
