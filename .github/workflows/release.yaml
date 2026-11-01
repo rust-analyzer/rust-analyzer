@@ -40,13 +40,13 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             # Use a container with glibc 2.28
-            container: quay.io/pypa/manylinux_2_28_x86_64
+            container: quay.io/pypa/manylinux_2_28_x86_64:2026.10.31-1@sha256:43f7ce12d79ed98b6dbfa3291d5afe389efd40a7e76de089959ffe99501b6edf
             code-target: linux-x64
             allocator: system
             pgo: clap-rs/clap@v4.5.36
           - os: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            container: quay.io/pypa/manylinux_2_28_aarch64
+            container: quay.io/pypa/manylinux_2_28_aarch64:2026.10.31-1@sha256:724b504247662e1cf122590957c857211ec2d16b113ec134f92c570a2d01250f
             code-target: linux-arm64
             allocator: system
             pgo: clap-rs/clap@v4.5.36
@@ -54,7 +54,7 @@ jobs:
             target: arm-unknown-linux-gnueabihf
             # Use a Debian 10 (EOL) container for glibc 2.28
             # pypa/manylinux only has armv7l and glibc 2.31
-            container: debian:10
+            container: debian:10@sha256:58ce6f1271ae1c8a2006ff7d3e54e9874d839f573d8009c20154ad0f2fb0a225
             code-target: linux-armhf
             allocator: system
           - os: macos-14
@@ -161,7 +161,7 @@ jobs:
       # For some reason `-crt-static` is not working for clang without lld
       RUSTFLAGS: "-C link-arg=-fuse-ld=lld -C target-feature=-crt-static"
     container:
-      image: rust:alpine
+      image: rust:alpine@sha256:7e9e2d068a107a2adafd19930011178d14a78326053cd4c3a9f7ad3fd049557d
       volumes:
         - /usr/local/cargo/registry:/usr/local/cargo/registry
 
