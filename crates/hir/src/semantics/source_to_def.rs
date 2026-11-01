@@ -109,7 +109,7 @@ use smallvec::SmallVec;
 use span::FileId;
 use stdx::impl_from;
 use syntax::{
-    AstNode, AstPtr, SyntaxNode,
+    AstNode, AstPtr, SyntaxNode, SyntaxNodePtr,
     ast::{self, HasAttrs, HasName},
 };
 use tt::TextRange;
@@ -127,6 +127,8 @@ pub(super) struct SourceToDefCache<'db> {
     pub(super) included_file_cache: FxHashMap<EditionedFileId, Option<MacroCallId>>,
     /// Rootnode to HirFileId cache
     pub(super) root_to_file_cache: FxHashMap<SyntaxNode, HirFileId>,
+    /// Memoizes [`SourceToDefCtx::find_container_cached`], including `None`.
+    container_cache: FxHashMap<InFile<SyntaxNodePtr>, Option<ChildContainer>>,
 }
 
 impl<'db> SourceToDefCache<'db> {
@@ -456,8 +458,18 @@ impl<'db> SourceToDefCtx<'db, '_> {
     }
 
     fn dyn_map<Ast: AstNode + 'static>(&mut self, src: InFile<&Ast>) -> Option<&DynMap> {
-        let container = self.find_container(src.map(|it| it.syntax()))?;
+        let container = self.find_container_cached(src.map(|it| it.syntax()))?;
         Some(self.cache_for(container, src.file_id))
+    }
+
+    fn find_container_cached(&mut self, src: InFile<&SyntaxNode>) -> Option<ChildContainer> {
+        let key = src.map(SyntaxNodePtr::new);
+        if let Some(&container) = self.cache.container_cache.get(&key) {
+            return container;
+        }
+        let container = self.find_container(src);
+        self.cache.container_cache.insert(key, container);
+        container
     }
 
     fn cache_for(&mut self, container: ChildContainer, file_id: HirFileId) -> &DynMap {
