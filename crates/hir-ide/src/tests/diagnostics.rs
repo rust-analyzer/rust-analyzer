@@ -152,6 +152,24 @@ fn consume() -> Option<()> {
 }
 
 #[test]
+fn invalid_mismatch_reported() {
+    check(
+        r#"
+struct Token { id: u32 }
+
+fn take(_: &u64) {}
+
+fn main() {
+    let id = nothing();
+    take(&id);
+    Token { id };
+          //^^ expected u32, got i64
+}
+"#,
+    );
+}
+
+#[test]
 fn method_call_on_field() {
     check(
         r#"
