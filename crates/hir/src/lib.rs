@@ -1217,8 +1217,8 @@ impl Adt {
         }
     }
 
-    /// Returns the lifetime of the DataType
-    pub fn lifetime(&self, db: &dyn HirDatabase) -> Option<LifetimeParamData> {
+    /// Returns the early-bound lifetime parameters of the data type.
+    pub fn lifetimes(&self, db: &dyn HirDatabase) -> Vec<LifetimeParamData> {
         let resolver = match self {
             Adt::Struct(s) => s.id.resolver(db),
             Adt::Union(u) => u.id.resolver(db),
@@ -1226,13 +1226,13 @@ impl Adt {
         };
         resolver
             .generic_params()
-            .and_then(|gp| {
-                gp.iter_early_bound_lt()
-                    // there should only be a single lifetime
-                    // but `Arena` requires to use an iterator
-                    .nth(0)
-            })
-            .map(|arena| arena.1.clone())
+            .map(|gp| gp.iter_early_bound_lt().map(|(_, data)| data.clone()).collect())
+            .unwrap_or_default()
+    }
+
+    /// Returns the first early-bound lifetime parameter of the data type, if any.
+    pub fn lifetime(&self, db: &dyn HirDatabase) -> Option<LifetimeParamData> {
+        self.lifetimes(db).into_iter().next()
     }
 
     pub fn as_struct(&self) -> Option<Struct> {
@@ -5341,13 +5341,12 @@ impl<'db> Type<'db> {
         db: &'a dyn HirDatabase,
         display_target: DisplayTarget,
     ) -> impl Iterator<Item = SmolStr> + 'a {
-        // iterate the lifetime
+        // Iterate all early-bound lifetimes. Lifetimes do not need edition-specific handling as
+        // they cannot be escaped.
         self.as_adt()
-            .and_then(|a| {
-                // Lifetimes do not need edition-specific handling as they cannot be escaped.
-                a.lifetime(db).map(|lt| lt.name.display_no_db(Edition::Edition2015).to_smolstr())
-            })
             .into_iter()
+            .flat_map(|a| a.lifetimes(db))
+            .map(|lt| lt.name.display_no_db(Edition::Edition2015).to_smolstr())
             // add the type and const parameters
             .chain(self.type_and_const_arguments(db, display_target))
     }

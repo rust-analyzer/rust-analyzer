@@ -762,6 +762,17 @@ mod tests {
         expect.assert_debug_eq(&result);
     }
 
+    fn check_labels(#[rust_analyzer::rust_fixture] ra_fixture: &str, expect: Expect) {
+        let (analysis, position) = fixture::position(ra_fixture);
+        let result = analysis
+            .runnables(position.file_id)
+            .unwrap()
+            .into_iter()
+            .map(|runnable| runnable.label(None))
+            .collect::<Vec<_>>();
+        expect.assert_debug_eq(&result);
+    }
+
     fn check_tests(#[rust_analyzer::rust_fixture] ra_fixture: &str, expect: Expect) {
         let (analysis, position) = fixture::position(ra_fixture);
         let tests = analysis.related_tests(position, None).unwrap();
@@ -972,6 +983,66 @@ impl Data<'a> {
                 [
                     "(Bin, NavigationTarget { file_id: FileId(0), full_range: 1..13, focus_range: 4..8, name: \"main\", kind: Function })",
                     "(DocTest, NavigationTarget { file_id: FileId(0), full_range: 52..106, name: \"foo\" })",
+                ]
+            "#]],
+        );
+        check_labels(
+            r#"
+//- /lib.rs
+$0
+struct Data<'a>;
+impl Data<'a> {
+    /// ```
+    /// let x = 5;
+    /// ```
+    fn foo() {}
+}
+"#,
+            expect![[r#"
+                [
+                    "doctest Data<'a>::foo",
+                ]
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_runnables_doc_test_in_impl_with_multiple_lifetimes() {
+        check_labels(
+            r#"
+//- /lib.rs
+$0
+struct Foo<'a, 'b>(&'a (), &'b ());
+
+impl<'a, 'b> Foo<'a, 'b> {
+    /// ```
+    /// let _ = "Hello, world!";
+    /// ```
+    fn method(self) {}
+}
+"#,
+            expect![[r#"
+                [
+                    "doctest Foo<'a,'b>::method",
+                ]
+            "#]],
+        );
+        check_labels(
+            r#"
+//- /lib.rs
+$0
+struct Foo<'a, 'b, T>(&'a T, &'b T);
+
+impl<'a, 'b, T> Foo<'a, 'b, T> {
+    /// ```
+    /// let _ = "Hello, world!";
+    /// ```
+    fn method(self) {}
+}
+"#,
+            expect![[r#"
+                [
+                    "doctest Foo<'a,'b,T>::method",
                 ]
             "#]],
         );
