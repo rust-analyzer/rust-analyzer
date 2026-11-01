@@ -2126,7 +2126,13 @@ impl<'db> InferenceContext<'db> {
         expected: Ty<'db>,
         found: Ty<'db>,
     ) {
-        if self.result.nodes_with_type_mismatches.get_or_insert_default().insert(node) {
+        let has_dummy_span = |ty: Ty<'db>| {
+            ty.ty_vid().is_some_and(|vid| self.table.infer_ctxt.type_var_span(vid).is_dummy())
+        };
+        if !has_dummy_span(expected)
+            && !has_dummy_span(found)
+            && self.result.nodes_with_type_mismatches.get_or_insert_default().insert(node)
+        {
             self.diagnostics.push(InferenceDiagnostic::TypeMismatch {
                 node,
                 expected: expected.store(),
