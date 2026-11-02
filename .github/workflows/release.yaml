@@ -294,7 +294,8 @@ jobs:
       - name: Publish Extension
         if: github.repository == 'rust-lang/rust-analyzer'
         env:
+          COMMAND: ${{ matrix.cmd }}
           PUBLISH_PAT: ${{ (matrix.cmd == 'vsce' && secrets.MARKETPLACE_TOKEN) || (matrix.cmd == 'ovsx' && secrets.OPENVSX_TOKEN) }}
         working-directory: ./editors/code
-        run: npx ${{ matrix.cmd }} publish --skip-duplicate --pat "$PUBLISH_PAT" --packagePath ../../dist/rust-analyzer-*.vsix ${{ github.ref != 'refs/heads/release' && '--pre-release' || '' }}
+        run: npx ${COMMAND} publish --skip-duplicate --pat "$PUBLISH_PAT" --packagePath ../../dist/rust-analyzer-*.vsix ${{ github.ref != 'refs/heads/release' && '--pre-release' || '' }}
         timeout-minutes: 2
