@@ -296,6 +296,7 @@ jobs:
         env:
           COMMAND: ${{ matrix.cmd }}
           PUBLISH_PAT: ${{ (matrix.cmd == 'vsce' && secrets.MARKETPLACE_TOKEN) || (matrix.cmd == 'ovsx' && secrets.OPENVSX_TOKEN) }}
+          MAYBE_PRE_RELEASE: ${{ github.ref != 'refs/heads/release' && '--pre-release' || '' }}
         working-directory: ./editors/code
-        run: npx ${COMMAND} publish --skip-duplicate --pat "$PUBLISH_PAT" --packagePath ../../dist/rust-analyzer-*.vsix ${{ github.ref != 'refs/heads/release' && '--pre-release' || '' }}
+        run: npx ${COMMAND} publish --skip-duplicate --pat "$PUBLISH_PAT" --packagePath ../../dist/rust-analyzer-*.vsix ${MAYBE_PRE_RELEASE}
         timeout-minutes: 2
