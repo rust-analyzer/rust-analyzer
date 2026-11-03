@@ -541,7 +541,7 @@ impl<'db> HasCrate<'db> for ModuleDef<'_> {
     }
 }
 
-impl HasAttrs for ModuleDef<'_> {
+impl<'db> HasAttrs<'db> for ModuleDef<'_> {
     fn attr_id(self, db: &dyn HirDatabase) -> attrs::AttrsOwner {
         match self {
             ModuleDef::Module(it) => it.attr_id(db),

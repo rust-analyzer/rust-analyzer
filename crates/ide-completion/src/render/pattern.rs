@@ -97,7 +97,7 @@ fn build_completion<'db>(
     label: SmolStr,
     lookup: SmolStr,
     pat: String,
-    def: impl HasDocs,
+    def: impl HasDocs<'db>,
     adt_ty: hir::Type<'db>,
     // Missing in context of match statement completions
     is_variant_missing: bool,

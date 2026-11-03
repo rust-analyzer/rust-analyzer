@@ -112,7 +112,7 @@ impl<'a, 'db> RenderContext<'a, 'db> {
     /// [`try_as_dyn`]: https://doc.rust-lang.org/std/any/fn.try_as_dyn.html
     fn is_deprecated(
         &self,
-        def: impl HasAttrs,
+        def: impl HasAttrs<'db>,
         def_as_assoc_item: Option<hir::AssocItem<'_>>,
     ) -> bool {
         let db = self.db();
@@ -134,7 +134,7 @@ impl<'a, 'db> RenderContext<'a, 'db> {
     }
 
     // FIXME: remove this
-    fn docs(&self, def: impl HasDocs) -> Option<Documentation<'a>> {
+    fn docs(&self, def: impl HasDocs<'db>) -> Option<Documentation<'a>> {
         def.docs(self.db())
     }
 }

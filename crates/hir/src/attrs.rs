@@ -176,9 +176,9 @@ impl AttrsWithOwner {
     }
 }
 
-pub trait HasAttrs: Sized {
+pub trait HasAttrs<'db>: Sized {
     #[inline]
-    fn attrs(self, db: &dyn HirDatabase) -> AttrsWithOwner {
+    fn attrs(self, db: &'db dyn HirDatabase) -> AttrsWithOwner {
         match self.attr_id(db) {
             AttrsOwner::AttrDef(it) => AttrsWithOwner::new(db, it),
             AttrsOwner::Field(it) => AttrsWithOwner::new_field(db, it),
@@ -191,10 +191,10 @@ pub trait HasAttrs: Sized {
     }
 
     #[doc(hidden)]
-    fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner;
+    fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner;
 
     #[inline]
-    fn hir_docs(self, db: &dyn HirDatabase) -> Option<&Docs> {
+    fn hir_docs(self, db: &'db dyn HirDatabase) -> Option<&'db Docs> {
         match self.attr_id(db) {
             AttrsOwner::AttrDef(it) => AttrFlags::docs(db, it),
             AttrsOwner::Field(it) => AttrFlags::field_docs(db, it),
@@ -207,9 +207,9 @@ pub trait HasAttrs: Sized {
 
 macro_rules! impl_has_attrs {
     ($(($def:ident, $def_id:ident),)*) => {$(
-        impl HasAttrs for $def {
+        impl<'db> HasAttrs<'db> for $def {
             #[inline]
-            fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+            fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner {
                 AttrsOwner::AttrDef(AttrDefId::$def_id(self.into()))
             }
         }
@@ -227,8 +227,8 @@ impl_has_attrs![
     (ExternCrateDecl, ExternCrateId),
 ];
 
-impl HasAttrs for Function<'_> {
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+impl<'db> HasAttrs<'db> for Function<'db> {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner {
         match self.id {
             crate::AnyFunctionId::FunctionId(id) => AttrsOwner::AttrDef(id.into()),
             crate::AnyFunctionId::BuiltinDeriveImplMethod { .. } => AttrsOwner::Dummy,
@@ -236,8 +236,8 @@ impl HasAttrs for Function<'_> {
     }
 }
 
-impl HasAttrs for Impl<'_> {
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+impl<'db> HasAttrs<'db> for Impl<'db> {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner {
         match self.id {
             hir_ide::next_solver::AnyImplId::ImplId(id) => AttrsOwner::AttrDef(id.into()),
             hir_ide::next_solver::AnyImplId::BuiltinDeriveImplId(..) => AttrsOwner::Dummy,
@@ -247,9 +247,9 @@ impl HasAttrs for Impl<'_> {
 
 macro_rules! impl_has_attrs_enum {
     ($($variant:ident),* for $enum:ident) => {$(
-        impl HasAttrs for $variant {
+        impl<'db> HasAttrs<'db> for $variant {
             #[inline]
-            fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
+            fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner {
                 $enum::$variant(self).attr_id(db)
             }
         }
@@ -259,16 +259,16 @@ macro_rules! impl_has_attrs_enum {
 impl_has_attrs_enum![Struct, Union, Enum for Adt];
 impl_has_attrs_enum![TypeParam, ConstParam, LifetimeParam for GenericParam];
 
-impl HasAttrs for Module {
+impl<'db> HasAttrs<'db> for Module {
     #[inline]
-    fn attr_id(self, _: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, _: &'db dyn HirDatabase) -> AttrsOwner {
         AttrsOwner::AttrDef(AttrDefId::ModuleId(self.id))
     }
 }
 
-impl HasAttrs for GenericParam {
+impl<'db> HasAttrs<'db> for GenericParam {
     #[inline]
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner {
         match self {
             GenericParam::TypeParam(it) => AttrsOwner::TypeOrConstParam(it.merge().into()),
             GenericParam::ConstParam(it) => AttrsOwner::TypeOrConstParam(it.merge().into()),
@@ -277,9 +277,9 @@ impl HasAttrs for GenericParam {
     }
 }
 
-impl HasAttrs for AssocItem<'_> {
+impl<'db> HasAttrs<'db> for AssocItem<'_> {
     #[inline]
-    fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner {
         match self {
             AssocItem::Function(it) => it.attr_id(db),
             AssocItem::Const(it) => it.attr_id(db),
@@ -288,16 +288,16 @@ impl HasAttrs for AssocItem<'_> {
     }
 }
 
-impl HasAttrs for crate::Crate {
+impl<'db> HasAttrs<'db> for crate::Crate {
     #[inline]
-    fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner {
         self.root_module(db).attr_id(db)
     }
 }
 
-impl HasAttrs for Field {
+impl<'db> HasAttrs<'db> for Field {
     #[inline]
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner {
         AttrsOwner::Field(self.into())
     }
 }
@@ -305,7 +305,7 @@ impl HasAttrs for Field {
 /// Resolves the item `link` points to in the scope of `def`.
 pub fn resolve_doc_path_on<'db>(
     db: &'db dyn HirDatabase,
-    def: impl HasAttrs + Copy,
+    def: impl HasAttrs<'db> + Copy,
     link: &str,
     ns: Option<Namespace>,
     is_inner_doc: IsInnerDoc,

@@ -29,18 +29,18 @@ impl<'db> Documentation<'db> {
     }
 }
 
-pub trait HasDocs: HasAttrs + Copy {
-    fn docs(self, db: &dyn HirDatabase) -> Option<Documentation<'_>> {
+pub trait HasDocs<'db>: HasAttrs<'db> + Copy {
+    fn docs(self, db: &'db dyn HirDatabase) -> Option<Documentation<'db>> {
         let docs = match self.docs_with_rangemap(db)? {
             Cow::Borrowed(docs) => Documentation::new_borrowed(docs.docs()),
             Cow::Owned(docs) => Documentation::new_owned(docs.into_docs()),
         };
         Some(docs)
     }
-    fn docs_with_rangemap(self, db: &dyn HirDatabase) -> Option<Cow<'_, hir::Docs>> {
+    fn docs_with_rangemap(self, db: &'db dyn HirDatabase) -> Option<Cow<'db, hir::Docs>> {
         self.hir_docs(db).map(Cow::Borrowed)
     }
-    fn resolve_doc_path<'db>(
+    fn resolve_doc_path(
         self,
         db: &'db dyn HirDatabase,
         link: &str,
@@ -53,7 +53,7 @@ pub trait HasDocs: HasAttrs + Copy {
 
 macro_rules! impl_has_docs {
     ($($def:ty,)*) => {$(
-        impl HasDocs for $def {}
+        impl<'db> HasDocs<'db> for $def {}
     )*};
 }
 
@@ -65,18 +65,18 @@ impl_has_docs![
     hir::Trait,
     hir::TypeAlias,
     hir::Macro,
-    hir::Function<'_>,
+    hir::Function<'db>,
     hir::Adt,
     hir::Module,
-    hir::Impl<'_>,
+    hir::Impl<'db>,
     hir::Crate,
-    hir::AssocItem<'_>,
+    hir::AssocItem<'db>,
     hir::Struct,
     hir::Union,
     hir::Enum,
 ];
 
-impl HasDocs for hir::ExternCrateDecl {
+impl<'db> HasDocs<'db> for hir::ExternCrateDecl {
     fn docs(self, db: &dyn HirDatabase) -> Option<Documentation<'_>> {
         let crate_docs = self.resolved_crate(db)?.hir_docs(db);
         let decl_docs = self.hir_docs(db);

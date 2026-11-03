@@ -95,7 +95,7 @@ pub(crate) fn render_tuple_lit(
 pub(crate) fn visible_fields<'db>(
     ctx: &CompletionContext<'_, 'db>,
     fields: &[hir::Field],
-    item: impl HasAttrs + HasCrate<'db> + Copy,
+    item: impl HasAttrs<'db> + HasCrate<'db> + Copy,
 ) -> Option<(Vec<hir::Field>, bool)> {
     let module = ctx.module;
     let n_fields = fields.len();

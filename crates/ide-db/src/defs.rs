@@ -202,12 +202,12 @@ impl<'db> Definition<'db> {
         Some(name)
     }
 
-    pub fn docs<'a>(
+    pub fn docs(
         &self,
-        db: &'a RootDatabase,
+        db: &'db RootDatabase,
         famous_defs: Option<&FamousDefs<'_, '_>>,
         display_target: DisplayTarget,
-    ) -> Option<Documentation<'a>> {
+    ) -> Option<Documentation<'db>> {
         self.docs_with_rangemap(db, famous_defs, display_target).map(|docs| match docs {
             Either::Left(Cow::Borrowed(docs)) => Documentation::new_borrowed(docs.docs()),
             Either::Left(Cow::Owned(docs)) => Documentation::new_owned(docs.into_docs()),
@@ -215,12 +215,12 @@ impl<'db> Definition<'db> {
         })
     }
 
-    pub fn docs_with_rangemap<'a>(
+    pub fn docs_with_rangemap(
         &self,
-        db: &'a RootDatabase,
+        db: &'db RootDatabase,
         famous_defs: Option<&FamousDefs<'_, '_>>,
         display_target: DisplayTarget,
-    ) -> Option<Either<Cow<'a, hir::Docs>, Documentation<'a>>> {
+    ) -> Option<Either<Cow<'db, hir::Docs>, Documentation<'db>>> {
         let docs = match self {
             Definition::Macro(it) => it.docs_with_rangemap(db),
             Definition::Field(it) => it.docs_with_rangemap(db),
