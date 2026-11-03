@@ -119,7 +119,7 @@ pub fn unsafe_operations(
     visitor.walk_expr(current);
 }
 
-struct UnsafeVisitor<'db> {
+struct UnsafeVisitor<'a, 'db> {
     db: &'db dyn HirDatabase,
     infer: &'db InferenceResult<'db>,
     body: &'db ExpressionStore,
@@ -128,7 +128,7 @@ struct UnsafeVisitor<'db> {
     inside_unsafe_block: InsideUnsafeBlock,
     inside_assignment: bool,
     inside_union_destructure: bool,
-    callback: &'db mut dyn FnMut(UnsafeDiagnostic),
+    callback: &'a mut dyn FnMut(UnsafeDiagnostic),
     def_target_features: TargetFeatures<'db>,
     // FIXME: This needs to be the edition of the span of each call.
     edition: Edition,
@@ -137,13 +137,13 @@ struct UnsafeVisitor<'db> {
     target_feature_is_safe: TargetFeatureIsSafeInTarget,
 }
 
-impl<'db> UnsafeVisitor<'db> {
+impl<'a, 'db> UnsafeVisitor<'a, 'db> {
     fn new(
         db: &'db dyn HirDatabase,
         infer: &'db InferenceResult<'db>,
         body: &'db ExpressionStore,
         def: ExpressionStoreOwnerId,
-        unsafe_expr_cb: &'db mut dyn FnMut(UnsafeDiagnostic),
+        unsafe_expr_cb: &'a mut dyn FnMut(UnsafeDiagnostic),
     ) -> Self {
         let resolver = def.resolver(db);
         let def_target_features = match def {
