@@ -321,9 +321,19 @@ impl<'a> StaticIndex<'a> {
             // are never a module's definition file, so the loop above never
             // reaches them. Index the rest of each local root, in path order
             // for deterministic output, skipping files already visited.
+            // Restrict to Rust sources: roots also contain manifests and other
+            // non-code files, which would otherwise become spurious documents.
             for root_id in local_roots {
                 let source_root = db.source_root(root_id).source_root(db);
-                let mut extra: Vec<_> = source_root.iter().collect();
+                let mut extra: Vec<_> = source_root
+                    .iter()
+                    .filter(|file_id| {
+                        source_root
+                            .path_for_file(file_id)
+                            .and_then(|p| p.name_and_extension())
+                            .is_some_and(|(_, ext)| ext == Some("rs"))
+                    })
+                    .collect();
                 extra.sort_by_key(|file_id| {
                     source_root.path_for_file(file_id).map(|p| format!("{p:?}"))
                 });
