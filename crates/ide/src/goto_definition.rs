@@ -104,76 +104,101 @@ pub(crate) fn goto_definition(
         return Some(RangeInfo::new(original_token.text_range(), navs));
     }
 
-    let tokens = sema.descend_into_macros_no_opaque(original_token.clone(), false);
+    let (exact, respanned) = descend_exact_and_respanned(sema, original_token.clone());
     let mut navs = Vec::new();
-    for token in tokens {
-        if let Some(n) = find_definition_for_known_blanket_dual_impls(sema, &token.value) {
-            navs.extend(n);
-            continue;
-        }
-
-        if let Some(n) = find_definition_for_comparison_operators(sema, &token.value) {
-            navs.extend(n);
-            continue;
-        }
-
-        let parent = token.value.parent()?;
-
-        if let Some(question_mark_conversion) = goto_question_mark_conversions(sema, &parent) {
-            navs.extend(def_to_nav(sema, question_mark_conversion.into()));
-            continue;
-        }
-
-        if let Some(token) = ast::String::cast(token.value.clone())
-            && let Some(original_token) = ast::String::cast(original_token.clone())
-            && let Some((analysis, fixture_analysis)) =
-                Analysis::from_ra_fixture(sema, original_token, &token, &config.ra_fixture)
-            && let Some((virtual_file_id, file_offset)) = fixture_analysis.map_offset_down(offset)
-        {
-            return hir::attach_db_allow_change(&analysis.db, || {
-                goto_definition(
-                    &analysis.db,
-                    FilePosition { file_id: virtual_file_id, offset: file_offset },
-                    config,
-                )
-            })
-            .and_then(|navs| {
-                navs.upmap_from_ra_fixture(&fixture_analysis, virtual_file_id, file_id).ok()
-            });
-        }
-
-        let token_file_id = token.file_id;
-        if let Some(token) = ast::String::cast(token.value.clone())
-            && let Some(x) =
-                try_lookup_include_path(sema, InFile::new(token_file_id, token), file_id)
-        {
-            navs.push(x);
-            continue;
-        }
-
-        if ast::TokenTree::can_cast(parent.kind())
-            && let Some(x) = try_lookup_macro_def_in_macro_use(sema, token.value)
-        {
-            navs.push(x);
-            continue;
-        }
-
-        let Some(ident_class) = IdentClass::classify_node(sema, &parent) else { continue };
-        navs.extend(ident_class.definitions().into_iter().flat_map(|(def, _)| {
-            if let Definition::ExternCrateDecl(crate_def) = def {
-                return crate_def
-                    .resolved_crate(db)
-                    .map(|it| it.root_module(db).to_nav(db))
-                    .into_iter()
-                    .flatten()
-                    .collect();
+    for tokens in [exact, respanned] {
+        for token in tokens {
+            if let Some(n) = find_definition_for_known_blanket_dual_impls(sema, &token.value) {
+                navs.extend(n);
+                continue;
             }
-            try_filter_trait_item_definition(sema, &def).unwrap_or_else(|| def_to_nav(sema, def))
-        }));
+
+            if let Some(n) = find_definition_for_comparison_operators(sema, &token.value) {
+                navs.extend(n);
+                continue;
+            }
+
+            let parent = token.value.parent()?;
+
+            if let Some(question_mark_conversion) = goto_question_mark_conversions(sema, &parent) {
+                navs.extend(def_to_nav(sema, question_mark_conversion.into()));
+                continue;
+            }
+
+            if let Some(token) = ast::String::cast(token.value.clone())
+                && let Some(original_token) = ast::String::cast(original_token.clone())
+                && let Some((analysis, fixture_analysis)) =
+                    Analysis::from_ra_fixture(sema, original_token, &token, &config.ra_fixture)
+                && let Some((virtual_file_id, file_offset)) =
+                    fixture_analysis.map_offset_down(offset)
+            {
+                return hir::attach_db_allow_change(&analysis.db, || {
+                    goto_definition(
+                        &analysis.db,
+                        FilePosition { file_id: virtual_file_id, offset: file_offset },
+                        config,
+                    )
+                })
+                .and_then(|navs| {
+                    navs.upmap_from_ra_fixture(&fixture_analysis, virtual_file_id, file_id).ok()
+                });
+            }
+
+            let token_file_id = token.file_id;
+            if let Some(token) = ast::String::cast(token.value.clone())
+                && let Some(x) =
+                    try_lookup_include_path(sema, InFile::new(token_file_id, token), file_id)
+            {
+                navs.push(x);
+                continue;
+            }
+
+            if ast::TokenTree::can_cast(parent.kind())
+                && let Some(x) = try_lookup_macro_def_in_macro_use(sema, token.value)
+            {
+                navs.push(x);
+                continue;
+            }
+
+            let Some(ident_class) = IdentClass::classify_node(sema, &parent) else { continue };
+            navs.extend(ident_class.definitions().into_iter().flat_map(|(def, _)| {
+                if let Definition::ExternCrateDecl(crate_def) = def {
+                    return crate_def
+                        .resolved_crate(db)
+                        .map(|it| it.root_module(db).to_nav(db))
+                        .into_iter()
+                        .flatten()
+                        .collect();
+                }
+                try_filter_trait_item_definition(sema, &def)
+                    .unwrap_or_else(|| def_to_nav(sema, def))
+            }));
+        }
+        if !navs.is_empty() {
+            break;
+        }
     }
     let navs = navs.into_iter().unique().collect();
 
     Some(RangeInfo::new(original_token.text_range(), navs))
+}
+
+/// Descends `token` into macros, separating the tokens that match it from those that merely share
+/// its span.
+///
+/// Proc macros commonly give generated tokens the span of an input token (`quote_spanned!`), so
+/// descending also finds tokens the user never wrote. Those only matter if there is nothing else,
+/// e.g. when a macro derives a new token from the input, like `concat!` does.
+pub(crate) fn descend_exact_and_respanned(
+    sema: &Semantics<'_, RootDatabase>,
+    token: SyntaxToken,
+) -> (Vec<InFile<SyntaxToken>>, Vec<InFile<SyntaxToken>>) {
+    let (kind, text) = (token.kind(), token.text());
+    sema.descend_into_macros_no_opaque(token.clone(), false).into_iter().partition(|descended| {
+        let descended_kind = descended.value.kind();
+        let any_ident_match = kind.is_any_identifier() && descended_kind.is_any_identifier();
+        (kind == descended_kind || any_ident_match) && text == descended.value.text()
+    })
 }
 
 /// When the `?` operator is used on `Result`, go to the `From` impl if it exists as this provides more value.
@@ -2292,6 +2317,37 @@ pub mod theitem {
 pub fn gimme() -> theitem::TheItem {
     theitem::TheItem
 }
+"#,
+        );
+    }
+
+    #[test]
+    fn goto_def_ignores_tokens_respanned_by_proc_macro() {
+        check(
+            r#"
+//- proc_macros: respanned_helper
+mod generated { pub fn helper() {} }
+struct Api;
+     //^^^
+#[proc_macros::respanned_helper]
+fn page() -> Ap$0i { Api }
+"#,
+        );
+    }
+
+    #[test]
+    fn goto_def_falls_back_to_respanned_tokens() {
+        check(
+            r#"
+//- proc_macros: respanned_helper
+mod generated {
+  //^^^^^^^^^
+    pub fn helper() {}
+         //^^^^^^
+}
+#[proc_macros::respanned_helper]
+fn page() -> Unreso$0lved { loop {} }
+           //^^^^^^^^^^
 "#,
         );
     }

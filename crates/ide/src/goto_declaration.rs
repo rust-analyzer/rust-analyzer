@@ -7,7 +7,8 @@ use syntax::{AstNode, SyntaxKind::*, T, ast, match_ast};
 
 use crate::{
     FilePosition, GotoDefinitionConfig, NavigationTarget, RangeInfo,
-    goto_definition::goto_definition, navigation_target::TryToNav,
+    goto_definition::{descend_exact_and_respanned, goto_definition},
+    navigation_target::TryToNav,
 };
 
 // Feature: Go to Declaration
@@ -29,8 +30,9 @@ pub(crate) fn goto_declaration(
         .token_at_offset(offset)
         .find(|it| matches!(it.kind(), IDENT | T![self] | T![super] | T![crate] | T![Self]))?;
     let range = original_token.text_range();
-    let info: Vec<NavigationTarget> = sema
-        .descend_into_macros_no_opaque(original_token, false)
+    let (exact, respanned) = descend_exact_and_respanned(&sema, original_token);
+    let tokens = if exact.is_empty() { respanned } else { exact };
+    let info: Vec<NavigationTarget> = tokens
         .iter()
         .filter_map(|token| {
             let parent = token.value.parent()?;
@@ -110,6 +112,20 @@ mod tests {
             .sorted_by_key(cmp)
             .collect::<Vec<_>>();
         assert_eq!(expected, navs);
+    }
+
+    #[test]
+    fn goto_decl_ignores_tokens_respanned_by_proc_macro() {
+        check(
+            r#"
+//- proc_macros: respanned_helper
+mod generated { pub fn helper() {} }
+struct Api;
+     //^^^
+#[proc_macros::respanned_helper]
+fn page() -> Ap$0i { Api }
+"#,
+        );
     }
 
     #[test]

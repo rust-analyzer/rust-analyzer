@@ -709,6 +709,21 @@ pub fn generate_suffixed_type(_attr: TokenStream, input: TokenStream) -> TokenSt
                 disabled: false,
             },
         ),
+        (
+            r#"
+#[proc_macro_attribute]
+pub fn respanned_helper(_attr: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+"#
+            .into(),
+            ProcMacro {
+                name: Symbol::intern("respanned_helper"),
+                kind: ProcMacroKind::Attr,
+                expander: sync::Arc::new(RespannedHelperProcMacroExpander),
+                disabled: false,
+            },
+        ),
     ])
 }
 
@@ -1243,6 +1258,42 @@ impl ProcMacroExpander for GenerateSuffixedTypeProcMacroExpander {
         };
 
         Ok(ret)
+    }
+
+    fn eq_dyn(&self, other: &dyn ProcMacroExpander) -> bool {
+        other.type_id() == TypeId::of::<Self>()
+    }
+}
+
+// Appends a function calling `generated::helper()` whose tokens all carry the span of the last
+// identifier of the input, the way macros like Rocket's route attributes use `quote_spanned!`.
+#[derive(Debug)]
+struct RespannedHelperProcMacroExpander;
+impl ProcMacroExpander for RespannedHelperProcMacroExpander {
+    fn expand(
+        &self,
+        _: &dyn SourceDatabase,
+        subtree: &TopSubtree,
+        _attrs: Option<&TopSubtree>,
+        _env: &Env,
+        _def_site: Span,
+        _call_site: Span,
+        _mixed_site: Span,
+        _current_dir: String,
+    ) -> Result<TopSubtree, ProcMacroExpansionError> {
+        let span = subtree
+            .iter()
+            .filter_map(|tt| match tt {
+                TtElement::Leaf(tt::Leaf::Ident(ident)) => Some(ident.span),
+                _ => None,
+            })
+            .last()
+            .ok_or_else(|| ProcMacroExpansionError::Panic("incorrect Input".into()))?;
+        Ok(quote! { span =>
+            #subtree
+
+            fn __respanned() { generated::helper() }
+        })
     }
 
     fn eq_dyn(&self, other: &dyn ProcMacroExpander) -> bool {

@@ -2,7 +2,10 @@ use hir::GenericParam;
 use ide_db::{RootDatabase, defs::Definition, helpers::pick_best_token};
 use syntax::{AstNode, SyntaxKind::*, SyntaxToken, T, ast, match_ast};
 
-use crate::{FilePosition, NavigationTarget, RangeInfo, TryToNav};
+use crate::{
+    FilePosition, NavigationTarget, RangeInfo, TryToNav,
+    goto_definition::descend_exact_and_respanned,
+};
 
 // Feature: Go to Type Definition
 //
@@ -70,7 +73,9 @@ pub(crate) fn goto_type_definition(
     }
 
     let range = token.text_range();
-    sema.descend_into_macros_no_opaque(token, false)
+    let (exact, respanned) = descend_exact_and_respanned(&sema, token);
+    let tokens = if exact.is_empty() { respanned } else { exact };
+    tokens
         .into_iter()
         .filter_map(|token| {
             sema.token_ancestors_with_macros(token.value)
@@ -133,6 +138,23 @@ mod tests {
             .sorted_by_key(cmp)
             .collect::<Vec<_>>();
         assert_eq!(expected, navs);
+    }
+
+    #[test]
+    fn goto_type_def_ignores_tokens_respanned_by_proc_macro() {
+        check(
+            r#"
+//- proc_macros: respanned_helper
+mod generated {
+    pub struct Noise;
+    pub fn helper() -> Noise { Noise }
+}
+struct Api;
+     //^^^
+#[proc_macros::respanned_helper]
+fn page() -> Ap$0i { Api }
+"#,
+        );
     }
 
     #[test]
