@@ -5,7 +5,7 @@ mod format_like;
 use base_db::SourceDatabase;
 use hir::{ItemInNs, Semantics};
 use ide_db::{
-    RootDatabase, SnippetCap,
+    CompletionSnippetCap, RootDatabase,
     documentation::{Documentation, HasDocs},
     imports::insert_use::ImportScope,
     source_change::SnippetEdit,
@@ -475,7 +475,7 @@ fn include_references(initial_element: &ast::Expr) -> (ast::Expr, String) {
 
 fn build_postfix_snippet_builder<'ctx>(
     ctx: &'ctx CompletionContext<'_, '_>,
-    cap: SnippetCap,
+    cap: CompletionSnippetCap,
     receiver: &'ctx ast::Expr,
 ) -> Option<impl Fn(&str, &str, String) -> Builder + 'ctx> {
     let receiver_range = ctx.sema.original_range_opt(receiver.syntax())?.range;
@@ -491,7 +491,7 @@ fn build_postfix_snippet_builder<'ctx>(
     // can't be annotated for the closure, hence fix it by constructing it without the Option first
     fn build<'ctx>(
         ctx: &'ctx CompletionContext<'_, '_>,
-        cap: SnippetCap,
+        cap: CompletionSnippetCap,
         delete_range: TextRange,
     ) -> impl Fn(&str, &str, String) -> Builder + 'ctx {
         move |label, detail, snippet| {

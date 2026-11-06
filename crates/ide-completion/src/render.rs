@@ -13,7 +13,7 @@ pub(crate) mod variant;
 use hir::{AsAssocItem, HasAttrs, HirDisplay, Impl, ModuleDef, ScopeDef, Type};
 use ide_db::text_edit::TextEdit;
 use ide_db::{
-    RootDatabase, SnippetCap, SymbolKind,
+    CompletionSnippetCap, RootDatabase, SymbolKind,
     documentation::{Documentation, HasDocs},
     helpers::item_name,
     imports::import_assets::LocatedImport,
@@ -67,7 +67,7 @@ impl<'a, 'db> RenderContext<'a, 'db> {
         self
     }
 
-    fn snippet_cap(&self) -> Option<SnippetCap> {
+    fn snippet_cap(&self) -> Option<CompletionSnippetCap> {
         self.completion.config.snippet_cap
     }
 

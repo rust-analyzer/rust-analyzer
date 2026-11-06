@@ -313,7 +313,6 @@ class ExperimentalFeatures implements lc.StaticFeature {
 
     fillClientCapabilities(capabilities: lc.ClientCapabilities): void {
         capabilities.experimental = {
-            snippetTextEdit: true,
             codeActionGroup: true,
             hoverActions: true,
             serverStatusNotification: true,

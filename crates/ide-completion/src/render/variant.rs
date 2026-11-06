@@ -2,7 +2,7 @@
 
 use crate::context::CompletionContext;
 use hir::{HasAttrs, HasCrate, HasVisibility, HirDisplay, StructKind};
-use ide_db::SnippetCap;
+use ide_db::CompletionSnippetCap;
 use itertools::Itertools;
 use syntax::SmolStr;
 
@@ -18,7 +18,7 @@ pub(crate) struct RenderedLiteral {
 /// the `name` argument for an anonymous type.
 pub(crate) fn render_record_lit(
     ctx: &CompletionContext<'_, '_>,
-    snippet_cap: Option<SnippetCap>,
+    snippet_cap: Option<CompletionSnippetCap>,
     fields: &[hir::Field],
     path: &str,
 ) -> RenderedLiteral {
@@ -64,7 +64,7 @@ pub(crate) fn render_record_lit(
 /// the `name` argument for an anonymous type.
 pub(crate) fn render_tuple_lit(
     ctx: &CompletionContext<'_, '_>,
-    snippet_cap: Option<SnippetCap>,
+    snippet_cap: Option<CompletionSnippetCap>,
     fields: &[hir::Field],
     path: &str,
 ) -> RenderedLiteral {
@@ -115,7 +115,7 @@ pub(crate) fn visible_fields(
 pub(crate) fn format_literal_label(
     name: &str,
     kind: StructKind,
-    snippet_cap: Option<SnippetCap>,
+    snippet_cap: Option<CompletionSnippetCap>,
 ) -> SmolStr {
     if snippet_cap.is_none() {
         return name.into();

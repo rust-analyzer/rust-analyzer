@@ -6,7 +6,7 @@
 use std::{collections::hash_map::Entry, fmt, iter, mem};
 
 use crate::text_edit::{TextEdit, TextEditBuilder};
-use crate::{SnippetCap, assists::Command, syntax_helpers::tree_diff::diff};
+use crate::{WorkspaceSnippetCap, assists::Command, syntax_helpers::tree_diff::diff};
 use base_db::AnchoredPathBuf;
 use itertools::Itertools;
 use macros::UpmapFromRaFixture;
@@ -244,16 +244,16 @@ impl SourceChangeBuilder {
         }
     }
 
-    pub fn make_placeholder_snippet(&mut self, _cap: SnippetCap) -> SyntaxAnnotation {
-        self.add_snippet_annotation(AnnotationSnippet::Over)
+    pub fn make_placeholder_snippet(&mut self, cap: WorkspaceSnippetCap) -> SyntaxAnnotation {
+        self.add_snippet_annotation(cap, AnnotationSnippet::Over)
     }
 
-    pub fn make_tabstop_before(&mut self, _cap: SnippetCap) -> SyntaxAnnotation {
-        self.add_snippet_annotation(AnnotationSnippet::Before)
+    pub fn make_tabstop_before(&mut self, cap: WorkspaceSnippetCap) -> SyntaxAnnotation {
+        self.add_snippet_annotation(cap, AnnotationSnippet::Before)
     }
 
-    pub fn make_tabstop_after(&mut self, _cap: SnippetCap) -> SyntaxAnnotation {
-        self.add_snippet_annotation(AnnotationSnippet::After)
+    pub fn make_tabstop_after(&mut self, cap: WorkspaceSnippetCap) -> SyntaxAnnotation {
+        self.add_snippet_annotation(cap, AnnotationSnippet::After)
     }
 
     fn commit(&mut self) {
@@ -340,7 +340,11 @@ impl SourceChangeBuilder {
         self.command = Some(Command::Rename);
     }
 
-    fn add_snippet_annotation(&mut self, kind: AnnotationSnippet) -> SyntaxAnnotation {
+    fn add_snippet_annotation(
+        &mut self,
+        _cap: WorkspaceSnippetCap,
+        kind: AnnotationSnippet,
+    ) -> SyntaxAnnotation {
         let annotation = SyntaxAnnotation::default();
         self.snippet_annotations.push((kind, annotation));
         self.source_change.is_snippet = true;

@@ -1,7 +1,7 @@
 //! Renderer for patterns.
 
 use hir::{Name, StructKind, db::HirDatabase};
-use ide_db::{SnippetCap, documentation::HasDocs};
+use ide_db::{CompletionSnippetCap, documentation::HasDocs};
 use itertools::Itertools;
 use syntax::{Edition, SmolStr, ToSmolStr};
 
@@ -182,7 +182,7 @@ fn render_pat(
 
 fn render_record_as_pat(
     db: &dyn HirDatabase,
-    snippet_cap: Option<SnippetCap>,
+    snippet_cap: Option<CompletionSnippetCap>,
     fields: &[hir::Field],
     name: &str,
     fields_omitted: bool,
@@ -212,7 +212,7 @@ fn render_record_as_pat(
 }
 
 fn render_tuple_as_pat(
-    snippet_cap: Option<SnippetCap>,
+    snippet_cap: Option<CompletionSnippetCap>,
     fields: &[hir::Field],
     name: &str,
     fields_omitted: bool,

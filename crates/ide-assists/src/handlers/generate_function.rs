@@ -3,7 +3,7 @@ use hir::{
     TypeInfo,
 };
 use ide_db::{
-    FileId, FxHashMap, FxHashSet, RootDatabase, SnippetCap,
+    FileId, FxHashMap, FxHashSet, RootDatabase, WorkspaceSnippetCap,
     defs::{Definition, NameRefClass},
     famous_defs::FamousDefs,
     helpers::is_editable_crate,
@@ -566,7 +566,7 @@ impl GeneratedFunctionTarget {
         ctx: &AssistContext<'_, '_>,
         function_builder: &FunctionBuilder,
         adt: Adt,
-        cap: Option<SnippetCap>,
+        cap: Option<WorkspaceSnippetCap>,
     ) {
         let editor = edit.make_editor(self.syntax());
 
@@ -625,7 +625,7 @@ impl GeneratedFunctionTarget {
         edit: &mut SourceChangeBuilder,
         file: FileId,
         function_builder: &FunctionBuilder,
-        cap: Option<SnippetCap>,
+        cap: Option<WorkspaceSnippetCap>,
     ) {
         let editor = edit.make_editor(self.syntax());
         let make = editor.make();
@@ -730,7 +730,7 @@ fn insert_rendered_impl(
     position: Position,
     impl_indent: IndentLevel,
     leading_ws_indent: IndentLevel,
-    cap: Option<SnippetCap>,
+    cap: Option<WorkspaceSnippetCap>,
 ) {
     let make = editor.make();
     let leading_ws = make.whitespace(&format!("\n{leading_ws_indent}"));
@@ -759,7 +759,7 @@ fn insert_rendered_fn(
     indent: IndentLevel,
     leading_ws: String,
     trailing_ws: Option<String>,
-    cap: Option<SnippetCap>,
+    cap: Option<WorkspaceSnippetCap>,
 ) {
     let make = editor.make();
     let leading_ws = make.whitespace(&leading_ws);
@@ -778,7 +778,7 @@ fn add_generated_fn_annotation(
     edit: &mut SourceChangeBuilder,
     function_builder: &FunctionBuilder,
     fn_: &ast::Fn,
-    cap: Option<SnippetCap>,
+    cap: Option<WorkspaceSnippetCap>,
 ) {
     let Some(cap) = cap else { return };
 

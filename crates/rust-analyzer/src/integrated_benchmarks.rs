@@ -16,7 +16,7 @@ use ide::{
     FilePosition, RaFixtureConfig, TextSize,
 };
 use ide_db::{
-    SnippetCap,
+    CompletionSnippetCap, WorkspaceSnippetCap,
     imports::insert_use::{ImportGranularity, InsertUseConfig},
 };
 use project_model::CargoConfig;
@@ -269,7 +269,7 @@ fn integrated_diagnostics_benchmark() {
         disabled: Default::default(),
         expr_fill_default: Default::default(),
         style_lints: false,
-        snippet_cap: SnippetCap::new(true),
+        snippet_cap: WorkspaceSnippetCap::new(true),
         insert_use: InsertUseConfig {
             granularity: ImportGranularity::Crate,
             enforce_granularity: false,
@@ -324,7 +324,7 @@ fn completion_config() -> CompletionConfig<'static> {
         term_search_fuel: 200,
         full_function_signatures: false,
         callable: Some(CallableSnippets::FillArguments),
-        snippet_cap: SnippetCap::new(true),
+        snippet_cap: CompletionSnippetCap::new(true),
         insert_use: InsertUseConfig {
             granularity: ImportGranularity::Crate,
             prefix_kind: hir::PrefixKind::ByCrate,

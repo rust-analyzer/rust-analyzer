@@ -1,7 +1,7 @@
 //! Renderer for function calls.
 
 use hir::{AsAssocItem, HirDisplay, db::HirDatabase};
-use ide_db::{SnippetCap, SymbolKind};
+use ide_db::{CompletionSnippetCap, SymbolKind};
 use itertools::Itertools;
 use stdx::{format_to, to_lower_snake_case};
 use syntax::{AstNode, SmolStr, ToSmolStr, format_smolstr};
@@ -213,7 +213,7 @@ fn compute_return_type_match(
 pub(super) fn add_call_parens<'b>(
     builder: &'b mut Builder,
     ctx: &CompletionContext<'_, '_>,
-    cap: SnippetCap,
+    cap: CompletionSnippetCap,
     name: SmolStr,
     escaped_name: SmolStr,
     self_param: Option<hir::SelfParam>,

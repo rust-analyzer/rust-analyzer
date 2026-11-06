@@ -36,41 +36,6 @@ If a language client does not know about `rust-analyzer`'s configuration options
 * Sending `"initializationOptions": null`
 * Sending `"initializationOptions": {}`
 
-## Snippet `TextEdit`
-
-**Upstream Issue:** <https://github.com/microsoft/language-server-protocol/issues/724>
-
-**Experimental Client Capability:** `{ "snippetTextEdit": boolean }`
-
-If this capability is set, `WorkspaceEdit`s returned from `codeAction` requests and `TextEdit`s returned from `textDocument/onTypeFormatting` requests might contain `SnippetTextEdit`s instead of usual `TextEdit`s:
-
-```typescript
-interface SnippetTextEdit extends TextEdit {
-    insertTextFormat?: InsertTextFormat;
-    annotationId?: ChangeAnnotationIdentifier;
-}
-```
-
-```typescript
-export interface TextDocumentEdit {
-    textDocument: OptionalVersionedTextDocumentIdentifier;
-    edits: (TextEdit | SnippetTextEdit)[];
-}
-```
-
-When applying such code action or text edit, the editor should insert snippet, with tab stops and placeholders.
-At the moment, rust-analyzer guarantees that only a single `TextDocumentEdit` will have edits which can be `InsertTextFormat.Snippet`.
-Any additional `TextDocumentEdit`s will only have edits which are `InsertTextFormat.PlainText`.
-
-### Example
-
-"Add `derive`" code action transforms `struct S;` into `#[derive($0)] struct S;`
-
-### Unresolved Questions
-
-* Where exactly are `SnippetTextEdit`s allowed (only in code actions at the moment)?
-* Can snippets span multiple files (so far, no)?
-
 ## `CodeAction` Groups
 
 **Upstream Issue:** <https://github.com/microsoft/language-server-protocol/issues/994>

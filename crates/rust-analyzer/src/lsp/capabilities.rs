@@ -1,6 +1,6 @@
 //! Advertises the capabilities of the LSP Server.
 use ide::{CompletionFieldsToResolve, InlayFieldsToResolve};
-use ide_db::{FxHashSet, line_index::WideEncoding};
+use ide_db::{CompletionSnippetCap, FxHashSet, WorkspaceSnippetCap, line_index::WideEncoding};
 use lsp_types::{
     CallHierarchyProvider, ChangeNotifications, CodeActionKind, CodeActionOptions,
     CodeActionProvider, CodeLensOptions, CompletionOptions, DeclarationProvider,
@@ -468,8 +468,14 @@ impl ClientCapabilities {
         self.experimental_bool("serverStatusNotification")
     }
 
-    pub fn snippet_text_edit(&self) -> bool {
-        self.experimental_bool("snippetTextEdit")
+    pub fn workspace_snippet_cap(&self) -> Option<WorkspaceSnippetCap> {
+        self.0
+            .workspace
+            .as_ref()?
+            .workspace_edit
+            .as_ref()?
+            .snippet_edit_support
+            .and_then(WorkspaceSnippetCap::new)
     }
 
     pub fn hover_actions(&self) -> bool {
@@ -485,18 +491,16 @@ impl ClientCapabilities {
         self.experimental_bool("testExplorer")
     }
 
-    pub fn completion_snippet(&self) -> bool {
-        (|| -> _ {
-            self.0
-                .text_document
-                .as_ref()?
-                .completion
-                .as_ref()?
-                .completion_item
-                .as_ref()?
-                .snippet_support
-        })()
-        .unwrap_or_default()
+    pub fn completion_snippet_cap(&self) -> Option<CompletionSnippetCap> {
+        self.0
+            .text_document
+            .as_ref()?
+            .completion
+            .as_ref()?
+            .completion_item
+            .as_ref()?
+            .snippet_support
+            .and_then(CompletionSnippetCap::new)
     }
 
     pub fn semantic_tokens_refresh(&self) -> bool {

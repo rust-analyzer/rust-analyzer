@@ -25,7 +25,7 @@ use ide::{
     InlayHintsConfig, LineCol, RaFixtureConfig, RootDatabase,
 };
 use ide_db::{
-    EditionedFileId, SnippetCap,
+    EditionedFileId, WorkspaceSnippetCap,
     base_db::{SourceDatabase, salsa::Database},
     line_index,
 };
@@ -1355,7 +1355,7 @@ impl flags::AnalysisStats {
                     disable_experimental: false,
                     disabled: Default::default(),
                     expr_fill_default: Default::default(),
-                    snippet_cap: SnippetCap::new(true),
+                    snippet_cap: WorkspaceSnippetCap::new(true),
                     insert_use: ide_db::imports::insert_use::InsertUseConfig {
                         granularity: ide_db::imports::insert_use::ImportGranularity::Crate,
                         enforce_granularity: true,

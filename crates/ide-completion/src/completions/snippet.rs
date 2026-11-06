@@ -1,6 +1,8 @@
 //! This file provides snippet completions, like `pd` => `eprintln!(...)`.
 
-use ide_db::{SnippetCap, documentation::Documentation, imports::insert_use::ImportScope};
+use ide_db::{
+    CompletionSnippetCap, documentation::Documentation, imports::insert_use::ImportScope,
+};
 
 use crate::{
     CompletionContext, CompletionItem, CompletionItemKind, Completions, SnippetScope,
@@ -119,7 +121,7 @@ macro_rules! $1 {
 
 fn snippet(
     ctx: &CompletionContext<'_, '_>,
-    cap: SnippetCap,
+    cap: CompletionSnippetCap,
     label: &str,
     snippet: &str,
 ) -> Builder {
@@ -132,7 +134,7 @@ fn snippet(
 fn add_custom_completions(
     acc: &mut Completions,
     ctx: &CompletionContext<'_, '_>,
-    cap: SnippetCap,
+    cap: CompletionSnippetCap,
     scope: SnippetScope,
 ) -> Option<()> {
     ImportScope::find_insert_use_container(&ctx.token.parent()?, &ctx.sema)?;

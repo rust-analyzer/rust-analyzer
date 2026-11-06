@@ -6,7 +6,7 @@
 
 use hir::FindPathConfig;
 use ide_db::{
-    SnippetCap,
+    WorkspaceSnippetCap,
     assists::ExprFillDefaultMode,
     imports::{import_assets::ImportPathConfig, insert_use::InsertUseConfig},
     rename::RenameConfig,
@@ -16,7 +16,7 @@ use crate::AssistKind;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct AssistConfig {
-    pub snippet_cap: Option<SnippetCap>,
+    pub snippet_cap: Option<WorkspaceSnippetCap>,
     pub allowed: Option<Vec<AssistKind>>,
     pub insert_use: InsertUseConfig,
     pub prefer_no_std: bool,

@@ -3,7 +3,7 @@ mod generated;
 use expect_test::expect;
 use hir::{Semantics, db::HirDatabase, setup_tracing};
 use ide_db::{
-    EditionedFileId, FileRange, RootDatabase, SnippetCap,
+    EditionedFileId, FileRange, RootDatabase, WorkspaceSnippetCap,
     assists::ExprFillDefaultMode,
     base_db::SourceDatabase,
     imports::insert_use::{ImportGranularity, InsertUseConfig},
@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub(crate) const TEST_CONFIG: AssistConfig = AssistConfig {
-    snippet_cap: SnippetCap::new(true),
+    snippet_cap: WorkspaceSnippetCap::new(true),
     allowed: None,
     insert_use: InsertUseConfig {
         granularity: ImportGranularity::Crate,
@@ -41,7 +41,7 @@ pub(crate) const TEST_CONFIG: AssistConfig = AssistConfig {
 };
 
 pub(crate) const TEST_CONFIG_NO_GROUPING: AssistConfig = AssistConfig {
-    snippet_cap: SnippetCap::new(true),
+    snippet_cap: WorkspaceSnippetCap::new(true),
     allowed: None,
     insert_use: InsertUseConfig {
         granularity: ImportGranularity::Crate,
@@ -83,7 +83,7 @@ pub(crate) const TEST_CONFIG_NO_SNIPPET_CAP: AssistConfig = AssistConfig {
 };
 
 pub(crate) const TEST_CONFIG_IMPORT_ONE: AssistConfig = AssistConfig {
-    snippet_cap: SnippetCap::new(true),
+    snippet_cap: WorkspaceSnippetCap::new(true),
     allowed: None,
     insert_use: InsertUseConfig {
         granularity: ImportGranularity::One,

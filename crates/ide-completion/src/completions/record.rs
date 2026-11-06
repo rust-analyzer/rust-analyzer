@@ -149,8 +149,6 @@ fn complete_fields(
 
 #[cfg(test)]
 mod tests {
-    use ide_db::SnippetCap;
-
     use crate::{
         CompletionConfig,
         tests::{TEST_CONFIG, check_edit, check_edit_with_config},
@@ -210,7 +208,7 @@ fn baz() {
 
     #[test]
     fn enum_variant_no_snippets() {
-        let conf = CompletionConfig { snippet_cap: SnippetCap::new(false), ..TEST_CONFIG };
+        let conf = CompletionConfig { snippet_cap: None, ..TEST_CONFIG };
         // tuple variant
         check_edit_with_config(
             conf.clone(),

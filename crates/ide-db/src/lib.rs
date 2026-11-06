@@ -339,13 +339,24 @@ impl SymbolKind {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct SnippetCap {
+pub struct WorkspaceSnippetCap {
     _private: (),
 }
 
-impl SnippetCap {
-    pub const fn new(allow_snippets: bool) -> Option<SnippetCap> {
-        if allow_snippets { Some(SnippetCap { _private: () }) } else { None }
+impl WorkspaceSnippetCap {
+    pub const fn new(allow_snippets: bool) -> Option<Self> {
+        if allow_snippets { Some(Self { _private: () }) } else { None }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CompletionSnippetCap {
+    _private: (),
+}
+
+impl CompletionSnippetCap {
+    pub const fn new(allow_snippets: bool) -> Option<Self> {
+        if allow_snippets { Some(Self { _private: () }) } else { None }
     }
 }
 
