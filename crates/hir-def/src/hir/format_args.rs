@@ -14,15 +14,15 @@ use syntax::{
 use crate::hir::ExprId;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FormatArgs {
+pub struct FormatArgs<'db> {
     pub template: Box<[FormatArgsPiece]>,
-    pub arguments: FormatArguments,
-    pub orphans: Vec<ExprId>,
+    pub arguments: FormatArguments<'db>,
+    pub orphans: Vec<ExprId<'db>>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FormatArguments {
-    pub arguments: Box<[FormatArgument]>,
+pub struct FormatArguments<'db> {
+    pub arguments: Box<[FormatArgument<'db>]>,
     pub num_unnamed_args: usize,
     pub num_explicit_args: usize,
     pub names: Box<[(Name, usize)]>,
@@ -143,9 +143,9 @@ pub enum FormatCount {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct FormatArgument {
+pub struct FormatArgument<'db> {
     pub kind: FormatArgumentKind,
-    pub expr: ExprId,
+    pub expr: ExprId<'db>,
     pub syntax: Option<AstPtr<ast::Expr>>,
 }
 
@@ -169,16 +169,16 @@ enum PositionUsedAs {
 }
 use PositionUsedAs::*;
 
-pub(crate) fn parse(
+pub(crate) fn parse<'db>(
     s: &ast::String,
     string_ptr: AstPtr<ast::Expr>,
     fmt_snippet: Option<String>,
-    mut args: FormatArgumentsCollector,
+    mut args: FormatArgumentsCollector<'db>,
     is_direct_literal: bool,
-    mut synth: impl FnMut(Name, Option<TextRange>) -> ExprId,
+    mut synth: impl FnMut(Name, Option<TextRange>) -> ExprId<'db>,
     mut record_usage: impl FnMut(Name, Option<TextRange>),
     call_ctx: SyntaxContext,
-) -> FormatArgs {
+) -> FormatArgs<'db> {
     let Ok(text) = s.value() else {
         return FormatArgs {
             template: Default::default(),
@@ -450,15 +450,15 @@ pub(crate) fn parse(
 }
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
-pub struct FormatArgumentsCollector {
-    arguments: Vec<FormatArgument>,
+pub struct FormatArgumentsCollector<'db> {
+    arguments: Vec<FormatArgument<'db>>,
     num_unnamed_args: usize,
     num_explicit_args: usize,
     names: Vec<(Name, usize)>,
 }
 
-impl FormatArgumentsCollector {
-    pub(crate) fn finish(self) -> FormatArguments {
+impl<'db> FormatArgumentsCollector<'db> {
+    pub(crate) fn finish(self) -> FormatArguments<'db> {
         FormatArguments {
             arguments: self.arguments.into_boxed_slice(),
             num_unnamed_args: self.num_unnamed_args,
@@ -467,7 +467,7 @@ impl FormatArgumentsCollector {
         }
     }
 
-    pub fn add(&mut self, arg: FormatArgument) -> usize {
+    pub fn add(&mut self, arg: FormatArgument<'db>) -> usize {
         let index = self.arguments.len();
         if let Some(name) = arg.kind.ident() {
             self.names.push((name.clone(), index));
@@ -490,32 +490,32 @@ impl FormatArgumentsCollector {
         index
     }
 
-    pub fn by_name(&self, name: &Name) -> Option<(usize, &FormatArgument)> {
+    pub fn by_name(&self, name: &Name) -> Option<(usize, &FormatArgument<'db>)> {
         let &(_, i) = self.names.iter().find(|(n, _)| n == name)?;
         Some((i, &self.arguments[i]))
     }
 
-    pub fn by_index(&self, i: usize) -> Option<&FormatArgument> {
+    pub fn by_index(&self, i: usize) -> Option<&FormatArgument<'db>> {
         (i < self.num_explicit_args).then(|| &self.arguments[i])
     }
 
-    pub fn unnamed_args(&self) -> &[FormatArgument] {
+    pub fn unnamed_args(&self) -> &[FormatArgument<'db>] {
         &self.arguments[..self.num_unnamed_args]
     }
 
-    pub fn named_args(&self) -> &[FormatArgument] {
+    pub fn named_args(&self) -> &[FormatArgument<'db>] {
         &self.arguments[self.num_unnamed_args..self.num_explicit_args]
     }
 
-    pub fn explicit_args(&self) -> &[FormatArgument] {
+    pub fn explicit_args(&self) -> &[FormatArgument<'db>] {
         &self.arguments[..self.num_explicit_args]
     }
 
-    pub fn all_args(&self) -> &[FormatArgument] {
+    pub fn all_args(&self) -> &[FormatArgument<'db>] {
         &self.arguments[..]
     }
 
-    pub fn all_args_mut(&mut self) -> &mut Vec<FormatArgument> {
+    pub fn all_args_mut(&mut self) -> &mut Vec<FormatArgument<'db>> {
         &mut self.arguments
     }
 }

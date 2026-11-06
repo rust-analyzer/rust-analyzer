@@ -102,7 +102,7 @@ pub type Result<T = (), E = HirDisplayError> = std::result::Result<T, E>;
 
 pub trait HirWrite: fmt::Write {
     fn start_location_link(&mut self, _location: ModuleDefId) {}
-    fn start_location_link_generic(&mut self, _location: GenericParamId) {}
+    fn start_location_link_generic(&mut self, _location: GenericParamId<'_>) {}
     fn end_location_link(&mut self) {}
 }
 
@@ -168,7 +168,7 @@ impl<'db> HirFormatter<'_, 'db> {
         self.fmt.start_location_link(location);
     }
 
-    pub fn start_location_link_generic(&mut self, location: GenericParamId) {
+    pub fn start_location_link_generic(&mut self, location: GenericParamId<'db>) {
         self.fmt.start_location_link_generic(location);
     }
 
@@ -1226,9 +1226,9 @@ fn render_const_scalar_from_valtree_inner<'db>(
 }
 
 fn render_variant_after_name<'db>(
-    data: &VariantFields,
+    data: &VariantFields<'db>,
     f: &mut HirFormatter<'_, 'db>,
-    field_types: &'db ArenaMap<LocalFieldId, FieldType>,
+    field_types: &'db ArenaMap<LocalFieldId<'db>, FieldType>,
     param_env: ParamEnv<'db>,
     layout: &Layout,
     args: GenericArgs<'db>,
@@ -1236,7 +1236,7 @@ fn render_variant_after_name<'db>(
     memory_map: &MemoryMap<'db>,
 ) -> Result {
     let param_env = ParamEnvAndCrate { param_env, krate: f.krate() };
-    let render_field = |f: &mut HirFormatter<'_, 'db>, id: LocalFieldId| {
+    let render_field = |f: &mut HirFormatter<'_, 'db>, id: LocalFieldId<'_>| {
         let offset = layout.fields.offset(u32::from(id.into_raw()) as usize).bytes_usize();
         let ty = field_types[id].ty().instantiate(f.interner, args).skip_norm_wip();
         let Ok(layout) = f.db.layout_of_ty(ty.store(), param_env.store()) else {
@@ -2382,7 +2382,7 @@ pub trait HirDisplayWithExpressionStore<'db> {
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result;
 }
 
@@ -2393,7 +2393,7 @@ impl<'db, T: ?Sized + HirDisplayWithExpressionStore<'db>> HirDisplayWithExpressi
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         T::hir_fmt(&**self, f, owner, store)
     }
@@ -2402,23 +2402,25 @@ impl<'db, T: ?Sized + HirDisplayWithExpressionStore<'db>> HirDisplayWithExpressi
 pub fn hir_display_with_store<'a, 'db, T: HirDisplayWithExpressionStore<'db> + 'a>(
     value: T,
     owner: ExpressionStoreOwnerId,
-    store: &'a ExpressionStore,
+    store: &'a ExpressionStore<'db>,
 ) -> impl HirDisplay<'db> + 'a {
     ExpressionStoreAdapter(value, owner, store)
 }
 
-struct ExpressionStoreAdapter<'a, T>(T, ExpressionStoreOwnerId, &'a ExpressionStore);
+struct ExpressionStoreAdapter<'a, 'db, T>(T, ExpressionStoreOwnerId, &'a ExpressionStore<'db>);
 
-impl<'a, T> ExpressionStoreAdapter<'a, T> {
+impl<'a, 'db, T> ExpressionStoreAdapter<'a, 'db, T> {
     fn wrap(
         owner: ExpressionStoreOwnerId,
-        store: &'a ExpressionStore,
-    ) -> impl Fn(T) -> ExpressionStoreAdapter<'a, T> {
+        store: &'a ExpressionStore<'db>,
+    ) -> impl Fn(T) -> ExpressionStoreAdapter<'a, 'db, T> {
         move |value| ExpressionStoreAdapter(value, owner, store)
     }
 }
 
-impl<'db, T: HirDisplayWithExpressionStore<'db>> HirDisplay<'db> for ExpressionStoreAdapter<'_, T> {
+impl<'db, T: HirDisplayWithExpressionStore<'db>> HirDisplay<'db>
+    for ExpressionStoreAdapter<'_, 'db, T>
+{
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         T::hir_fmt(&self.0, f, self.1, self.2)
     }
@@ -2428,7 +2430,7 @@ impl<'db> HirDisplayWithExpressionStore<'db> for LifetimeRefId {
         &self,
         f: &mut HirFormatter<'_, 'db>,
         _owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         match &store[*self] {
             LifetimeRef::Named(name) => write!(f, "{}", name.display(f.db, f.edition())),
@@ -2447,12 +2449,12 @@ impl<'db> HirDisplayWithExpressionStore<'db> for LifetimeRefId {
     }
 }
 
-impl<'db> HirDisplayWithExpressionStore<'db> for TypeRefId {
+impl<'db> HirDisplayWithExpressionStore<'db> for TypeRefId<'db> {
     fn hir_fmt(
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         match &store[*self] {
             TypeRef::Never => write!(f, "!")?,
@@ -2595,12 +2597,12 @@ impl<'db> HirDisplayWithExpressionStore<'db> for TypeRefId {
     }
 }
 
-impl<'db> HirDisplayWithExpressionStore<'db> for ConstRef {
+impl<'db> HirDisplayWithExpressionStore<'db> for ConstRef<'db> {
     fn hir_fmt(
         &self,
         f: &mut HirFormatter<'_, 'db>,
         _owner: ExpressionStoreOwnerId,
-        _store: &ExpressionStore,
+        _store: &ExpressionStore<'db>,
     ) -> Result {
         // FIXME
         write!(f, "{{const}}")?;
@@ -2609,12 +2611,12 @@ impl<'db> HirDisplayWithExpressionStore<'db> for ConstRef {
     }
 }
 
-impl<'db> HirDisplayWithExpressionStore<'db> for PatId {
+impl<'db> HirDisplayWithExpressionStore<'db> for PatId<'db> {
     fn hir_fmt(
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         write!(
             f,
@@ -2632,12 +2634,12 @@ impl<'db> HirDisplayWithExpressionStore<'db> for PatId {
     }
 }
 
-impl<'db> HirDisplayWithExpressionStore<'db> for TypeBound {
+impl<'db> HirDisplayWithExpressionStore<'db> for TypeBound<'db> {
     fn hir_fmt(
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         match self {
             &TypeBound::Path(path, modifier) => {
@@ -2677,12 +2679,12 @@ impl<'db> HirDisplayWithExpressionStore<'db> for TypeBound {
     }
 }
 
-impl<'db> HirDisplayWithExpressionStore<'db> for Path {
+impl<'db> HirDisplayWithExpressionStore<'db> for Path<'db> {
     fn hir_fmt(
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         match (self.type_anchor(), self.kind()) {
             (Some(anchor), _) => {
@@ -2830,12 +2832,12 @@ impl<'db> HirDisplayWithExpressionStore<'db> for Path {
     }
 }
 
-impl<'db> HirDisplayWithExpressionStore<'db> for hir_def::expr_store::path::GenericArg {
+impl<'db> HirDisplayWithExpressionStore<'db> for hir_def::expr_store::path::GenericArg<'db> {
     fn hir_fmt(
         &self,
         f: &mut HirFormatter<'_, 'db>,
         owner: ExpressionStoreOwnerId,
-        store: &ExpressionStore,
+        store: &ExpressionStore<'db>,
     ) -> Result {
         match self {
             hir_def::expr_store::path::GenericArg::Type(ty) => ty.hir_fmt(f, owner, store),

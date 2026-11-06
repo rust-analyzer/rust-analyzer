@@ -56,12 +56,12 @@ impl fmt::Display for RecursiveMemoryLayout {
 }
 
 #[derive(Copy, Clone)]
-enum FieldOrTupleIdx {
-    Field(Field),
+enum FieldOrTupleIdx<'db> {
+    Field(Field<'db>),
     TupleIdx(usize),
 }
 
-impl FieldOrTupleIdx {
+impl<'db> FieldOrTupleIdx<'db> {
     fn name(&self, db: &RootDatabase) -> String {
         match *self {
             FieldOrTupleIdx::Field(f) => f.name(db).as_str().to_owned(),

@@ -1600,7 +1600,7 @@ fn make_generic_param_list<'db>(
     ctx: &AssistContext<'_, 'db>,
     make: &SyntaxFactory,
     fun: &Function<'db>,
-    used_type_params: &[TypeParam],
+    used_type_params: &[TypeParam<'db>],
 ) -> Option<ast::GenericParamList> {
     let mut generic_params = fun
         .mods
@@ -1623,7 +1623,7 @@ fn make_generic_param_list<'db>(
 fn param_is_required(
     ctx: &AssistContext<'_, '_>,
     param: &ast::GenericParam,
-    used_type_params: &[TypeParam],
+    used_type_params: &[TypeParam<'_>],
 ) -> bool {
     match param {
         ast::GenericParam::ConstParam(_) | ast::GenericParam::LifetimeParam(_) => false,
@@ -1638,7 +1638,7 @@ fn make_where_clause(
     ctx: &AssistContext<'_, '_>,
     make: &SyntaxFactory,
     fun: &Function<'_>,
-    used_type_params: &[TypeParam],
+    used_type_params: &[TypeParam<'_>],
 ) -> Option<ast::WhereClause> {
     let mut predicates = fun
         .mods
@@ -1657,7 +1657,7 @@ fn make_where_clause(
 fn pred_is_required(
     ctx: &AssistContext<'_, '_>,
     pred: &ast::WherePred,
-    used_type_params: &[TypeParam],
+    used_type_params: &[TypeParam<'_>],
 ) -> bool {
     match resolved_type_param(ctx, pred) {
         Some(it) => used_type_params.contains(&it),
@@ -1665,7 +1665,10 @@ fn pred_is_required(
     }
 }
 
-fn resolved_type_param(ctx: &AssistContext<'_, '_>, pred: &ast::WherePred) -> Option<TypeParam> {
+fn resolved_type_param<'db>(
+    ctx: &AssistContext<'_, 'db>,
+    pred: &ast::WherePred,
+) -> Option<TypeParam<'db>> {
     let path = match pred.ty()? {
         ast::Type::PathType(path_type) => path_type.path(),
         _ => None,
@@ -1679,7 +1682,7 @@ fn resolved_type_param(ctx: &AssistContext<'_, '_>, pred: &ast::WherePred) -> Op
 
 impl<'db> Function<'db> {
     /// Collect all the `TypeParam`s used in the `body` and `params`.
-    fn type_params(&self, ctx: &AssistContext<'_, 'db>) -> Vec<TypeParam> {
+    fn type_params(&self, ctx: &AssistContext<'_, 'db>) -> Vec<TypeParam<'db>> {
         let type_params_in_descendant_paths =
             self.body.descendant_paths().filter_map(|it| match ctx.sema.resolve_path(&it) {
                 Some(PathResolution::TypeParam(type_param)) => Some(type_param),

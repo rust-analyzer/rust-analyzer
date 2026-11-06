@@ -29,54 +29,54 @@ impl<'db> Documentation<'db> {
     }
 }
 
-pub trait HasDocs: HasAttrs + Copy {
-    fn docs(self, db: &dyn HirDatabase) -> Option<Documentation<'_>> {
+pub trait HasDocs<'db>: HasAttrs<'db> + Copy {
+    fn docs(self, db: &'db dyn HirDatabase) -> Option<Documentation<'db>> {
         let docs = match self.docs_with_rangemap(db)? {
             Cow::Borrowed(docs) => Documentation::new_borrowed(docs.docs()),
             Cow::Owned(docs) => Documentation::new_owned(docs.into_docs()),
         };
         Some(docs)
     }
-    fn docs_with_rangemap(self, db: &dyn HirDatabase) -> Option<Cow<'_, hir::Docs>> {
+    fn docs_with_rangemap(self, db: &'db dyn HirDatabase) -> Option<Cow<'db, hir::Docs>> {
         self.hir_docs(db).map(Cow::Borrowed)
     }
     fn resolve_doc_path(
         self,
-        db: &dyn HirDatabase,
+        db: &'db dyn HirDatabase,
         link: &str,
         ns: Option<hir::Namespace>,
         is_inner_doc: hir::IsInnerDoc,
-    ) -> Option<hir::DocLinkDef> {
+    ) -> Option<hir::DocLinkDef<'db>> {
         resolve_doc_path_on(db, self, link, ns, is_inner_doc)
     }
 }
 
 macro_rules! impl_has_docs {
-    ($($def:ident,)*) => {$(
-        impl HasDocs for hir::$def {}
+    ($($def:ty,)*) => {$(
+        impl<'db> HasDocs<'db> for $def {}
     )*};
 }
 
 impl_has_docs![
-    EnumVariant,
-    Field,
-    Static,
-    Const,
-    Trait,
-    TypeAlias,
-    Macro,
-    Function,
-    Adt,
-    Module,
-    Impl,
-    Crate,
-    AssocItem,
-    Struct,
-    Union,
-    Enum,
+    hir::EnumVariant,
+    hir::Field<'db>,
+    hir::Static,
+    hir::Const,
+    hir::Trait,
+    hir::TypeAlias,
+    hir::Macro,
+    hir::Function<'db>,
+    hir::Adt,
+    hir::Module,
+    hir::Impl<'db>,
+    hir::Crate,
+    hir::AssocItem<'db>,
+    hir::Struct,
+    hir::Union,
+    hir::Enum,
 ];
 
-impl HasDocs for hir::ExternCrateDecl {
+impl<'db> HasDocs<'db> for hir::ExternCrateDecl {
     fn docs(self, db: &dyn HirDatabase) -> Option<Documentation<'_>> {
         let crate_docs = self.resolved_crate(db)?.hir_docs(db);
         let decl_docs = self.hir_docs(db);

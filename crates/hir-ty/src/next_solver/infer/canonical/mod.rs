@@ -53,7 +53,7 @@ impl<'db> InferCtxt<'db> {
     /// for each of the canonical inputs to your query.
     pub fn instantiate_canonical<T>(
         &self,
-        span: Span,
+        span: Span<'db>,
         canonical: &Canonical<'db, T>,
     ) -> (T, CanonicalVarValues<'db>)
     where
@@ -93,7 +93,7 @@ impl<'db> InferCtxt<'db> {
     /// We should somehow deduplicate all of this.
     pub fn instantiate_canonical_var(
         &self,
-        span: Span,
+        span: Span<'db>,
         cv_info: CanonicalVarKind<DbInterner<'db>>,
         prev_var_values: &[GenericArg<'db>],
         universe_map: impl Fn(UniverseIndex) -> UniverseIndex,

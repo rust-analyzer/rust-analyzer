@@ -97,7 +97,7 @@ fn build_completion<'db>(
     label: SmolStr,
     lookup: SmolStr,
     pat: String,
-    def: impl HasDocs,
+    def: impl HasDocs<'db>,
     adt_ty: hir::Type<'db>,
     // Missing in context of match statement completions
     is_variant_missing: bool,
@@ -133,7 +133,7 @@ fn render_pat(
     pattern_ctx: &PatternContext,
     name: &str,
     kind: StructKind,
-    fields: &[hir::Field],
+    fields: &[hir::Field<'_>],
     fields_omitted: bool,
 ) -> Option<String> {
     let mut pat = match kind {
@@ -172,7 +172,7 @@ fn render_pat(
 fn render_record_as_pat(
     db: &dyn HirDatabase,
     snippet_cap: Option<SnippetCap>,
-    fields: &[hir::Field],
+    fields: &[hir::Field<'_>],
     name: &str,
     fields_omitted: bool,
     edition: Edition,
@@ -202,7 +202,7 @@ fn render_record_as_pat(
 
 fn render_tuple_as_pat(
     snippet_cap: Option<SnippetCap>,
-    fields: &[hir::Field],
+    fields: &[hir::Field<'_>],
     name: &str,
     fields_omitted: bool,
 ) -> String {

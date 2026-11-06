@@ -424,7 +424,7 @@ fn rename_reference<'db>(
 
 fn rename_field_constructors(
     sema: &Semantics<'_, RootDatabase>,
-    field: hir::Field,
+    field: hir::Field<'_>,
     new_name: &Name,
     source_change: &mut SourceChange,
     config: &RenameConfig,

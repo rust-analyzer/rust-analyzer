@@ -38,11 +38,11 @@ thread_local! {
 /// It correctly handles `$crate` based path from macro call.
 // If you modify the logic of the lowering, make sure to check if `hir_segment_to_ast_segment()`
 // also needs an update.
-pub(super) fn lower_path(
-    collector: &mut ExprCollector<'_>,
+pub(super) fn lower_path<'db>(
+    collector: &mut ExprCollector<'db>,
     mut path: ast::Path,
-    impl_trait_lower_fn: ImplTraitLowerFn<'_>,
-) -> Option<Path> {
+    impl_trait_lower_fn: ImplTraitLowerFn<'_, 'db>,
+) -> Option<Path<'db>> {
     let mut kind = PathKind::Plain;
     let mut type_anchor = None;
     let mut segments = Vec::new();

@@ -6,7 +6,7 @@ use crate::{Diagnostic, DiagnosticCode, DiagnosticsContext};
 // module.
 pub(crate) fn private_assoc_item(
     ctx: &DiagnosticsContext<'_, '_>,
-    d: &hir::PrivateAssocItem,
+    d: &hir::PrivateAssocItem<'_>,
 ) -> Diagnostic {
     // FIXME: add quickfix
     let name = d

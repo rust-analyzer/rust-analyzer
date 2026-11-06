@@ -293,7 +293,7 @@ impl<'a> DeclValidator<'a> {
         }
     }
 
-    fn edition(&self, id: impl HasModule) -> span::Edition {
+    fn edition(&self, id: impl HasModule<'a>) -> span::Edition {
         let krate = id.krate(self.db);
         krate.data(self.db).edition
     }
@@ -705,8 +705,8 @@ impl<'a> DeclValidator<'a> {
         ident_type: IdentType,
     ) where
         N: AstNode + HasName + fmt::Debug,
-        S: HasSource<Value = N>,
-        L: Lookup<Data = S> + HasModule + Copy,
+        S: HasSource<Value = N> + 'a,
+        L: Lookup<'a, Data = S> + HasModule<'a> + Copy,
     {
         let to_expected_case_type = match expected_case {
             CaseType::LowerSnakeCase => to_lower_snake_case,

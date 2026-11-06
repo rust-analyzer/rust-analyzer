@@ -318,7 +318,7 @@ impl From<hir::MacroKind> for SymbolKind {
 }
 
 impl SymbolKind {
-    pub fn from_module_def(db: &dyn HirDatabase, it: hir::ModuleDef) -> Self {
+    pub fn from_module_def(db: &dyn HirDatabase, it: hir::ModuleDef<'_>) -> Self {
         match it {
             hir::ModuleDef::Const(..) => SymbolKind::Const,
             hir::ModuleDef::EnumVariant(..) => SymbolKind::Variant,

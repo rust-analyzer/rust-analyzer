@@ -208,7 +208,7 @@ pub(crate) fn extract_definitions_from_docs(
 }
 
 pub(crate) fn resolve_doc_path_for_def<'db>(
-    db: &dyn HirDatabase,
+    db: &'db dyn HirDatabase,
     def: Definition<'db>,
     link: &str,
     ns: Option<hir::Namespace>,
@@ -246,7 +246,7 @@ pub(crate) fn resolve_doc_path_for_def<'db>(
 pub(crate) fn doc_attributes<'db>(
     sema: &Semantics<'db, RootDatabase>,
     node: &SyntaxNode,
-) -> Option<(hir::AttrsWithOwner, Definition<'db>)> {
+) -> Option<(hir::AttrsWithOwner<'db>, Definition<'db>)> {
     match_ast! {
         match node {
             ast::SourceFile(it)  => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
@@ -362,7 +362,7 @@ impl DocCommentToken {
         sema: &Semantics<'db, RootDatabase>,
         node: &SyntaxNode,
         is_inner_doc: bool,
-    ) -> Option<(AttrsWithOwner, Definition<'db>)> {
+    ) -> Option<(AttrsWithOwner<'db>, Definition<'db>)> {
         if is_inner_doc && node.kind() != SOURCE_FILE {
             let parent = node.parent()?;
             doc_attributes(sema, &parent).or(doc_attributes(sema, &parent.parent()?))
@@ -752,7 +752,7 @@ fn filename_and_frag_for_def<'db>(
 /// https://doc.rust-lang.org/std/iter/trait.Iterator.html#tymethod.next
 ///                                                       ^^^^^^^^^^^^^^
 /// ```
-fn get_assoc_item_fragment(db: &dyn HirDatabase, assoc_item: hir::AssocItem) -> Option<String> {
+fn get_assoc_item_fragment(db: &dyn HirDatabase, assoc_item: hir::AssocItem<'_>) -> Option<String> {
     Some(match assoc_item {
         AssocItem::Function(function) => {
             let is_trait_method =

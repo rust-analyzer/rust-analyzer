@@ -150,7 +150,10 @@ pub(crate) fn generate_blanket_trait_impl(
     Some(())
 }
 
-fn existing_any_impl(traitd: &ast::Trait, sema: &Semantics<'_, RootDatabase>) -> Option<hir::Impl> {
+fn existing_any_impl<'db>(
+    traitd: &ast::Trait,
+    sema: &Semantics<'db, RootDatabase>,
+) -> Option<hir::Impl<'db>> {
     let db = sema.db;
     let traitd = sema.to_def(traitd)?;
     traitd

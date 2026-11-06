@@ -235,7 +235,7 @@ impl<'db> InferCtxt<'db> {
     /// [c]: https://rust-lang.github.io/chalk/book/canonical_queries/canonicalization.html#processing-the-canonicalized-query-result
     pub fn instantiate_query_response_and_region_obligations<R>(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         original_values: &OriginalQueryValues<'db>,
         query_response: &Canonical<'db, QueryResponse<'db, R>>,
@@ -275,7 +275,7 @@ impl<'db> InferCtxt<'db> {
     /// projection.
     fn query_response_instantiation<R>(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         original_values: &OriginalQueryValues<'db>,
         query_response: &Canonical<'db, QueryResponse<'db, R>>,
@@ -321,7 +321,7 @@ impl<'db> InferCtxt<'db> {
     #[instrument(level = "debug", skip(self, param_env))]
     fn query_response_instantiation_guess<R>(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         original_values: &OriginalQueryValues<'db>,
         query_response: &Canonical<'db, QueryResponse<'db, R>>,
@@ -453,7 +453,7 @@ impl<'db> InferCtxt<'db> {
     /// See also: [`Self::query_response_instantiation_guess`]
     fn unify_query_response_instantiation_guess<R>(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         original_values: &OriginalQueryValues<'db>,
         result_args: &CanonicalVarValues<'db>,
@@ -480,7 +480,7 @@ impl<'db> InferCtxt<'db> {
     /// The second set is produced lazily by supplying indices from the first set.
     fn unify_canonical_vars(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         variables1: &OriginalQueryValues<'db>,
         variables2: impl Fn(BoundVar) -> GenericArg<'db>,

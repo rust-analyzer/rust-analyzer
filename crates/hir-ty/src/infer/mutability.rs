@@ -14,11 +14,11 @@ use crate::{
 };
 
 impl<'db> InferenceContext<'db> {
-    pub(crate) fn infer_mut_body(&mut self, body_expr: ExprId) {
+    pub(crate) fn infer_mut_body(&mut self, body_expr: ExprId<'db>) {
         self.infer_mut_expr(body_expr, Mutability::Not);
     }
 
-    fn infer_mut_expr(&mut self, tgt_expr: ExprId, mut mutability: Mutability) {
+    fn infer_mut_expr(&mut self, tgt_expr: ExprId<'db>, mut mutability: Mutability) {
         if let Some(adjustments) = self.result.expr_adjustments.get_mut(&tgt_expr) {
             let mut adjustments = adjustments.iter_mut().rev().peekable();
             while let Some(adj) = adjustments.next() {
@@ -52,7 +52,7 @@ impl<'db> InferenceContext<'db> {
         self.infer_mut_expr_without_adjust(tgt_expr, mutability);
     }
 
-    fn infer_mut_expr_without_adjust(&mut self, tgt_expr: ExprId, mutability: Mutability) {
+    fn infer_mut_expr_without_adjust(&mut self, tgt_expr: ExprId<'db>, mutability: Mutability) {
         match &self.store[tgt_expr] {
             Expr::Missing => (),
             Expr::InlineAsm(e) => {
@@ -195,13 +195,13 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn infer_mut_not_expr_iter(&mut self, exprs: impl Iterator<Item = ExprId>) {
+    fn infer_mut_not_expr_iter(&mut self, exprs: impl Iterator<Item = ExprId<'db>>) {
         for expr in exprs {
             self.infer_mut_expr(expr, Mutability::Not);
         }
     }
 
-    fn pat_iter_bound_mutability(&self, mut pat: impl Iterator<Item = PatId>) -> Mutability {
+    fn pat_iter_bound_mutability(&self, mut pat: impl Iterator<Item = PatId<'db>>) -> Mutability {
         if pat.any(|p| self.pat_bound_mutability(p) == Mutability::Mut) {
             Mutability::Mut
         } else {
@@ -212,7 +212,7 @@ impl<'db> InferenceContext<'db> {
     /// Checks if the pat contains a `ref mut` binding. Such paths makes the context of bounded expressions
     /// mutable. For example in `let (ref mut x0, ref x1) = *it;` we need to use `DerefMut` for `*it` but in
     /// `let (ref x0, ref x1) = *it;` we should use `Deref`.
-    fn pat_bound_mutability(&self, pat: PatId) -> Mutability {
+    fn pat_bound_mutability(&self, pat: PatId<'db>) -> Mutability {
         let mut r = Mutability::Not;
         self.store.walk_bindings_in_pat(pat, |b| {
             if self.store[b].mode == BindingAnnotation::RefMut {

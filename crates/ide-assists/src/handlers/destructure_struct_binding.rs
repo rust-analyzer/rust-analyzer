@@ -130,7 +130,7 @@ impl AstNode for Target {
 fn destructure_struct_binding_impl(
     ctx: &AssistContext<'_, '_>,
     builder: &mut SourceChangeBuilder,
-    data: &StructEditData,
+    data: &StructEditData<'_>,
 ) {
     let field_names = generate_field_names(ctx, data);
     let editor = builder.make_editor(data.target.syntax());
@@ -139,11 +139,11 @@ fn destructure_struct_binding_impl(
     builder.add_file_edits(ctx.vfs_file_id(), editor);
 }
 
-struct StructEditData {
+struct StructEditData<'db> {
     target: Target,
     kind: hir::StructKind,
     struct_def_path: hir::ModPath,
-    visible_fields: Vec<hir::Field>,
+    visible_fields: Vec<hir::Field<'db>>,
     usages: Vec<FileReference>,
     names_in_scope: FxHashSet<SmolStr>,
     has_private_members: bool,
@@ -152,7 +152,7 @@ struct StructEditData {
     edition: Edition,
 }
 
-impl StructEditData {
+impl<'db> StructEditData<'db> {
     fn apply_to_destruct(&self, new_pat: ast::Pat, editor: &SyntaxEditor) {
         let make = editor.make();
         match &self.target {
@@ -182,7 +182,7 @@ impl StructEditData {
     }
 }
 
-fn collect_data(target: Target, ctx: &AssistContext<'_, '_>) -> Option<StructEditData> {
+fn collect_data<'db>(target: Target, ctx: &AssistContext<'_, 'db>) -> Option<StructEditData<'db>> {
     let ty = target.ty(&ctx.sema)?;
     let hir::Adt::Struct(struct_type) = ty.strip_references().as_adt()? else { return None };
 
@@ -281,7 +281,7 @@ fn get_names_in_scope(
 fn destructure_pat(
     _ctx: &AssistContext<'_, '_>,
     editor: &SyntaxEditor,
-    data: &StructEditData,
+    data: &StructEditData<'_>,
     field_names: &[(SmolStr, SmolStr)],
 ) {
     let make = editor.make();
@@ -324,7 +324,7 @@ fn destructure_pat(
 
 fn generate_field_names(
     ctx: &AssistContext<'_, '_>,
-    data: &StructEditData,
+    data: &StructEditData<'_>,
 ) -> Vec<(SmolStr, SmolStr)> {
     match data.kind {
         hir::StructKind::Tuple => data
@@ -362,7 +362,7 @@ fn new_field_name(base_name: SmolStr, names_in_scope: &FxHashSet<SmolStr>) -> Sm
 fn update_usages(
     ctx: &AssistContext<'_, '_>,
     editor: &SyntaxEditor,
-    data: &StructEditData,
+    data: &StructEditData<'_>,
     field_names: &FxHashMap<SmolStr, SmolStr>,
 ) {
     let source = ctx.source_file().syntax();
@@ -381,7 +381,7 @@ fn update_usages(
 fn build_usage_edit(
     ctx: &AssistContext<'_, '_>,
     make: &SyntaxFactory,
-    data: &StructEditData,
+    data: &StructEditData<'_>,
     usage: &FileReference,
     field_names: &FxHashMap<SmolStr, SmolStr>,
 ) -> Option<(SyntaxNode, SyntaxNode)> {

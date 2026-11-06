@@ -25,7 +25,7 @@ use crate::{
     },
 };
 
-fn coerce_pointee_new_type_param(trait_id: TraitId) -> TypeParamId {
+fn coerce_pointee_new_type_param<'db>(trait_id: TraitId) -> TypeParamId<'db> {
     // HACK: Fake the param.
     // We cannot use a dummy param here, because it can leak into the IDE layer and that'll cause panics
     // when e.g. trying to display it. So we use an existing param.
@@ -56,7 +56,7 @@ fn trait_args(trait_: BuiltinDeriveImplTrait, self_ty: Ty<'_>) -> GenericArgs<'_
 
 pub(crate) fn generics_of<'db>(
     interner: DbInterner<'db>,
-    id: BuiltinDeriveImplId,
+    id: BuiltinDeriveImplId<'_>,
 ) -> Generics<'db> {
     let db = interner.db;
     let loc = id.loc(db);
@@ -84,7 +84,7 @@ pub(crate) fn generics_of<'db>(
     }
 }
 
-pub fn generic_params_count(db: &dyn HirDatabase, id: BuiltinDeriveImplId) -> usize {
+pub fn generic_params_count(db: &dyn HirDatabase, id: BuiltinDeriveImplId<'_>) -> usize {
     let loc = id.loc(db);
     let adt_params = GenericParams::of(db, loc.adt.into());
     let extra_params_count = match loc.trait_ {
@@ -105,7 +105,7 @@ pub fn generic_params_count(db: &dyn HirDatabase, id: BuiltinDeriveImplId) -> us
 
 pub fn impl_trait<'db>(
     interner: DbInterner<'db>,
-    id: BuiltinDeriveImplId,
+    id: BuiltinDeriveImplId<'_>,
 ) -> EarlyBinder<'db, TraitRef<'db>> {
     let db = interner.db;
     let loc = id.loc(db);
@@ -160,14 +160,14 @@ pub fn impl_trait<'db>(
 #[inline]
 pub fn impl_super_outlives<'db>(
     _interner: DbInterner<'db>,
-    _id: BuiltinDeriveImplId,
+    _id: BuiltinDeriveImplId<'_>,
 ) -> EarlyBinder<'db, &'db [Clause<'db>]> {
     // Currently no builtin-derived traits have super outlive bounds.
     EarlyBinder::bind(&[])
 }
 
 #[salsa::tracked(returns(ref))]
-pub fn predicates(db: &dyn HirDatabase, impl_: BuiltinDeriveImplId) -> GenericPredicates {
+pub fn predicates(db: &dyn HirDatabase, impl_: BuiltinDeriveImplId<'_>) -> GenericPredicates {
     let loc = impl_.loc(db);
     let generic_params = GenericParams::of(db, loc.adt.into());
     let interner = DbInterner::new_with(db, loc.module(db).krate(db));
@@ -249,7 +249,7 @@ fn explicit_own_predicates<'db>(
 }
 
 /// Not cached in a query, currently used in `hir` only. If you need this in `hir-ty` consider introducing a query.
-pub fn param_env<'db>(interner: DbInterner<'db>, id: BuiltinDeriveImplId) -> ParamEnv<'db> {
+pub fn param_env<'db>(interner: DbInterner<'db>, id: BuiltinDeriveImplId<'_>) -> ParamEnv<'db> {
     let predicates = predicates(interner.db, id);
     crate::lower::param_env_from_predicates(interner, predicates)
 }
@@ -287,7 +287,7 @@ fn replace_pointee<'db, T: TypeFoldable<DbInterner<'db>>>(
 fn simple_trait_predicates<'db>(
     interner: DbInterner<'db>,
     loc: &BuiltinDeriveImplLoc,
-    generic_params: &GenericParams,
+    generic_params: &GenericParams<'db>,
     adt_predicates: &GenericPredicates,
     trait_id: TraitId,
 ) -> GenericPredicates {
@@ -350,7 +350,7 @@ fn simple_trait_predicates<'db>(
 fn extend_assoc_type_bounds<'db>(
     interner: DbInterner<'db>,
     assoc_type_bounds: &mut Vec<Clause<'db>>,
-    fields: &ArenaMap<LocalFieldId, FieldType>,
+    fields: &ArenaMap<LocalFieldId<'db>, FieldType>,
     trait_id: TraitId,
     trait_: BuiltinDeriveImplTrait,
 ) {
@@ -392,9 +392,9 @@ fn extend_assoc_type_bounds<'db>(
 fn coerce_pointee_params<'db>(
     interner: DbInterner<'db>,
     loc: &BuiltinDeriveImplLoc,
-    generic_params: &GenericParams,
+    generic_params: &GenericParams<'db>,
     trait_id: TraitId,
-) -> Option<(u32, TypeParamId, Ty<'db>)> {
+) -> Option<(u32, TypeParamId<'db>, Ty<'db>)> {
     let pointee_param = {
         if let Ok((pointee_param, _)) = generic_params
             .iter_type_or_consts()

@@ -157,7 +157,7 @@ pub(crate) struct GeneralAutoderef<'db, Ctx, Steps = Vec<(Ty<'db>, AutoderefKind
     // Configurations:
     include_raw_pointers: bool,
     use_receiver_trait: bool,
-    span: Span,
+    span: Span<'db>,
 }
 
 pub(crate) type Autoderef<'a, 'db, Steps = Vec<(Ty<'db>, AutoderefKind)>> =
@@ -234,7 +234,7 @@ impl<'a, 'db> Autoderef<'a, 'db> {
         infcx: &'a InferCtxt<'db>,
         param_env: ParamEnv<'db>,
         base_ty: Ty<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> Self {
         Self::new_impl(DefaultAutoderefCtx { infcx, param_env }, base_ty, span)
     }
@@ -245,7 +245,7 @@ impl<'a, 'db> InferenceContextAutoderef<'a, 'db> {
     pub(crate) fn new_from_inference_context(
         ctx: &'a mut InferenceContext<'db>,
         base_ty: Ty<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> Self {
         Self::new_impl(InferenceContextAutoderefCtx(ctx), base_ty, span)
     }
@@ -262,7 +262,7 @@ impl<'a, 'db> Autoderef<'a, 'db, usize> {
         infcx: &'a InferCtxt<'db>,
         param_env: ParamEnv<'db>,
         base_ty: Ty<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> Self {
         Self::new_impl(DefaultAutoderefCtx { infcx, param_env }, base_ty, span)
     }
@@ -274,7 +274,7 @@ where
     Steps: TrackAutoderefSteps<'db>,
 {
     #[inline]
-    fn new_impl(ctx: Ctx, base_ty: Ty<'db>, span: Span) -> Self {
+    fn new_impl(ctx: Ctx, base_ty: Ty<'db>, span: Span<'db>) -> Self {
         GeneralAutoderef {
             state: AutoderefSnapshot {
                 steps: Steps::default(),
@@ -410,7 +410,7 @@ fn structurally_normalize_ty<'db>(
     infcx: &InferCtxt<'db>,
     param_env: ParamEnv<'db>,
     ty: Ty<'db>,
-    span: Span,
+    span: Span<'db>,
 ) -> Option<(Ty<'db>, PredicateObligations<'db>)> {
     let mut ocx = ObligationCtxt::new(infcx);
     let Ok(normalized_ty) =

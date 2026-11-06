@@ -527,7 +527,7 @@ impl<'db> BestObligation<'db> {
 impl<'db> ProofTreeVisitor<'db> for BestObligation<'db> {
     type Result = ControlFlow<(PredicateObligation<'db>, Vec<Predicate<'db>>)>;
 
-    fn span(&self) -> Span {
+    fn span(&self) -> Span<'db> {
         self.obligation.cause.span()
     }
 
@@ -700,19 +700,19 @@ enum ChildMode<'db> {
 fn derive_cause<'db>(
     _interner: DbInterner<'db>,
     _candidate_kind: inspect::ProbeKind<DbInterner<'db>>,
-    cause: ObligationCause,
+    cause: ObligationCause<'db>,
     _idx: usize,
     _parent_trait_pred: PolyTraitPredicate<'db>,
-) -> ObligationCause {
+) -> ObligationCause<'db> {
     cause
 }
 
 fn derive_host_cause<'db>(
     _interner: DbInterner<'db>,
     _candidate_kind: inspect::ProbeKind<DbInterner<'db>>,
-    cause: ObligationCause,
+    cause: ObligationCause<'db>,
     _idx: usize,
     _parent_host_pred: Binder<'db, HostEffectPredicate<'db>>,
-) -> ObligationCause {
+) -> ObligationCause<'db> {
     cause
 }

@@ -15,7 +15,7 @@ macro_rules! register_builtin {
         }
 
         impl BuiltinAttrExpander {
-            pub fn expander(&self) -> fn (&dyn SourceDatabase, MacroCallId, &tt::TopSubtree, Span) -> ExpandResult<tt::TopSubtree>  {
+            pub fn expander(&self) -> fn(&dyn SourceDatabase, MacroCallId, &tt::TopSubtree, Span) -> ExpandResult<tt::TopSubtree>  {
                 match *self {
                     $( BuiltinAttrExpander::$variant => $expand, )*
                 }

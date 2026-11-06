@@ -28,7 +28,7 @@ enum TypeOrConst {
 }
 
 type LifetimeName = String;
-type DefaultedParam = Either<hir::TypeParam, hir::ConstParam>;
+type DefaultedParam<'db> = Either<hir::TypeParam<'db>, hir::ConstParam<'db>>;
 
 /// `PathTransform` substitutes path in SyntaxNodes in bulk.
 ///
@@ -53,20 +53,20 @@ type DefaultedParam = Either<hir::TypeParam, hir::ConstParam>;
 ///   }
 /// }
 /// ```
-pub struct PathTransform<'a> {
-    generic_def: Option<hir::GenericDef>,
+pub struct PathTransform<'a, 'db> {
+    generic_def: Option<hir::GenericDef<'db>>,
     substs: AstSubsts,
-    target_scope: &'a SemanticsScope<'a>,
-    source_scope: &'a SemanticsScope<'a>,
+    target_scope: &'a SemanticsScope<'db>,
+    source_scope: &'a SemanticsScope<'db>,
 }
 
-impl<'a> PathTransform<'a> {
+impl<'a, 'db> PathTransform<'a, 'db> {
     pub fn trait_impl(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
         trait_: hir::Trait,
         impl_: ast::Impl,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -76,11 +76,11 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn function_call(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
-        function: hir::Function,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
+        function: hir::Function<'db>,
         generic_arg_list: ast::GenericArgList,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -90,11 +90,11 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn impl_transformation(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
-        impl_: hir::Impl,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
+        impl_: hir::Impl<'db>,
         generic_arg_list: ast::GenericArgList,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -104,11 +104,11 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn adt_transformation(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
         adt: hir::Adt,
         generic_arg_list: ast::GenericArgList,
-    ) -> PathTransform<'a> {
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -118,9 +118,9 @@ impl<'a> PathTransform<'a> {
     }
 
     pub fn generic_transformation(
-        target_scope: &'a SemanticsScope<'a>,
-        source_scope: &'a SemanticsScope<'a>,
-    ) -> PathTransform<'a> {
+        target_scope: &'a SemanticsScope<'db>,
+        source_scope: &'a SemanticsScope<'db>,
+    ) -> PathTransform<'a, 'db> {
         PathTransform {
             source_scope,
             target_scope,
@@ -162,7 +162,7 @@ impl<'a> PathTransform<'a> {
         N::cast(self.prettify_target_node(node.syntax().clone())).unwrap()
     }
 
-    fn build_ctx(&self) -> Ctx<'a> {
+    fn build_ctx(&self) -> Ctx<'a, 'db> {
         let db = self.source_scope.db;
         let target_module = self.target_scope.module();
         let source_module = self.source_scope.module();
@@ -171,9 +171,9 @@ impl<'a> PathTransform<'a> {
             Some(hir::GenericDef::Trait(_)) => 1,
             _ => 0,
         };
-        let mut type_substs: FxHashMap<hir::TypeParam, ast::Type> = Default::default();
-        let mut const_substs: FxHashMap<hir::ConstParam, SyntaxNode> = Default::default();
-        let mut defaulted_params: Vec<DefaultedParam> = Default::default();
+        let mut type_substs: FxHashMap<hir::TypeParam<'_>, ast::Type> = Default::default();
+        let mut const_substs: FxHashMap<hir::ConstParam<'_>, SyntaxNode> = Default::default();
+        let mut defaulted_params: Vec<DefaultedParam<'_>> = Default::default();
         let target_edition = target_module.krate(db).edition(self.source_scope.db);
         self.generic_def
             .into_iter()
@@ -251,12 +251,12 @@ impl<'a> PathTransform<'a> {
     }
 }
 
-struct Ctx<'a> {
-    type_substs: FxHashMap<hir::TypeParam, ast::Type>,
-    const_substs: FxHashMap<hir::ConstParam, SyntaxNode>,
+struct Ctx<'a, 'db> {
+    type_substs: FxHashMap<hir::TypeParam<'db>, ast::Type>,
+    const_substs: FxHashMap<hir::ConstParam<'db>, SyntaxNode>,
     lifetime_substs: FxHashMap<LifetimeName, ast::Lifetime>,
     target_module: hir::Module,
-    source_scope: &'a SemanticsScope<'a>,
+    source_scope: &'a SemanticsScope<'db>,
     same_self_type: bool,
     target_edition: Edition,
 }
@@ -272,7 +272,7 @@ fn preorder_rev(item: &SyntaxNode) -> impl Iterator<Item = SyntaxNode> {
     x.into_iter().rev()
 }
 
-impl Ctx<'_> {
+impl<'db> Ctx<'_, 'db> {
     fn apply(&self, item: &SyntaxNode) -> SyntaxNode {
         // `transform_path` may update a node's parent and that would break the
         // tree traversal. Thus all paths in the tree are collected into a vec
@@ -287,7 +287,7 @@ impl Ctx<'_> {
         editor.finish().new_root().clone()
     }
 
-    fn transform_default_values(&mut self, defaulted_params: Vec<DefaultedParam>) {
+    fn transform_default_values(&mut self, defaulted_params: Vec<DefaultedParam<'db>>) {
         // By now the default values are simply copied from where they are declared
         // and should be transformed. As any value is allowed to refer to previous
         // generic (both type and const) parameters, they should be all iterated left-to-right.
@@ -635,7 +635,7 @@ fn get_type_args_from_arg_list(generic_arg_list: ast::GenericArgList) -> Option<
 
 fn find_trait_for_assoc_item(
     scope: &SemanticsScope<'_>,
-    type_param: hir::TypeParam,
+    type_param: hir::TypeParam<'_>,
     assoc_item: ast::NameRef,
 ) -> Option<hir::Trait> {
     let db = scope.db;

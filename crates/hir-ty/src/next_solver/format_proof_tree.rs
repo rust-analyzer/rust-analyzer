@@ -23,7 +23,7 @@ pub struct CandidateData {
 
 pub fn dump_proof_tree_structured<'db>(
     proof_tree: GoalEvaluation<DbInterner<'db>>,
-    _span: Span,
+    _span: Span<'db>,
     infcx: &InferCtxt<'db>,
 ) -> ProofTreeData {
     let goal_eval = InspectGoal::new(infcx, 0, proof_tree, None, GoalSource::Misc);

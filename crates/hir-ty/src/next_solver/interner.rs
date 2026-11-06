@@ -418,7 +418,7 @@ impl<'db> DbInterner<'db> {
     }
 }
 
-impl<'db> inherent::Span<DbInterner<'db>> for Span {
+impl<'db> inherent::Span<DbInterner<'db>> for Span<'db> {
     fn dummy() -> Self {
         Span::Dummy
     }
@@ -883,7 +883,7 @@ impl<'db> Interner for DbInterner<'db> {
     type CoroutineClosureId = CoroutineClosureIdWrapper<'db>;
     type CoroutineId = CoroutineIdWrapper<'db>;
     type AdtId = AdtIdWrapper;
-    type ImplId = AnyImplId;
+    type ImplId = AnyImplId<'db>;
     type UnevaluatedConstId = GeneralConstIdWrapper<'db>;
     type TraitAssocTyId = TraitAssocTyId;
     type TraitAssocConstId = TraitAssocConstId;
@@ -899,7 +899,7 @@ impl<'db> Interner for DbInterner<'db> {
     type InherentAssocTyId = InherentAssocTyId;
     type InherentAssocConstId = InherentAssocConstId;
     type InherentAssocTermId = InherentAssocTermId;
-    type Span = Span;
+    type Span = Span<'db>;
 
     type GenericArgs = GenericArgs<'db>;
     type GenericArgsSlice = &'db [GenericArg<'db>];
@@ -943,7 +943,7 @@ impl<'db> Interner for DbInterner<'db> {
     type Ty = Ty<'db>;
     type Tys = Tys<'db>;
     type FnInputTys = &'db [Ty<'db>];
-    type ParamTy = ParamTy;
+    type ParamTy = ParamTy<'db>;
     type Symbol = Symbol;
 
     type ErrorGuaranteed = ErrorGuaranteed;
@@ -954,7 +954,7 @@ impl<'db> Interner for DbInterner<'db> {
     type Safety = Safety;
 
     type Const = Const<'db>;
-    type ParamConst = ParamConst;
+    type ParamConst = ParamConst<'db>;
     type ValueConst = ValueConst<'db>;
     type ValTree = ValTree<'db>;
     type Consts = Consts<'db>;
@@ -1445,7 +1445,7 @@ impl<'db> Interner for DbInterner<'db> {
     ) -> R {
         let krate = self.krate.expect("trait solving requires setting `DbInterner::krate`");
         let trait_block = trait_def_id.0.loc(self.db).container.block(self.db);
-        let mut consider_impls_for_simplified_type = |simp: SimplifiedType<'_>| {
+        let mut consider_impls_for_simplified_type = |simp: SimplifiedType<'db>| {
             let type_block = simp.def().and_then(|def_id| {
                 let module = match def_id {
                     SolverDefId::AdtId(AdtId::StructId(id)) => id.module(self.db),
@@ -1821,12 +1821,12 @@ impl<'db> Interner for DbInterner<'db> {
         struct CoroutinesVisitor<'a, 'db> {
             db: &'db dyn HirDatabase,
             owner: InferBodyId<'db>,
-            store: &'db ExpressionStore,
+            store: &'db ExpressionStore<'db>,
             coroutines: &'a mut Vec<SolverDefId<'db>>,
         }
 
-        impl<'db> StoreVisitor for CoroutinesVisitor<'_, 'db> {
-            fn on_expr(&mut self, expr: ExprId) {
+        impl<'db> StoreVisitor<'db> for CoroutinesVisitor<'_, 'db> {
+            fn on_expr(&mut self, expr: ExprId<'db>) {
                 if let hir_def::hir::Expr::Closure {
                     closure_kind:
                         kind @ (hir_def::hir::ClosureKind::Coroutine { .. }
@@ -1843,11 +1843,11 @@ impl<'db> Interner for DbInterner<'db> {
 
                 self.store.visit_expr_children(expr, self);
             }
-            fn on_pat(&mut self, pat: PatId) {
+            fn on_pat(&mut self, pat: PatId<'db>) {
                 self.store.visit_pat_children(pat, self);
             }
             // Do not visit anon consts, they're separate bodies.
-            fn on_anon_const_expr(&mut self, _expr: ExprId) {}
+            fn on_anon_const_expr(&mut self, _expr: ExprId<'db>) {}
         }
     }
 
@@ -2195,12 +2195,12 @@ TrivialTypeTraversalImpls! {
     InherentAssocConstId,
     InherentAssocTermId,
     OpaqueTyIdWrapper<'_>,
-    AnyImplId,
+    AnyImplId<'_>,
     GeneralConstIdWrapper<'_>,
     Safety,
-    Span,
-    ParamConst,
-    ParamTy,
+    Span<'_>,
+    ParamConst<'_>,
+    ParamTy<'_>,
     EarlyParamRegion,
     AdtDef,
     ScalarInt,

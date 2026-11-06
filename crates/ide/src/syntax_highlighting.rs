@@ -258,8 +258,9 @@ fn traverse(
     let mut inside_attribute = false;
 
     // FIXME: accommodate range highlighting
-    let mut body_stack: Vec<Option<ExpressionStoreOwner>> = vec![];
-    let mut per_body_cache: FxHashMap<ExpressionStoreOwner, FxHashSet<_>> = FxHashMap::default();
+    let mut body_stack: Vec<Option<ExpressionStoreOwner<'_>>> = vec![];
+    let mut per_body_cache: FxHashMap<ExpressionStoreOwner<'_>, FxHashSet<_>> =
+        FxHashMap::default();
 
     // Walk all nodes, keeping track of whether we are inside a macro or not.
     // If in macro, expand it first and highlight the expanded code.

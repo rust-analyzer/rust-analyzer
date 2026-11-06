@@ -31,11 +31,11 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub enum AttrsOwner {
+pub enum AttrsOwner<'db> {
     AttrDef(AttrDefId),
-    Field(FieldId),
+    Field(FieldId<'db>),
     LifetimeParam(LifetimeParamId),
-    TypeOrConstParam(TypeOrConstParamId),
+    TypeOrConstParam(TypeOrConstParamId<'db>),
     /// Things that do not have attributes.
     ///
     /// Used for:
@@ -44,7 +44,7 @@ pub enum AttrsOwner {
     Dummy,
 }
 
-impl AttrsOwner {
+impl<'db> AttrsOwner<'db> {
     #[inline]
     fn attr_def(&self) -> Option<AttrDefId> {
         match self {
@@ -55,17 +55,17 @@ impl AttrsOwner {
 }
 
 #[derive(Debug, Clone)]
-pub struct AttrsWithOwner {
+pub struct AttrsWithOwner<'db> {
     pub(crate) attrs: AttrFlags,
-    owner: AttrsOwner,
+    owner: AttrsOwner<'db>,
 }
 
-impl AttrsWithOwner {
+impl<'db> AttrsWithOwner<'db> {
     fn new(db: &dyn HirDatabase, owner: AttrDefId) -> Self {
         Self { attrs: AttrFlags::query(db, owner), owner: AttrsOwner::AttrDef(owner) }
     }
 
-    fn new_field(db: &dyn HirDatabase, owner: FieldId) -> Self {
+    fn new_field(db: &dyn HirDatabase, owner: FieldId<'db>) -> Self {
         Self { attrs: AttrFlags::query_field(db, owner), owner: AttrsOwner::Field(owner) }
     }
 
@@ -75,7 +75,7 @@ impl AttrsWithOwner {
             owner: AttrsOwner::LifetimeParam(owner),
         }
     }
-    fn new_type_or_const_param(db: &dyn HirDatabase, owner: TypeOrConstParamId) -> Self {
+    fn new_type_or_const_param(db: &dyn HirDatabase, owner: TypeOrConstParamId<'db>) -> Self {
         Self {
             attrs: AttrFlags::query_type_or_const_param(db, owner),
             owner: AttrsOwner::TypeOrConstParam(owner),
@@ -141,7 +141,7 @@ impl AttrsWithOwner {
     }
 
     #[inline]
-    pub fn doc_aliases<'db>(&self, db: &'db dyn HirDatabase) -> &'db [Symbol] {
+    pub fn doc_aliases(&self, db: &'db dyn HirDatabase) -> &'db [Symbol] {
         let owner = match self.owner {
             AttrsOwner::AttrDef(it) => Either::Left(it),
             AttrsOwner::Field(it) => Either::Right(it),
@@ -153,7 +153,7 @@ impl AttrsWithOwner {
     }
 
     #[inline]
-    pub fn cfgs<'db>(&self, db: &'db dyn HirDatabase) -> Option<&'db CfgExpr> {
+    pub fn cfgs(&self, db: &'db dyn HirDatabase) -> Option<&'db CfgExpr> {
         let owner = match self.owner {
             AttrsOwner::AttrDef(it) => Either::Left(it),
             AttrsOwner::Field(it) => Either::Right(it),
@@ -165,7 +165,7 @@ impl AttrsWithOwner {
     }
 
     #[inline]
-    pub fn hir_docs<'db>(&self, db: &'db dyn HirDatabase) -> Option<&'db Docs> {
+    pub fn hir_docs(&self, db: &'db dyn HirDatabase) -> Option<&'db Docs> {
         match self.owner {
             AttrsOwner::AttrDef(it) => AttrFlags::docs(db, it),
             AttrsOwner::Field(it) => AttrFlags::field_docs(db, it),
@@ -176,9 +176,9 @@ impl AttrsWithOwner {
     }
 }
 
-pub trait HasAttrs: Sized {
+pub trait HasAttrs<'db>: Sized {
     #[inline]
-    fn attrs(self, db: &dyn HirDatabase) -> AttrsWithOwner {
+    fn attrs(self, db: &'db dyn HirDatabase) -> AttrsWithOwner<'db> {
         match self.attr_id(db) {
             AttrsOwner::AttrDef(it) => AttrsWithOwner::new(db, it),
             AttrsOwner::Field(it) => AttrsWithOwner::new_field(db, it),
@@ -191,10 +191,10 @@ pub trait HasAttrs: Sized {
     }
 
     #[doc(hidden)]
-    fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner;
+    fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner<'db>;
 
     #[inline]
-    fn hir_docs(self, db: &dyn HirDatabase) -> Option<&Docs> {
+    fn hir_docs(self, db: &'db dyn HirDatabase) -> Option<&'db Docs> {
         match self.attr_id(db) {
             AttrsOwner::AttrDef(it) => AttrFlags::docs(db, it),
             AttrsOwner::Field(it) => AttrFlags::field_docs(db, it),
@@ -207,9 +207,9 @@ pub trait HasAttrs: Sized {
 
 macro_rules! impl_has_attrs {
     ($(($def:ident, $def_id:ident),)*) => {$(
-        impl HasAttrs for $def {
+        impl<'db> HasAttrs<'db> for $def {
             #[inline]
-            fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+            fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
                 AttrsOwner::AttrDef(AttrDefId::$def_id(self.into()))
             }
         }
@@ -227,8 +227,8 @@ impl_has_attrs![
     (ExternCrateDecl, ExternCrateId),
 ];
 
-impl HasAttrs for Function {
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+impl<'db> HasAttrs<'db> for Function<'db> {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         match self.id {
             crate::AnyFunctionId::FunctionId(id) => AttrsOwner::AttrDef(id.into()),
             crate::AnyFunctionId::BuiltinDeriveImplMethod { .. } => AttrsOwner::Dummy,
@@ -236,8 +236,8 @@ impl HasAttrs for Function {
     }
 }
 
-impl HasAttrs for Impl {
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+impl<'db> HasAttrs<'db> for Impl<'db> {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         match self.id {
             hir_ide::next_solver::AnyImplId::ImplId(id) => AttrsOwner::AttrDef(id.into()),
             hir_ide::next_solver::AnyImplId::BuiltinDeriveImplId(..) => AttrsOwner::Dummy,
@@ -246,10 +246,10 @@ impl HasAttrs for Impl {
 }
 
 macro_rules! impl_has_attrs_enum {
-    ($($variant:ident),* for $enum:ident) => {$(
-        impl HasAttrs for $variant {
+    ($($variant:ident $(<$db:lifetime>)?),* for $enum:ident) => {$(
+        impl<'db> HasAttrs<'db> for $variant$(<$db>)? {
             #[inline]
-            fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
+            fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
                 $enum::$variant(self).attr_id(db)
             }
         }
@@ -257,18 +257,18 @@ macro_rules! impl_has_attrs_enum {
 }
 
 impl_has_attrs_enum![Struct, Union, Enum for Adt];
-impl_has_attrs_enum![TypeParam, ConstParam, LifetimeParam for GenericParam];
+impl_has_attrs_enum![TypeParam<'db>, ConstParam<'db>, LifetimeParam for GenericParam];
 
-impl HasAttrs for Module {
+impl<'db> HasAttrs<'db> for Module {
     #[inline]
-    fn attr_id(self, _: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, _: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         AttrsOwner::AttrDef(AttrDefId::ModuleId(self.id))
     }
 }
 
-impl HasAttrs for GenericParam {
+impl<'db> HasAttrs<'db> for GenericParam<'db> {
     #[inline]
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         match self {
             GenericParam::TypeParam(it) => AttrsOwner::TypeOrConstParam(it.merge().into()),
             GenericParam::ConstParam(it) => AttrsOwner::TypeOrConstParam(it.merge().into()),
@@ -277,9 +277,9 @@ impl HasAttrs for GenericParam {
     }
 }
 
-impl HasAttrs for AssocItem {
+impl<'db> HasAttrs<'db> for AssocItem<'db> {
     #[inline]
-    fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         match self {
             AssocItem::Function(it) => it.attr_id(db),
             AssocItem::Const(it) => it.attr_id(db),
@@ -288,38 +288,38 @@ impl HasAttrs for AssocItem {
     }
 }
 
-impl HasAttrs for crate::Crate {
+impl<'db> HasAttrs<'db> for crate::Crate {
     #[inline]
-    fn attr_id(self, db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         self.root_module(db).attr_id(db)
     }
 }
 
-impl HasAttrs for Field {
+impl<'db> HasAttrs<'db> for Field<'db> {
     #[inline]
-    fn attr_id(self, _db: &dyn HirDatabase) -> AttrsOwner {
+    fn attr_id(self, _db: &'db dyn HirDatabase) -> AttrsOwner<'db> {
         AttrsOwner::Field(self.into())
     }
 }
 
 /// Resolves the item `link` points to in the scope of `def`.
-pub fn resolve_doc_path_on(
-    db: &dyn HirDatabase,
-    def: impl HasAttrs + Copy,
+pub fn resolve_doc_path_on<'db>(
+    db: &'db dyn HirDatabase,
+    def: impl HasAttrs<'db> + Copy,
     link: &str,
     ns: Option<Namespace>,
     is_inner_doc: IsInnerDoc,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     resolve_doc_path_on_(db, link, def.attr_id(db), ns, is_inner_doc)
 }
 
-fn resolve_doc_path_on_(
-    db: &dyn HirDatabase,
+fn resolve_doc_path_on_<'db>(
+    db: &'db dyn HirDatabase,
     link: &str,
-    attr_id: AttrsOwner,
+    attr_id: AttrsOwner<'db>,
     ns: Option<Namespace>,
     is_inner_doc: IsInnerDoc,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     let resolver = match attr_id {
         AttrsOwner::AttrDef(AttrDefId::ModuleId(it)) => {
             if is_inner_doc.yes() {
@@ -369,13 +369,13 @@ fn resolve_doc_path_on_(
     }
 }
 
-fn resolve_assoc_or_field(
-    db: &dyn HirDatabase,
-    resolver: Resolver<'_>,
+fn resolve_assoc_or_field<'db>(
+    db: &'db dyn HirDatabase,
+    resolver: Resolver<'db>,
     path: ModPath,
     name: Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     let path = Path::from_known_path_with_no_generic(path);
     let base_def = resolver.resolve_path_in_type_ns_fully(db, &path)?;
 
@@ -472,7 +472,7 @@ fn resolve_assoc_item<'db>(
     ty: &Type<'db>,
     name: &Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     ty.iterate_assoc_items(db, move |assoc_item| {
         if assoc_item.name(db)? != *name {
             return None;
@@ -483,11 +483,11 @@ fn resolve_assoc_item<'db>(
 
 fn resolve_impl_trait_item<'db>(
     db: &'db dyn HirDatabase,
-    resolver: Resolver<'_>,
+    resolver: Resolver<'db>,
     ty: &Type<'db>,
     name: &Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'static>> {
     let krate = ty.krate(db);
     let param_env = ty.param_env(db);
     let traits_in_scope = resolver.traits_in_scope(db);
@@ -523,22 +523,22 @@ fn resolve_impl_trait_item<'db>(
     as_module_def_if_namespace_matches(resolution, ns)
 }
 
-fn resolve_field(
-    db: &dyn HirDatabase,
+fn resolve_field<'db>(
+    db: &'db dyn HirDatabase,
     def: Variant,
     name: Name,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     if let Some(Namespace::Types | Namespace::Macros) = ns {
         return None;
     }
     def.fields(db).into_iter().find(|f| f.name(db) == name).map(DocLinkDef::Field)
 }
 
-fn as_module_def_if_namespace_matches(
-    assoc_item: AssocItem,
+fn as_module_def_if_namespace_matches<'db>(
+    assoc_item: AssocItem<'db>,
     ns: Option<Namespace>,
-) -> Option<DocLinkDef> {
+) -> Option<DocLinkDef<'db>> {
     let (def, expected_ns) = match assoc_item {
         AssocItem::Function(it) => (ModuleDef::Function(it), Namespace::Values),
         AssocItem::Const(it) => (ModuleDef::Const(it), Namespace::Values),

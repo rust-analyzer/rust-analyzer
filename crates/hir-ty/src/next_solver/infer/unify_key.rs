@@ -13,8 +13,8 @@ use crate::{
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum RegionVariableValue<'db> {
-    Known { value: Region<'db>, span: Option<Span> },
-    Unknown { universe: UniverseIndex, span: Span },
+    Known { value: Region<'db>, span: Option<Span<'db>> },
+    Unknown { universe: UniverseIndex, span: Span<'db> },
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -106,7 +106,7 @@ impl<'db> UnifyValue for RegionVariableValue<'db> {
 #[derive(Clone, Copy, Debug)]
 pub(crate) enum ConstVariableValue<'db> {
     Known { value: Const<'db> },
-    Unknown { span: Span, universe: UniverseIndex },
+    Unknown { span: Span<'db>, universe: UniverseIndex },
 }
 
 impl<'db> ConstVariableValue<'db> {

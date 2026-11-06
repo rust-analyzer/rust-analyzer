@@ -113,7 +113,7 @@ fn add_vis_to_referenced_module_def(acc: &mut Assists, ctx: &AssistContext<'_, '
 
 fn target_data_for_def(
     db: &dyn HirDatabase,
-    def: hir::ModuleDef,
+    def: hir::ModuleDef<'_>,
 ) -> Option<(ast::AnyHasVisibility, TextRange, FileId, Option<hir::Name>)> {
     fn offset_target_and_file_id<S, Ast>(
         db: &dyn HirDatabase,

@@ -69,7 +69,11 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         (SolverContext(infcx), value, vars)
     }
 
-    fn fresh_var_for_kind_with_span(&self, arg: GenericArg<'db>, span: Span) -> GenericArg<'db> {
+    fn fresh_var_for_kind_with_span(
+        &self,
+        arg: GenericArg<'db>,
+        span: Span<'db>,
+    ) -> GenericArg<'db> {
         match arg.kind() {
             GenericArgKind::Lifetime(_) => self.next_region_var(span).into(),
             GenericArgKind::Type(_) => self.next_ty_var(span).into(),
@@ -121,7 +125,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
     fn instantiate_canonical_var(
         &self,
         kind: CanonicalVarKind<'db>,
-        span: Span,
+        span: Span<'db>,
         var_values: &[GenericArg<'db>],
         universe_map: impl Fn(rustc_type_ir::UniverseIndex) -> rustc_type_ir::UniverseIndex,
     ) -> GenericArg<'db> {
@@ -177,7 +181,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         &self,
         _goal_trait_ref: rustc_type_ir::TraitRef<Self::Interner>,
         trait_assoc_def_id: TraitAssocTermId,
-        impl_id: AnyImplId,
+        impl_id: AnyImplId<'_>,
     ) -> FetchEligibleAssocItemResponse<Self::Interner> {
         let AnyImplId::ImplId(impl_id) = impl_id else {
             // Builtin derive traits don't have type/consts assoc items.

@@ -3,6 +3,7 @@
 use base_db::SourceDatabase;
 use hir_expand::mod_path::PathKind;
 use rustc_hash::FxHashSet;
+use salsa::SalsaValue;
 
 use crate::{
     DefWithBodyId, ExpressionStoreOwnerId, GenericDefId, ThinFxHashMap, VariantId,
@@ -12,7 +13,7 @@ use crate::{
     type_ref::TypeRefId,
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
 // Kept sorted.
 pub struct Upvars(Box<[BindingId]>);
 
@@ -71,10 +72,10 @@ impl UpvarsRef<'_> {
 }
 
 /// Returns a map from `Expr::Closure` to its upvars.
-pub fn upvars_mentioned(
-    db: &dyn SourceDatabase,
+pub fn upvars_mentioned<'db>(
+    db: &'db dyn SourceDatabase,
     owner: ExpressionStoreOwnerId,
-) -> &ThinFxHashMap<ExprId, Upvars> {
+) -> &'db ThinFxHashMap<ExprId<'db>, Upvars> {
     return match owner {
         ExpressionStoreOwnerId::Signature(owner) => signature_upvars_mentioned(db, owner),
         ExpressionStoreOwnerId::Body(owner) => body_upvars_mentioned(db, owner),
@@ -82,34 +83,34 @@ pub fn upvars_mentioned(
     };
 
     #[salsa::tracked]
-    pub fn signature_upvars_mentioned(
-        db: &dyn SourceDatabase,
+    pub fn signature_upvars_mentioned<'db>(
+        db: &'db dyn SourceDatabase,
         owner: GenericDefId,
-    ) -> ThinFxHashMap<ExprId, Upvars> {
+    ) -> ThinFxHashMap<ExprId<'db>, Upvars> {
         upvars_mentioned_impl(db, owner.into())
     }
 
     #[salsa::tracked]
-    pub fn body_upvars_mentioned(
-        db: &dyn SourceDatabase,
+    pub fn body_upvars_mentioned<'db>(
+        db: &'db dyn SourceDatabase,
         owner: DefWithBodyId,
-    ) -> ThinFxHashMap<ExprId, Upvars> {
+    ) -> ThinFxHashMap<ExprId<'db>, Upvars> {
         upvars_mentioned_impl(db, owner.into())
     }
 
     #[salsa::tracked]
-    pub fn variant_fields_upvars_mentioned(
-        db: &dyn SourceDatabase,
+    pub fn variant_fields_upvars_mentioned<'db>(
+        db: &'db dyn SourceDatabase,
         owner: VariantId,
-    ) -> ThinFxHashMap<ExprId, Upvars> {
+    ) -> ThinFxHashMap<ExprId<'db>, Upvars> {
         upvars_mentioned_impl(db, owner.into())
     }
 }
 
-pub fn upvars_mentioned_impl(
-    db: &dyn SourceDatabase,
+pub fn upvars_mentioned_impl<'db>(
+    db: &'db dyn SourceDatabase,
     owner: ExpressionStoreOwnerId,
-) -> ThinFxHashMap<ExprId, Upvars> {
+) -> ThinFxHashMap<ExprId<'db>, Upvars> {
     let store = ExpressionStore::of(db, owner);
     if store.expr_roots().next().is_none() {
         return ThinFxHashMap::new();
@@ -133,13 +134,13 @@ struct UpvarsMentionedVisitor<'db> {
     db: &'db dyn SourceDatabase,
     resolver: Resolver<'db>,
     owner: ExpressionStoreOwnerId,
-    store: &'db ExpressionStore,
-    closures_map: ThinFxHashMap<ExprId, Upvars>,
-    current_closure: Option<(ExprId, FxHashSet<BindingId>)>,
+    store: &'db ExpressionStore<'db>,
+    closures_map: ThinFxHashMap<ExprId<'db>, Upvars>,
+    current_closure: Option<(ExprId<'db>, FxHashSet<BindingId>)>,
 }
 
-impl UpvarsMentionedVisitor<'_> {
-    fn resolve_maybe_upvar(&mut self, expr: ExprId, path: &Path) {
+impl<'db> UpvarsMentionedVisitor<'db> {
+    fn resolve_maybe_upvar(&mut self, expr: ExprId<'db>, path: &Path<'db>) {
         let Some((current_closure, upvars)) = &mut self.current_closure else { return };
 
         if let Path::BarePath(mod_path) = path
@@ -164,8 +165,8 @@ impl UpvarsMentionedVisitor<'_> {
     }
 }
 
-impl StoreVisitor for UpvarsMentionedVisitor<'_> {
-    fn on_expr(&mut self, expr: ExprId) {
+impl<'db> StoreVisitor<'db> for UpvarsMentionedVisitor<'db> {
+    fn on_expr(&mut self, expr: ExprId<'db>) {
         match &self.store[expr] {
             Expr::Path(path) => {
                 self.resolve_maybe_upvar(expr, path);
@@ -202,18 +203,18 @@ impl StoreVisitor for UpvarsMentionedVisitor<'_> {
         }
     }
 
-    fn on_anon_const_expr(&mut self, expr: ExprId) {
+    fn on_anon_const_expr(&mut self, expr: ExprId<'db>) {
         // Anon consts don't contribute upvars.
         let old_current_closure = self.current_closure.take();
         self.on_expr(expr);
         self.current_closure = old_current_closure;
     }
 
-    fn on_pat(&mut self, pat: PatId) {
+    fn on_pat(&mut self, pat: PatId<'db>) {
         self.store.visit_pat_children(pat, self);
     }
 
-    fn on_type(&mut self, ty: TypeRefId) {
+    fn on_type(&mut self, ty: TypeRefId<'db>) {
         // Anon consts don't contribute upvars.
         let old_current_closure = self.current_closure.take();
         self.store.visit_type_ref_children(ty, &mut *self);

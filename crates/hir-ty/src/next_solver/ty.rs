@@ -104,7 +104,7 @@ impl<'db> Ty<'db> {
         Ty::new(interner, TyKind::Adt(AdtDef::new(adt_id, interner), args))
     }
 
-    pub fn new_param(interner: DbInterner<'db>, id: TypeParamId, index: u32) -> Self {
+    pub fn new_param(interner: DbInterner<'db>, id: TypeParamId<'db>, index: u32) -> Self {
         Ty::new(interner, TyKind::Param(ParamTy { id, index }))
     }
 
@@ -1122,7 +1122,7 @@ impl<'db> rustc_type_ir::inherent::Ty<DbInterner<'db>> for Ty<'db> {
         Ty::new(interner, TyKind::Infer(rustc_type_ir::InferTy::TyVar(var)))
     }
 
-    fn new_param(interner: DbInterner<'db>, param: ParamTy) -> Self {
+    fn new_param(interner: DbInterner<'db>, param: ParamTy<'db>) -> Self {
         Ty::new(interner, TyKind::Param(param))
     }
 
@@ -1439,21 +1439,21 @@ impl<'db> rustc_type_ir::inherent::Tys<DbInterner<'db>> for Tys<'db> {
 pub type PlaceholderType<'db> = rustc_type_ir::PlaceholderType<DbInterner<'db>>;
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
-pub struct ParamTy {
+pub struct ParamTy<'db> {
     // FIXME: I'm not pleased with this. Ideally a `Param` should only know its index - the defining item
     // is known from the `EarlyBinder`. This should also be beneficial for memory usage. But code currently
     // assumes it can get the definition from `Param` alone - so that's what we got.
-    pub id: TypeParamId,
+    pub id: TypeParamId<'db>,
     pub index: u32,
 }
 
-impl ParamTy {
-    pub fn to_ty<'db>(self, interner: DbInterner<'db>) -> Ty<'db> {
+impl<'db> ParamTy<'db> {
+    pub fn to_ty(self, interner: DbInterner<'db>) -> Ty<'db> {
         Ty::new_param(interner, self.id, self.index)
     }
 }
 
-impl std::fmt::Debug for ParamTy {
+impl<'db> std::fmt::Debug for ParamTy<'db> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "#{}", self.index)
     }
@@ -1490,7 +1490,7 @@ impl<'db> TypeFoldable<DbInterner<'db>> for ErrorGuaranteed {
     }
 }
 
-impl ParamLike for ParamTy {
+impl<'db> ParamLike for ParamTy<'db> {
     fn index(self) -> u32 {
         self.index
     }

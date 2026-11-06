@@ -737,7 +737,7 @@ impl HirWrite for InlayHintLabelBuilder<'_, '_> {
         });
     }
 
-    fn start_location_link_generic(&mut self, def: GenericParamId) {
+    fn start_location_link_generic(&mut self, def: GenericParamId<'_>) {
         never!(self.location.is_some(), "location link is already started");
         self.make_new_part();
 
@@ -811,7 +811,7 @@ fn label_of_ty<'db>(
                 });
 
                 let module_def_location = |label_builder: &mut InlayHintLabelBuilder<'_, '_>,
-                                           def: ModuleDef,
+                                           def: ModuleDef<'_>,
                                            name| {
                     let def = def.try_into();
                     if let Ok(def) = def {

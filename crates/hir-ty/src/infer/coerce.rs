@@ -84,7 +84,7 @@ trait CoerceDelegate<'db> {
     fn type_var_is_sized(&self, var: TyVid) -> bool;
 }
 
-struct Coerce<D> {
+struct Coerce<'db, D> {
     delegate: D,
     use_lub: bool,
     /// Determines whether or not allow_two_phase_borrow is set on any
@@ -99,7 +99,7 @@ struct Coerce<D> {
     /// This is a side-effect of HIR not really having a great distinction
     /// between places and values.
     coerce_never: bool,
-    cause: ObligationCause,
+    cause: ObligationCause<'db>,
 }
 
 type CoerceResult<'db> = InferResult<'db, (Vec<Adjustment>, Ty<'db>)>;
@@ -119,7 +119,7 @@ fn success<'db>(
     Ok(InferOk { value: (adj, target), obligations })
 }
 
-impl<'db, D> Coerce<D>
+impl<'db, D> Coerce<'db, D>
 where
     D: CoerceDelegate<'db>,
 {
@@ -891,7 +891,7 @@ impl<'db> InferenceContext<'db> {
     /// The expressions *must not* have any preexisting adjustments.
     pub(crate) fn coerce(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         expr_ty: Ty<'db>,
         mut target: Ty<'db>,
         allow_two_phase: AllowTwoPhase,
@@ -925,9 +925,9 @@ impl<'db> InferenceContext<'db> {
     /// module, you should instantiate a `CoerceMany` instance.
     fn try_find_coercion_lub(
         &mut self,
-        exprs: &[ExprId],
+        exprs: &[ExprId<'db>],
         prev_ty: Ty<'db>,
-        new: ExprId,
+        new: ExprId<'db>,
         new_ty: Ty<'db>,
     ) -> RelateResult<'db, Ty<'db>> {
         let prev_ty = self.table.try_structurally_resolve_type(new.into(), prev_ty);
@@ -1169,7 +1169,7 @@ impl<'db> InferenceContext<'db> {
 pub(crate) struct CoerceMany<'db, 'exprs> {
     expected_ty: Ty<'db>,
     final_ty: Option<Ty<'db>>,
-    expressions: Expressions<'exprs>,
+    expressions: Expressions<'db, 'exprs>,
     pushed: usize,
 }
 
@@ -1178,9 +1178,9 @@ pub(crate) struct CoerceMany<'db, 'exprs> {
 pub(crate) type DynamicCoerceMany<'db> = CoerceMany<'db, 'db>;
 
 #[derive(Debug, Clone)]
-enum Expressions<'exprs> {
-    Dynamic(SmallVec<[ExprId; 4]>),
-    UpFront(&'exprs [ExprId]),
+enum Expressions<'db, 'exprs> {
+    Dynamic(SmallVec<[ExprId<'db>; 4]>),
+    UpFront(&'exprs [ExprId<'db>]),
 }
 
 impl<'db, 'exprs> CoerceMany<'db, 'exprs> {
@@ -1198,12 +1198,12 @@ impl<'db, 'exprs> CoerceMany<'db, 'exprs> {
     /// needlessly cloning the slice.
     pub(crate) fn with_coercion_sites(
         expected_ty: Ty<'db>,
-        coercion_sites: &'exprs [ExprId],
+        coercion_sites: &'exprs [ExprId<'db>],
     ) -> Self {
         Self::make(expected_ty, Expressions::UpFront(coercion_sites))
     }
 
-    fn make(expected_ty: Ty<'db>, expressions: Expressions<'exprs>) -> Self {
+    fn make(expected_ty: Ty<'db>, expressions: Expressions<'db, 'exprs>) -> Self {
         CoerceMany { expected_ty, final_ty: None, expressions, pushed: 0 }
     }
 
@@ -1235,8 +1235,8 @@ impl<'db, 'exprs> CoerceMany<'db, 'exprs> {
     pub(crate) fn coerce(
         &mut self,
         icx: &mut InferenceContext<'db>,
-        cause: &ObligationCause,
-        expression: ExprId,
+        cause: &ObligationCause<'db>,
+        expression: ExprId<'db>,
         expression_ty: Ty<'db>,
         expr_is_read: ExprIsRead,
     ) {
@@ -1258,8 +1258,8 @@ impl<'db, 'exprs> CoerceMany<'db, 'exprs> {
     pub(crate) fn coerce_forced_unit(
         &mut self,
         icx: &mut InferenceContext<'db>,
-        expr: ExprId,
-        cause: &ObligationCause,
+        expr: ExprId<'db>,
+        cause: &ObligationCause<'db>,
         label_unit_as_expected: bool,
         expr_is_read: ExprIsRead,
     ) {
@@ -1280,8 +1280,8 @@ impl<'db, 'exprs> CoerceMany<'db, 'exprs> {
     pub(crate) fn coerce_inner(
         &mut self,
         icx: &mut InferenceContext<'db>,
-        cause: &ObligationCause,
-        expression: ExprId,
+        cause: &ObligationCause<'db>,
+        expression: ExprId<'db>,
         mut expression_ty: Ty<'db>,
         force_unit: bool,
         label_expression_as_expected: bool,
@@ -1600,7 +1600,7 @@ fn is_capturing_closure(db: &dyn HirDatabase, closure: InternedClosureId<'_>) ->
 /// Recursively visit goals to decide whether an unsizing is possible.
 /// `Break`s when it isn't, and an error should be raised.
 /// `Continue`s when an unsizing ok based on an implementation of the `Unsize` trait / lang item.
-struct CoerceVisitor<'a, D> {
+struct CoerceVisitor<'a, 'db, D> {
     delegate: &'a D,
     /// Whether the coercion is impossible. If so we sometimes still try to
     /// coerce in these cases to emit better errors. This changes the behavior
@@ -1608,13 +1608,13 @@ struct CoerceVisitor<'a, D> {
     errored: bool,
     unsize_did: TraitId,
     coerce_unsized_did: TraitId,
-    span: Span,
+    span: Span<'db>,
 }
 
-impl<'a, 'db, D: CoerceDelegate<'db>> ProofTreeVisitor<'db> for CoerceVisitor<'a, D> {
+impl<'a, 'db, D: CoerceDelegate<'db>> ProofTreeVisitor<'db> for CoerceVisitor<'a, 'db, D> {
     type Result = ControlFlow<()>;
 
-    fn span(&self) -> Span {
+    fn span(&self) -> Span<'db> {
         self.span
     }
 

@@ -55,7 +55,7 @@ pub(crate) enum ExprIsRead {
 impl<'db> InferenceContext<'db> {
     pub(crate) fn infer_expr(
         &mut self,
-        tgt_expr: ExprId,
+        tgt_expr: ExprId<'db>,
         expected: &Expectation<'db>,
         is_read: ExprIsRead,
     ) -> Ty<'db> {
@@ -68,7 +68,7 @@ impl<'db> InferenceContext<'db> {
 
     pub(crate) fn infer_expr_suptype_coerce_never(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         expected: &Expectation<'db>,
         is_read: ExprIsRead,
     ) -> Ty<'db> {
@@ -98,7 +98,7 @@ impl<'db> InferenceContext<'db> {
 
     pub(crate) fn infer_expr_no_expect(
         &mut self,
-        tgt_expr: ExprId,
+        tgt_expr: ExprId<'db>,
         is_read: ExprIsRead,
     ) -> Ty<'db> {
         self.infer_expr_inner(tgt_expr, &Expectation::None, is_read)
@@ -108,7 +108,7 @@ impl<'db> InferenceContext<'db> {
     /// Return the type after possible coercion.
     pub(super) fn infer_expr_coerce(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         expected: &Expectation<'db>,
         is_read: ExprIsRead,
     ) -> Ty<'db> {
@@ -139,7 +139,7 @@ impl<'db> InferenceContext<'db> {
     /// expressions take a *place* and not a value.
     pub(super) fn expr_guaranteed_to_constitute_read_for_never(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         is_read: ExprIsRead,
     ) -> bool {
         // rustc queries parent hir node of `expr` here and determine whether
@@ -163,7 +163,7 @@ impl<'db> InferenceContext<'db> {
     /// Whether this pattern constitutes a read of value of the scrutinee that
     /// it is matching against. This is used to determine whether we should
     /// perform `NeverToAny` coercions.
-    fn pat_guaranteed_to_constitute_read_for_never(&self, pat: PatId) -> bool {
+    fn pat_guaranteed_to_constitute_read_for_never(&self, pat: PatId<'db>) -> bool {
         match &self.store[pat] {
             // Does not constitute a read.
             Pat::Wild | Pat::Rest => false,
@@ -206,7 +206,7 @@ impl<'db> InferenceContext<'db> {
     //
     // FIXME(tschottdorf): this is problematic as the HIR is being scraped, but
     // ref bindings are be implicit after #42640 (default match binding modes). See issue #44848.
-    fn contains_explicit_ref_binding(&self, pat: PatId) -> bool {
+    fn contains_explicit_ref_binding(&self, pat: PatId<'db>) -> bool {
         if let Pat::Bind { id, .. } = self.store[pat]
             && matches!(self.store[id].mode, BindingAnnotation::Ref | BindingAnnotation::RefMut)
         {
@@ -218,7 +218,7 @@ impl<'db> InferenceContext<'db> {
         result
     }
 
-    fn is_syntactic_place_expr(&mut self, expr: ExprId) -> bool {
+    fn is_syntactic_place_expr(&mut self, expr: ExprId<'db>) -> bool {
         match &self.store[expr] {
             // Lang item paths cannot currently be local variables or statics.
             Expr::Path(Path::LangItem(_, _)) => false,
@@ -273,7 +273,7 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    pub(crate) fn check_lhs_assignable(&mut self, lhs: ExprId) {
+    pub(crate) fn check_lhs_assignable(&mut self, lhs: ExprId<'db>) {
         if self.is_syntactic_place_expr(lhs) {
             return;
         }
@@ -283,7 +283,7 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_expr_coerce_never(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         expected: &Expectation<'db>,
         is_read: ExprIsRead,
     ) -> Ty<'db> {
@@ -316,7 +316,7 @@ impl<'db> InferenceContext<'db> {
     #[tracing::instrument(level = "debug", skip(self, is_read), ret)]
     pub(super) fn infer_expr_inner(
         &mut self,
-        tgt_expr: ExprId,
+        tgt_expr: ExprId<'db>,
         expected: &Expectation<'db>,
         is_read: ExprIsRead,
     ) -> Ty<'db> {
@@ -877,9 +877,9 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         rawness: Rawness,
         mutbl: Mutability,
-        oprnd: ExprId,
+        oprnd: ExprId<'db>,
         expected: &Expectation<'db>,
-        expr: ExprId,
+        expr: ExprId<'db>,
     ) -> Ty<'db> {
         let hint = expected.only_has_type(&mut self.table).map_or(Expectation::None, |ty| {
             match self.table.resolve_vars_with_obligations(ty).kind() {
@@ -921,7 +921,7 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn infer_await_expr(&mut self, expr: ExprId, awaitee: ExprId) -> Ty<'db> {
+    fn infer_await_expr(&mut self, expr: ExprId<'db>, awaitee: ExprId<'db>) -> Ty<'db> {
         let awaitee_ty = self.infer_expr_no_expect(awaitee, ExprIsRead::Yes);
         let (Some(into_future), Some(into_future_output)) =
             (self.lang_items.IntoFuture, self.lang_items.IntoFutureOutput)
@@ -937,11 +937,11 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_record_expr(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         expected: &Expectation<'db>,
-        path: &Path,
-        fields: &[RecordLitField],
-        base_expr: RecordSpread,
+        path: &Path<'db>,
+        fields: &[RecordLitField<'db>],
+        base_expr: RecordSpread<'db>,
     ) -> Ty<'db> {
         // Find the relevant variant
         let (adt_ty, Some(variant)) = self.resolve_variant(expr.into(), path, false) else {
@@ -969,10 +969,10 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         adt_ty: Ty<'db>,
         expected: &Expectation<'db>,
-        expr: ExprId,
+        expr: ExprId<'db>,
         variant: VariantId,
-        hir_fields: &[RecordLitField],
-        base_expr: RecordSpread,
+        hir_fields: &[RecordLitField<'db>],
+        base_expr: RecordSpread<'db>,
     ) {
         let interner = self.interner();
 
@@ -1172,7 +1172,7 @@ impl<'db> InferenceContext<'db> {
 
     fn demand_scrutinee_type(
         &mut self,
-        scrut: ExprId,
+        scrut: ExprId<'db>,
         contains_ref_bindings: bool,
         no_arms: bool,
         scrutinee_is_read: ExprIsRead,
@@ -1241,7 +1241,12 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn infer_expr_path(&mut self, path: &Path, id: ExprOrPatIdPacked, scope_id: ExprId) -> Ty<'db> {
+    fn infer_expr_path(
+        &mut self,
+        path: &Path<'db>,
+        id: ExprOrPatIdPacked,
+        scope_id: ExprId<'db>,
+    ) -> Ty<'db> {
         let g = self.resolver.update_to_inner_scope(self.db, self.store_owner, scope_id);
         let ty = match self.infer_path(path, id) {
             Some((_, ty)) => ty,
@@ -1260,9 +1265,9 @@ impl<'db> InferenceContext<'db> {
     fn infer_unop_expr(
         &mut self,
         unop: UnaryOp,
-        oprnd: ExprId,
+        oprnd: ExprId<'db>,
         expected: &Expectation<'db>,
-        expr: ExprId,
+        expr: ExprId<'db>,
     ) -> Ty<'db> {
         let expected_inner = match unop {
             UnaryOp::Not | UnaryOp::Neg => expected,
@@ -1303,10 +1308,10 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_array_repeat_expr(
         &mut self,
-        element: ExprId,
-        count: ExprId,
+        element: ExprId<'db>,
+        count: ExprId<'db>,
         expected: &Expectation<'db>,
-        expr: ExprId,
+        expr: ExprId<'db>,
     ) -> Ty<'db> {
         let interner = self.interner();
         let count_ct = self.create_anon_const(count, self.types.types.usize);
@@ -1346,9 +1351,9 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_array_elements_expr(
         &mut self,
-        args: &[ExprId],
+        args: &[ExprId<'db>],
         expected: &Expectation<'db>,
-        expr: ExprId,
+        expr: ExprId<'db>,
     ) -> Ty<'db> {
         let element_ty = if !args.is_empty() {
             let coerce_to = expected
@@ -1383,7 +1388,7 @@ impl<'db> InferenceContext<'db> {
         Ty::new_array(self.interner(), element_ty, array_len)
     }
 
-    pub(super) fn infer_return(&mut self, expr: ExprId) {
+    pub(super) fn infer_return(&mut self, expr: ExprId<'db>) {
         let ret_ty = self
             .return_coercion
             .as_mut()
@@ -1402,7 +1407,7 @@ impl<'db> InferenceContext<'db> {
         self.return_coercion = Some(coerce_many);
     }
 
-    fn infer_expr_return(&mut self, ret: ExprId, expr: Option<ExprId>) -> Ty<'db> {
+    fn infer_expr_return(&mut self, ret: ExprId<'db>, expr: Option<ExprId<'db>>) -> Ty<'db> {
         match self.return_coercion {
             Some(_) => {
                 if let Some(expr) = expr {
@@ -1432,7 +1437,7 @@ impl<'db> InferenceContext<'db> {
         self.types.types.never
     }
 
-    fn infer_expr_become(&mut self, tgt_expr: ExprId, expr: ExprId) -> Ty<'db> {
+    fn infer_expr_become(&mut self, tgt_expr: ExprId<'db>, expr: ExprId<'db>) -> Ty<'db> {
         match &self.return_coercion {
             Some(return_coercion) => {
                 let ret_ty = return_coercion.expected_ty();
@@ -1458,9 +1463,9 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_block(
         &mut self,
-        expr: ExprId,
-        statements: &[Statement],
-        tail: Option<ExprId>,
+        expr: ExprId<'db>,
+        statements: &[Statement<'db>],
+        tail: Option<ExprId<'db>>,
         label: Option<LabelId>,
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
@@ -1562,8 +1567,8 @@ impl<'db> InferenceContext<'db> {
     fn infer_let(
         &mut self,
         decl_ty: Ty<'db>,
-        initializer: Option<ExprId>,
-        pat: PatId,
+        initializer: Option<ExprId<'db>>,
+        pat: PatId<'db>,
         pat_origin: PatOrigin,
     ) {
         if let Some(expr) = initializer {
@@ -1586,10 +1591,10 @@ impl<'db> InferenceContext<'db> {
 
     fn lookup_field(
         &mut self,
-        field_expr: ExprId,
+        field_expr: ExprId<'db>,
         receiver_ty: Ty<'db>,
         name: &Name,
-    ) -> Option<(Ty<'db>, Either<FieldId, TupleFieldId>, Vec<Adjustment>, bool)> {
+    ) -> Option<(Ty<'db>, Either<FieldId<'db>, TupleFieldId>, Vec<Adjustment>, bool)> {
         let interner = self.interner();
         let mut autoderef = self.table.autoderef_with_tracking(receiver_ty, field_expr.into());
         let mut private_field = None;
@@ -1666,8 +1671,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_field_access(
         &mut self,
-        tgt_expr: ExprId,
-        receiver: ExprId,
+        tgt_expr: ExprId<'db>,
+        receiver: ExprId<'db>,
         name: &Name,
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
@@ -1739,8 +1744,8 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_method_call_as_call(
         &mut self,
-        tgt_expr: ExprId,
-        args: &[ExprId],
+        tgt_expr: ExprId<'db>,
+        args: &[ExprId<'db>],
         callee_ty: Ty<'db>,
         param_tys: &[Ty<'db>],
         ret_ty: Ty<'db>,
@@ -1772,11 +1777,11 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_method_call(
         &mut self,
-        tgt_expr: ExprId,
-        receiver: ExprId,
-        args: &[ExprId],
+        tgt_expr: ExprId<'db>,
+        receiver: ExprId<'db>,
+        args: &[ExprId<'db>],
         method_name: &Name,
-        generic_args: Option<&HirGenericArgs>,
+        generic_args: Option<&HirGenericArgs<'db>>,
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
         let receiver_ty = self.infer_expr_inner(receiver, &Expectation::none(), ExprIsRead::Yes);
@@ -1890,8 +1895,8 @@ impl<'db> InferenceContext<'db> {
 
     fn check_method_call(
         &mut self,
-        tgt_expr: ExprId,
-        args: &[ExprId],
+        tgt_expr: ExprId<'db>,
+        args: &[ExprId<'db>],
         sig: FnSig<'db>,
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
@@ -1919,14 +1924,14 @@ impl<'db> InferenceContext<'db> {
     /// method calls and overloaded operators.
     pub(super) fn check_call_arguments(
         &mut self,
-        call_expr: ExprId,
+        call_expr: ExprId<'db>,
         // Types (as defined in the *signature* of the target function)
         formal_input_tys: &[Ty<'db>],
         formal_output: Ty<'db>,
         // Expected output from the parent expression or statement
         expectation: &Expectation<'db>,
         // The expressions for each provided argument
-        provided_args: &[ExprId],
+        provided_args: &[ExprId<'db>],
         skip_indices: &[u32],
         // Whether the function is variadic, for example when imported from C
         c_variadic: bool,

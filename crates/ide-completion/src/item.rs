@@ -473,12 +473,12 @@ pub enum CompletionItemRefMode {
 }
 
 impl CompletionItem {
-    pub(crate) fn new(
+    pub(crate) fn new<'db>(
         kind: impl Into<CompletionItemKind>,
         source_range: TextRange,
         label: impl Into<SmolStr>,
         edition: Edition,
-    ) -> Builder {
+    ) -> Builder<'db> {
         let label = label.into();
         Builder {
             source_range,
@@ -530,9 +530,9 @@ impl CompletionItem {
 /// A helper to make `CompletionItem`s.
 #[must_use]
 #[derive(Debug, Clone)]
-pub(crate) struct Builder {
+pub(crate) struct Builder<'db> {
     source_range: TextRange,
-    imports_to_add: SmallVec<[LocatedImport; 1]>,
+    imports_to_add: SmallVec<[LocatedImport<'db>; 1]>,
     trait_name: Option<SmolStr>,
     doc_aliases: Vec<SmolStr>,
     adds_text: Option<SmolStr>,
@@ -553,8 +553,8 @@ pub(crate) struct Builder {
     edition: Edition,
 }
 
-impl Builder {
-    pub(crate) fn from_resolution<'db>(
+impl<'db> Builder<'db> {
+    pub(crate) fn from_resolution(
         ctx: &CompletionContext<'_, 'db>,
         path_ctx: &PathCompletionCtx<'_>,
         local_name: hir::Name,
@@ -667,23 +667,23 @@ impl Builder {
             import_to_add,
         }
     }
-    pub(crate) fn lookup_by(&mut self, lookup: impl Into<SmolStr>) -> &mut Builder {
+    pub(crate) fn lookup_by(&mut self, lookup: impl Into<SmolStr>) -> &mut Builder<'db> {
         self.lookup = Some(lookup.into());
         self
     }
-    pub(crate) fn label(&mut self, label: impl Into<SmolStr>) -> &mut Builder {
+    pub(crate) fn label(&mut self, label: impl Into<SmolStr>) -> &mut Builder<'db> {
         self.label = label.into();
         self
     }
-    pub(crate) fn trait_name(&mut self, trait_name: SmolStr) -> &mut Builder {
+    pub(crate) fn trait_name(&mut self, trait_name: SmolStr) -> &mut Builder<'db> {
         self.trait_name = Some(trait_name);
         self
     }
-    pub(crate) fn doc_aliases(&mut self, doc_aliases: Vec<SmolStr>) -> &mut Builder {
+    pub(crate) fn doc_aliases(&mut self, doc_aliases: Vec<SmolStr>) -> &mut Builder<'db> {
         self.doc_aliases = doc_aliases;
         self
     }
-    pub(crate) fn adds_text(&mut self, adds_text: SmolStr) -> &mut Builder {
+    pub(crate) fn adds_text(&mut self, adds_text: SmolStr) -> &mut Builder<'db> {
         self.adds_text = Some(adds_text);
         self
     }
@@ -692,7 +692,7 @@ impl Builder {
         const_value: Option<hir::Const>,
         db: &dyn HirDatabase,
         display_target: DisplayTarget,
-    ) -> &mut Builder {
+    ) -> &mut Builder<'db> {
         if let Some(const_value) = const_value {
             if let Ok(evaluated_value) = const_value.eval(db) {
                 self.const_value = Some(evaluated_value.render(db, display_target).to_smolstr());
@@ -702,7 +702,7 @@ impl Builder {
         }
         self
     }
-    pub(crate) fn insert_text(&mut self, insert_text: impl Into<String>) -> &mut Builder {
+    pub(crate) fn insert_text(&mut self, insert_text: impl Into<String>) -> &mut Builder<'db> {
         self.insert_text = Some(insert_text.into());
         self
     }
@@ -710,23 +710,23 @@ impl Builder {
         &mut self,
         cap: SnippetCap,
         snippet: impl Into<String>,
-    ) -> &mut Builder {
+    ) -> &mut Builder<'db> {
         let _ = cap;
         self.is_snippet = true;
         self.insert_text(snippet)
     }
-    pub(crate) fn text_edit(&mut self, edit: TextEdit) -> &mut Builder {
+    pub(crate) fn text_edit(&mut self, edit: TextEdit) -> &mut Builder<'db> {
         self.text_edit = Some(edit);
         self
     }
-    pub(crate) fn snippet_edit(&mut self, _cap: SnippetCap, edit: TextEdit) -> &mut Builder {
+    pub(crate) fn snippet_edit(&mut self, _cap: SnippetCap, edit: TextEdit) -> &mut Builder<'db> {
         self.is_snippet = true;
         self.text_edit(edit)
     }
-    pub(crate) fn detail(&mut self, detail: impl Into<String>) -> &mut Builder {
+    pub(crate) fn detail(&mut self, detail: impl Into<String>) -> &mut Builder<'db> {
         self.set_detail(Some(detail))
     }
-    pub(crate) fn set_detail(&mut self, detail: Option<impl Into<String>>) -> &mut Builder {
+    pub(crate) fn set_detail(&mut self, detail: Option<impl Into<String>>) -> &mut Builder<'db> {
         self.detail = detail.map(Into::into);
         if let Some(detail) = &self.detail
             && never!(detail.contains('\n'), "multiline detail:\n{}", detail)
@@ -736,18 +736,21 @@ impl Builder {
         self
     }
     #[allow(unused)]
-    pub(crate) fn documentation(&mut self, docs: Documentation<'_>) -> &mut Builder {
+    pub(crate) fn documentation(&mut self, docs: Documentation<'_>) -> &mut Builder<'db> {
         self.set_documentation(Some(docs))
     }
-    pub(crate) fn set_documentation(&mut self, docs: Option<Documentation<'_>>) -> &mut Builder {
+    pub(crate) fn set_documentation(
+        &mut self,
+        docs: Option<Documentation<'_>>,
+    ) -> &mut Builder<'db> {
         self.documentation = docs.map(Documentation::into_owned);
         self
     }
-    pub(crate) fn set_deprecated(&mut self, deprecated: bool) -> &mut Builder {
+    pub(crate) fn set_deprecated(&mut self, deprecated: bool) -> &mut Builder<'db> {
         self.deprecated = deprecated;
         self
     }
-    pub(crate) fn set_relevance(&mut self, relevance: CompletionRelevance) -> &mut Builder {
+    pub(crate) fn set_relevance(&mut self, relevance: CompletionRelevance) -> &mut Builder<'db> {
         // The default value of `CompletionRelevance.is_deprecated` is `false`, so it being `true`
         // would mean it was set manually. Advise using the other function instead.
         //
@@ -763,15 +766,15 @@ impl Builder {
     pub(crate) fn with_relevance(
         &mut self,
         relevance: impl FnOnce(CompletionRelevance) -> CompletionRelevance,
-    ) -> &mut Builder {
+    ) -> &mut Builder<'db> {
         self.relevance = relevance(mem::take(&mut self.relevance));
         self
     }
-    pub(crate) fn trigger_call_info(&mut self) -> &mut Builder {
+    pub(crate) fn trigger_call_info(&mut self) -> &mut Builder<'db> {
         self.trigger_call_info = true;
         self
     }
-    pub(crate) fn add_import(&mut self, import_to_add: LocatedImport) -> &mut Builder {
+    pub(crate) fn add_import(&mut self, import_to_add: LocatedImport<'db>) -> &mut Builder<'db> {
         self.imports_to_add.push(import_to_add);
         self
     }
@@ -779,7 +782,7 @@ impl Builder {
         &mut self,
         ref_mode: CompletionItemRefMode,
         offset: TextSize,
-    ) -> &mut Builder {
+    ) -> &mut Builder<'db> {
         self.ref_match = Some((ref_mode, offset));
         self
     }

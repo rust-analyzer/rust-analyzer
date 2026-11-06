@@ -192,7 +192,7 @@ enum PlaceAncestryRelation {
 /// Intermediate format to store a captured `Place` and associated `CaptureInfo`
 /// during capture analysis. Information in this map feeds into the minimum capture
 /// analysis pass.
-type InferredCaptureInformation = Vec<(Place, CaptureInfo)>;
+type InferredCaptureInformation<'db> = Vec<(Place<'db>, CaptureInfo)>;
 
 impl<'db> InferenceContext<'db> {
     pub(crate) fn closure_analyze(&mut self) {
@@ -207,8 +207,8 @@ impl<'db> InferenceContext<'db> {
 
     fn analyze_closures_in_expr(
         &mut self,
-        expr: ExprId,
-        upvars: &'db ThinFxHashMap<ExprId, Upvars>,
+        expr: ExprId<'db>,
+        upvars: &'db ThinFxHashMap<ExprId<'db>, Upvars>,
     ) {
         self.store.walk_child_exprs(expr, |expr| self.analyze_closures_in_expr(expr, upvars));
 
@@ -231,9 +231,9 @@ impl<'db> InferenceContext<'db> {
     #[instrument(skip(self, body), level = "debug")]
     fn analyze_closure(
         &mut self,
-        closure_expr_id: ExprId,
-        params: &[PatId],
-        body: ExprId,
+        closure_expr_id: ExprId<'db>,
+        params: &[PatId<'db>],
+        body: ExprId<'db>,
         mut capture_clause: CaptureBy,
         closure_kind: hir_def::hir::ClosureKind,
         upvars: UpvarsRef<'db>,
@@ -369,7 +369,7 @@ impl<'db> InferenceContext<'db> {
         // We now fake capture information for all variables that are mentioned within the closure
         // We do this after handling migrations so that min_captures computes before
         if !enable_precise_capture(self.edition) {
-            let mut capture_information: InferredCaptureInformation = Default::default();
+            let mut capture_information: InferredCaptureInformation<'_> = Default::default();
 
             for var_hir_id in upvars.iter() {
                 let place = Place {
@@ -539,8 +539,8 @@ impl<'db> InferenceContext<'db> {
     /// coroutine-closure.
     fn coroutine_body_consumes_upvars(
         &mut self,
-        coroutine_def_id: ExprId,
-        body: ExprId,
+        coroutine_def_id: ExprId<'db>,
+        body: ExprId<'db>,
         upvars: UpvarsRef<'db>,
     ) -> bool {
         let mut delegate = InferBorrowKind {
@@ -559,7 +559,7 @@ impl<'db> InferenceContext<'db> {
     }
 
     // Returns a list of `Ty`s for each upvar.
-    fn final_upvar_tys(&self, closure_id: ExprId) -> Vec<Ty<'db>> {
+    fn final_upvar_tys(&self, closure_id: ExprId<'db>) -> Vec<Ty<'db>> {
         self.closure_min_captures_flattened(closure_id)
             .map(|captured_place| {
                 let upvar_ty = captured_place.place.ty();
@@ -595,10 +595,10 @@ impl<'db> InferenceContext<'db> {
     fn process_collected_capture_information(
         &mut self,
         capture_clause: CaptureBy,
-        capture_information: &InferredCaptureInformation,
-    ) -> (InferredCaptureInformation, ClosureKind, Option<Place>) {
+        capture_information: &InferredCaptureInformation<'db>,
+    ) -> (InferredCaptureInformation<'db>, ClosureKind, Option<Place<'db>>) {
         let mut closure_kind = ClosureKind::LATTICE_BOTTOM;
-        let mut origin: Option<Place> = None;
+        let mut origin: Option<Place<'_>> = None;
 
         let processed = capture_information
             .iter()
@@ -726,8 +726,8 @@ impl<'db> InferenceContext<'db> {
     #[instrument(level = "debug", skip(self))]
     fn compute_min_captures(
         &mut self,
-        closure_def_id: ExprId,
-        capture_information: InferredCaptureInformation,
+        closure_def_id: ExprId<'db>,
+        capture_information: InferredCaptureInformation<'db>,
     ) {
         if capture_information.is_empty() {
             return;
@@ -922,7 +922,7 @@ impl<'db> InferenceContext<'db> {
         self.result.closures_data.insert(closure_def_id, closure_data);
     }
 
-    fn normalize_capture_place(&mut self, span: Span, place: Place) -> Place {
+    fn normalize_capture_place(&mut self, span: Span<'db>, place: Place<'db>) -> Place<'db> {
         let place = self.infcx().resolve_vars_if_possible(place);
 
         // In the new solver, types in HIR `Place`s can contain unnormalized aliases,
@@ -956,8 +956,8 @@ impl<'db> InferenceContext<'db> {
 
     fn closure_min_captures_flattened(
         &self,
-        closure_expr_id: ExprId,
-    ) -> impl Iterator<Item = &CapturedPlace> {
+        closure_expr_id: ExprId<'db>,
+    ) -> impl Iterator<Item = &CapturedPlace<'db>> {
         self.result
             .closures_data
             .get(&closure_expr_id)
@@ -968,7 +968,7 @@ impl<'db> InferenceContext<'db> {
 
     fn init_capture_kind_for_place(
         &self,
-        place: &Place,
+        place: &Place<'db>,
         capture_clause: CaptureBy,
     ) -> UpvarCapture {
         match capture_clause {
@@ -1001,7 +1001,11 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn place_for_root_variable(&mut self, closure_def_id: ExprId, var_hir_id: BindingId) -> Place {
+    fn place_for_root_variable(
+        &mut self,
+        closure_def_id: ExprId<'db>,
+        var_hir_id: BindingId,
+    ) -> Place<'db> {
         let place = Place {
             base_ty: self.result.binding_ty(var_hir_id).store(),
             base: PlaceBase::Upvar { closure: closure_def_id, var_id: var_hir_id },
@@ -1016,7 +1020,11 @@ impl<'db> InferenceContext<'db> {
     /// A captured place is mutable if
     /// 1. Projections don't include a Deref of an immut-borrow, **and**
     /// 2. PlaceBase is mut or projections include a Deref of a mut-borrow.
-    fn determine_capture_mutability(&mut self, closure_expr: ExprId, place: &Place) -> Mutability {
+    fn determine_capture_mutability(
+        &mut self,
+        closure_expr: ExprId<'db>,
+        place: &Place<'db>,
+    ) -> Mutability {
         let var_hir_id = match place.base {
             PlaceBase::Upvar { var_id, .. } => var_id,
             _ => unreachable!(),
@@ -1093,9 +1101,9 @@ impl<'db> InferenceContext<'db> {
 /// not correct, then the program is not unsound, since we still borrowck and validate
 /// the choices made from this function -- the only side-effect is that the user
 /// may receive unnecessary borrowck errors.
-fn should_reborrow_from_env_of_parent_coroutine_closure(
-    parent_capture: &CapturedPlace,
-    child_capture: &CapturedPlace,
+fn should_reborrow_from_env_of_parent_coroutine_closure<'db>(
+    parent_capture: &CapturedPlace<'db>,
+    child_capture: &CapturedPlace<'db>,
 ) -> bool {
     // (1.)
     (!parent_capture.is_by_ref()
@@ -1121,10 +1129,10 @@ fn should_reborrow_from_env_of_parent_coroutine_closure(
 
 /// Truncate the capture so that the place being borrowed is in accordance with RFC 1240,
 /// which states that it's unsafe to take a reference into a struct marked `repr(packed)`.
-fn restrict_repr_packed_field_ref_capture(
-    mut place: Place,
+fn restrict_repr_packed_field_ref_capture<'db>(
+    mut place: Place<'db>,
     capture_info: &mut CaptureInfo,
-) -> Place {
+) -> Place<'db> {
     let pos = place.projections.iter().enumerate().position(|(i, p)| {
         let ty = place.ty_before_projection(i);
 
@@ -1164,9 +1172,9 @@ fn apply_capture_kind_on_capture_ty<'db>(
     }
 }
 
-struct InferBorrowKind {
+struct InferBorrowKind<'db> {
     // The def-id of the closure whose kind and upvar accesses are being inferred.
-    closure_def_id: ExprId,
+    closure_def_id: ExprId<'db>,
 
     /// For each Place that is captured by the closure, we track the minimal kind of
     /// access we need (ref, ref mut, move, etc) and the expression that resulted in such access.
@@ -1194,16 +1202,16 @@ struct InferBorrowKind {
     /// Place { V1, [ProjectionKind::Field(Index=0, Variant=0)] } : CaptureKind { E1, ImmutableBorrow }
     /// Place { V1, [ProjectionKind::Field(Index=1, Variant=0)] } : CaptureKind { E2, MutableBorrow }
     /// ```
-    capture_information: InferredCaptureInformation,
-    fake_reads: Vec<(Place, FakeReadCause, SmallVec<[CaptureSourceStack; 2]>)>,
+    capture_information: InferredCaptureInformation<'db>,
+    fake_reads: Vec<(Place<'db>, FakeReadCause<'db>, SmallVec<[CaptureSourceStack; 2]>)>,
 }
 
-impl<'db> euv::Delegate<'db> for InferBorrowKind {
+impl<'db> euv::Delegate<'db> for InferBorrowKind<'db> {
     #[instrument(skip(self), level = "debug")]
     fn fake_read(
         &mut self,
-        place_with_id: PlaceWithOrigin,
-        cause: FakeReadCause,
+        place_with_id: PlaceWithOrigin<'db>,
+        cause: FakeReadCause<'db>,
         ctx: &mut InferenceContext<'db>,
     ) {
         let PlaceBase::Upvar { .. } = place_with_id.place.base else { return };
@@ -1224,7 +1232,7 @@ impl<'db> euv::Delegate<'db> for InferBorrowKind {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn consume(&mut self, place_with_id: PlaceWithOrigin, ctx: &mut InferenceContext<'db>) {
+    fn consume(&mut self, place_with_id: PlaceWithOrigin<'db>, ctx: &mut InferenceContext<'db>) {
         let PlaceBase::Upvar { closure: upvar_closure, .. } = place_with_id.place.base else {
             return;
         };
@@ -1239,7 +1247,7 @@ impl<'db> euv::Delegate<'db> for InferBorrowKind {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn use_cloned(&mut self, place_with_id: PlaceWithOrigin, ctx: &mut InferenceContext<'db>) {
+    fn use_cloned(&mut self, place_with_id: PlaceWithOrigin<'db>, ctx: &mut InferenceContext<'db>) {
         let PlaceBase::Upvar { closure: upvar_closure, .. } = place_with_id.place.base else {
             return;
         };
@@ -1256,7 +1264,7 @@ impl<'db> euv::Delegate<'db> for InferBorrowKind {
     #[instrument(skip(self), level = "debug")]
     fn borrow(
         &mut self,
-        place_with_id: PlaceWithOrigin,
+        place_with_id: PlaceWithOrigin<'db>,
         bk: BorrowKind,
         ctx: &mut InferenceContext<'db>,
     ) {
@@ -1286,7 +1294,7 @@ impl<'db> euv::Delegate<'db> for InferBorrowKind {
     }
 
     #[instrument(skip(self), level = "debug")]
-    fn mutate(&mut self, assignee_place: PlaceWithOrigin, ctx: &mut InferenceContext<'db>) {
+    fn mutate(&mut self, assignee_place: PlaceWithOrigin<'db>, ctx: &mut InferenceContext<'db>) {
         self.borrow(assignee_place, BorrowKind::Mutable, ctx);
     }
 }
@@ -1295,9 +1303,9 @@ impl<'db> euv::Delegate<'db> for InferBorrowKind {
 #[instrument(skip(fcx), ret, level = "debug")]
 fn restrict_precision_for_drop_types<'db>(
     fcx: &mut InferenceContext<'db>,
-    mut place: Place,
+    mut place: Place<'db>,
     capture_info: &mut CaptureInfo,
-) -> Place {
+) -> Place<'db> {
     if capture_info.capture_kind == UpvarCapture::ByValue
         && !fcx.infcx().type_is_copy_modulo_regions(fcx.table.param_env, place.ty())
     {
@@ -1319,7 +1327,10 @@ fn restrict_precision_for_drop_types<'db>(
 /// - No projections are applied to raw pointers, since these require unsafe blocks. We capture
 ///   them completely.
 /// - No projections are applied on top of Union ADTs, since these require unsafe blocks.
-fn restrict_precision_for_unsafe(mut place: Place, capture_info: &mut CaptureInfo) -> Place {
+fn restrict_precision_for_unsafe<'db>(
+    mut place: Place<'db>,
+    capture_info: &mut CaptureInfo,
+) -> Place<'db> {
     if place.base_ty.as_ref().is_raw_ptr() {
         truncate_place_to_len_and_update_capture_kind(&mut place, capture_info, 0);
     }
@@ -1351,7 +1362,10 @@ fn restrict_precision_for_unsafe(mut place: Place, capture_info: &mut CaptureInf
 ///
 /// Returns the truncated place and updated capture mode.
 #[instrument(ret, level = "debug")]
-fn restrict_capture_precision(place: Place, capture_info: &mut CaptureInfo) -> Place {
+fn restrict_capture_precision<'db>(
+    place: Place<'db>,
+    capture_info: &mut CaptureInfo,
+) -> Place<'db> {
     let mut place = restrict_precision_for_unsafe(place, capture_info);
 
     if place.projections.is_empty() {
@@ -1377,7 +1391,10 @@ fn restrict_capture_precision(place: Place, capture_info: &mut CaptureInfo) -> P
 
 /// Truncate deref of any reference.
 #[instrument(ret, level = "debug")]
-fn adjust_for_move_closure(mut place: Place, capture_info: &mut CaptureInfo) -> Place {
+fn adjust_for_move_closure<'db>(
+    mut place: Place<'db>,
+    capture_info: &mut CaptureInfo,
+) -> Place<'db> {
     let first_deref = place.projections.iter().position(|proj| proj.kind == ProjectionKind::Deref);
 
     if let Some(idx) = first_deref {
@@ -1391,7 +1408,10 @@ fn adjust_for_move_closure(mut place: Place, capture_info: &mut CaptureInfo) -> 
 /// Adjust closure capture just that if taking ownership of data, only move data
 /// from enclosing stack frame.
 #[instrument(ret, level = "debug")]
-fn adjust_for_non_move_closure(mut place: Place, capture_info: &mut CaptureInfo) -> Place {
+fn adjust_for_non_move_closure<'db>(
+    mut place: Place<'db>,
+    capture_info: &mut CaptureInfo,
+) -> Place<'db> {
     let contains_deref =
         place.projections.iter().position(|proj| proj.kind == ProjectionKind::Deref);
 
@@ -1444,8 +1464,8 @@ fn determine_capture_sources(
 ///
 /// Note: Capture kind changes from `MutBorrow` to `UniqueImmBorrow` if the truncated part of the `place`
 /// contained `Deref` of `&mut`.
-fn truncate_place_to_len_and_update_capture_kind(
-    place: &mut Place,
+fn truncate_place_to_len_and_update_capture_kind<'db>(
+    place: &mut Place<'db>,
     info: &mut CaptureInfo,
     len: usize,
 ) {
@@ -1485,7 +1505,10 @@ fn truncate_place_to_len_and_update_capture_kind(
 /// `PlaceAncestryRelation::Ancestor` implies Place A is ancestor of Place B
 /// `PlaceAncestryRelation::Descendant` implies Place A is descendant of Place B
 /// `PlaceAncestryRelation::Divergent` implies neither of them is the ancestor of the other.
-fn determine_place_ancestry_relation(place_a: &Place, place_b: &Place) -> PlaceAncestryRelation {
+fn determine_place_ancestry_relation<'db>(
+    place_a: &Place<'db>,
+    place_b: &Place<'db>,
+) -> PlaceAncestryRelation {
     // If Place A and Place B don't start off from the same root variable, they are divergent.
     if place_a.base != place_b.base {
         return PlaceAncestryRelation::Divergent;
@@ -1544,7 +1567,10 @@ fn determine_place_ancestry_relation(place_a: &Place, place_b: &Place) -> PlaceA
 /// }
 /// ```
 #[instrument(ret, level = "debug")]
-fn truncate_capture_for_optimization(mut place: Place, info: &mut CaptureInfo) -> Place {
+fn truncate_capture_for_optimization<'db>(
+    mut place: Place<'db>,
+    info: &mut CaptureInfo,
+) -> Place<'db> {
     let is_shared_ref = |ty: Ty<'_>| matches!(ty.kind(), TyKind::Ref(.., Mutability::Not));
 
     // Find the rightmost deref (if any). All the projections that come after this
@@ -1570,10 +1596,10 @@ fn enable_precise_capture(edition: Edition) -> bool {
     edition.at_least_2021()
 }
 
-fn analyze_coroutine_closure_captures<'a, T>(
-    parent_captures: impl IntoIterator<Item = &'a CapturedPlace>,
-    child_captures: impl IntoIterator<Item = &'a CapturedPlace>,
-    mut for_each: impl FnMut((usize, &'a CapturedPlace), (usize, &'a CapturedPlace)) -> T,
+fn analyze_coroutine_closure_captures<'a, 'db: 'a, T>(
+    parent_captures: impl IntoIterator<Item = &'a CapturedPlace<'db>>,
+    child_captures: impl IntoIterator<Item = &'a CapturedPlace<'db>>,
+    mut for_each: impl FnMut((usize, &'a CapturedPlace<'db>), (usize, &'a CapturedPlace<'db>)) -> T,
 ) -> impl Iterator<Item = T> {
     let mut result = SmallVec::<[_; 10]>::new();
 
@@ -1622,9 +1648,9 @@ fn analyze_coroutine_closure_captures<'a, T>(
     result.into_iter()
 }
 
-fn child_prefix_matches_parent_projections(
-    parent_capture: &CapturedPlace,
-    child_capture: &CapturedPlace,
+fn child_prefix_matches_parent_projections<'db>(
+    parent_capture: &CapturedPlace<'db>,
+    child_capture: &CapturedPlace<'db>,
 ) -> bool {
     let PlaceBase::Upvar { var_id: parent_base, .. } = parent_capture.place.base else {
         panic!("expected capture to be an upvar");

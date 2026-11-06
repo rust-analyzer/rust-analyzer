@@ -5,6 +5,7 @@ use std::iter;
 use base_db::{Crate, SourceDatabase};
 use hir_expand::{InFile, Lookup};
 use la_arena::ArenaMap;
+use salsa::SalsaValue;
 use syntax::ast::{self, HasVisibility};
 
 use crate::{
@@ -15,7 +16,7 @@ use crate::{
 pub use crate::item_tree::{RawVisibility, VisibilityExplicitness};
 
 /// Visibility of an item, with the path resolved.
-#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, SalsaValue)]
 pub enum Visibility {
     /// Visibility is restricted to a certain module.
     Module(ModuleId, VisibilityExplicitness),
@@ -26,9 +27,9 @@ pub enum Visibility {
 }
 
 impl Visibility {
-    pub fn resolve(
-        db: &dyn SourceDatabase,
-        resolver: &crate::resolver::Resolver<'_>,
+    pub fn resolve<'db>(
+        db: &'db dyn SourceDatabase,
+        resolver: &crate::resolver::Resolver<'db>,
         raw_vis: &RawVisibility,
     ) -> Self {
         // we fall back to public visibility (i.e. fail open) if the path can't be resolved
@@ -65,7 +66,7 @@ impl Visibility {
     pub(crate) fn is_visible_from_def_map<'db>(
         self,
         db: &'db dyn SourceDatabase,
-        def_map: &'db DefMap,
+        def_map: &DefMap<'db>,
         from_module: ModuleIdLt<'db>,
     ) -> bool {
         if cfg!(debug_assertions) {
@@ -94,7 +95,7 @@ impl Visibility {
 
     fn is_visible_from_def_map_<'db>(
         db: &'db dyn SourceDatabase,
-        def_map: &'db DefMap,
+        def_map: &DefMap<'db>,
         mut to_module: ModuleIdLt<'db>,
         mut from_module: ModuleIdLt<'db>,
     ) -> bool {
@@ -125,24 +126,18 @@ impl Visibility {
 
         // from_module needs to be a descendant of to_module
         let mut def_map = def_map;
-        let mut parent_arc;
         loop {
             if from_module == to_module {
                 return true;
             }
-            match def_map[from_module].parent {
-                Some(parent) => from_module = parent,
-                None => {
-                    match def_map.parent() {
-                        Some(module) => {
-                            parent_arc = module.def_map(db);
-                            def_map = parent_arc;
-                            from_module = module;
-                        }
-                        // Reached the root module, nothing left to check.
-                        None => return false,
-                    }
-                }
+            if let Some(parent) = def_map[from_module].parent {
+                from_module = parent
+            } else if let Some(module) = def_map.parent() {
+                def_map = module.def_map(db);
+                from_module = module;
+            } else {
+                // Reached the root module, nothing left to check.
+                return false;
             }
         }
     }
@@ -155,7 +150,7 @@ impl Visibility {
         self,
         db: &dyn SourceDatabase,
         other: Visibility,
-        def_map: &DefMap,
+        def_map: &DefMap<'_>,
     ) -> Option<Visibility> {
         match (self, other) {
             (_, Visibility::Public) | (Visibility::Public, _) => Some(Visibility::Public),
@@ -221,7 +216,7 @@ impl Visibility {
         self,
         db: &dyn SourceDatabase,
         other: Visibility,
-        def_map: &DefMap,
+        def_map: &DefMap<'_>,
     ) -> Option<Visibility> {
         match (self, other) {
             (vis, Visibility::Public) | (Visibility::Public, vis) => Some(vis),
@@ -286,13 +281,13 @@ impl Visibility {
 }
 
 #[salsa::tracked]
-impl VariantFields {
+impl<'db> VariantFields<'db> {
     /// Resolve visibility of all specific fields of a struct or union variant.
     #[salsa::tracked(returns(ref))]
     pub fn field_visibilities(
         db: &dyn SourceDatabase,
         variant_id: VariantId,
-    ) -> ArenaMap<LocalFieldId, Visibility> {
+    ) -> ArenaMap<LocalFieldId<'_>, Visibility> {
         let variant_fields = variant_id.fields(db);
         let fields = variant_fields.fields();
         if fields.is_empty() {
@@ -307,9 +302,9 @@ impl VariantFields {
     }
 }
 
-pub fn visibility_from_ast(
-    db: &dyn SourceDatabase,
-    has_resolver: impl HasResolver + HasModule,
+pub fn visibility_from_ast<'db>(
+    db: &'db dyn SourceDatabase,
+    has_resolver: impl HasResolver + HasModule<'db>,
     ast_vis: InFile<Option<ast::Visibility>>,
 ) -> Visibility {
     let mut span_map = None;

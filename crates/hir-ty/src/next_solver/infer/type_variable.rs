@@ -20,7 +20,7 @@ use crate::next_solver::infer::{InferCtxtUndoLogs, iter_idx_range};
 #[derive(Clone)]
 pub(crate) enum UndoLog<'tcx> {
     EqRelation(sv::UndoLog<ut::Delegate<TyVidEqKey<'tcx>>>),
-    SubRelation(sv::UndoLog<ut::Delegate<TyVidSubKey>>),
+    SubRelation(sv::UndoLog<ut::Delegate<TyVidSubKey<'tcx>>>),
 }
 
 /// Convert from a specific kind of undo to the more general UndoLog
@@ -31,8 +31,8 @@ impl<'db> From<sv::UndoLog<ut::Delegate<TyVidEqKey<'db>>>> for UndoLog<'db> {
 }
 
 /// Convert from a specific kind of undo to the more general UndoLog
-impl<'db> From<sv::UndoLog<ut::Delegate<TyVidSubKey>>> for UndoLog<'db> {
-    fn from(l: sv::UndoLog<ut::Delegate<TyVidSubKey>>) -> Self {
+impl<'db> From<sv::UndoLog<ut::Delegate<TyVidSubKey<'db>>>> for UndoLog<'db> {
+    fn from(l: sv::UndoLog<ut::Delegate<TyVidSubKey<'db>>>) -> Self {
         UndoLog::SubRelation(l)
     }
 }
@@ -43,8 +43,8 @@ impl<'db> Rollback<sv::UndoLog<ut::Delegate<TyVidEqKey<'db>>>> for TypeVariableS
     }
 }
 
-impl<'tcx> Rollback<sv::UndoLog<ut::Delegate<TyVidSubKey>>> for TypeVariableStorage<'tcx> {
-    fn reverse(&mut self, undo: sv::UndoLog<ut::Delegate<TyVidSubKey>>) {
+impl<'tcx> Rollback<sv::UndoLog<ut::Delegate<TyVidSubKey<'tcx>>>> for TypeVariableStorage<'tcx> {
+    fn reverse(&mut self, undo: sv::UndoLog<ut::Delegate<TyVidSubKey<'tcx>>>) {
         self.sub_unification_table.reverse(undo)
     }
 }
@@ -82,7 +82,7 @@ pub(crate) struct TypeVariableStorage<'db> {
     /// Even for something like `let x = returns_arg(); x.method();` the
     /// type of `x` is only a supertype of the argument of `returns_arg`. We
     /// still want to suggest specifying the type of the argument.
-    sub_unification_table: ut::UnificationTableStorage<TyVidSubKey>,
+    sub_unification_table: ut::UnificationTableStorage<TyVidSubKey<'db>>,
 }
 
 pub(crate) struct TypeVariableTable<'a, 'db> {
@@ -133,7 +133,7 @@ impl<'db> TypeVariableStorage<'db> {
 }
 
 impl<'db> TypeVariableTable<'_, 'db> {
-    pub(crate) fn var_span(&mut self, vid: TyVid) -> Span {
+    pub(crate) fn var_span(&mut self, vid: TyVid) -> Span<'db> {
         // We return the span from unification and not equation, since when equating we also unify,
         // and we want to prevent duplicate diagnostics from vars that were unified.
         self.sub_unification_table().probe_value(vid).span
@@ -174,7 +174,7 @@ impl<'db> TypeVariableTable<'_, 'db> {
         self.eq_relations().union_value(vid, TypeVariableValue::Known { value: ty });
     }
 
-    pub(crate) fn new_var(&mut self, universe: UniverseIndex, span: Span) -> TyVid {
+    pub(crate) fn new_var(&mut self, universe: UniverseIndex, span: Span<'db>) -> TyVid {
         let eq_key = self.eq_relations().new_key(TypeVariableValue::Unknown { universe });
 
         let sub_key = self.sub_unification_table().new_key(TypeVariableSubValue { span });
@@ -229,12 +229,15 @@ impl<'db> TypeVariableTable<'_, 'db> {
     }
 
     #[inline]
-    fn sub_unification_table(&mut self) -> super::UnificationTable<'_, 'db, TyVidSubKey> {
+    fn sub_unification_table(&mut self) -> super::UnificationTable<'_, 'db, TyVidSubKey<'db>> {
         self.storage.sub_unification_table.with_log(self.undo_log)
     }
 
     /// Returns a range of the type variables created during the snapshot.
-    pub(crate) fn vars_since_snapshot(&mut self, value_count: usize) -> (Range<TyVid>, Vec<Span>) {
+    pub(crate) fn vars_since_snapshot(
+        &mut self,
+        value_count: usize,
+    ) -> (Range<TyVid>, Vec<Span<'db>>) {
         let range = TyVid::from_usize(value_count)..TyVid::from_usize(self.num_vars());
         (range.clone(), iter_idx_range(range).map(|index| self.var_span(index)).collect())
     }
@@ -290,38 +293,42 @@ impl<'db> ut::UnifyKey for TyVidEqKey<'db> {
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub(crate) struct TyVidSubKey {
+pub(crate) struct TyVidSubKey<'db> {
     vid: TyVid,
+    // HACK: We add a `'db` lifetime to `TyVidSubKey` in order to be able to make
+    // `impl UnifyKey for TyVidSubKey` generic over `'db`. This wouldn't be necessary if `UnifyKey`
+    // were a GAT or something.
+    _marker: PhantomData<fn() -> &'db ()>,
 }
 
-impl From<TyVid> for TyVidSubKey {
+impl<'db> From<TyVid> for TyVidSubKey<'db> {
     #[inline] // make this function eligible for inlining - it is quite hot.
     fn from(vid: TyVid) -> Self {
-        TyVidSubKey { vid }
+        TyVidSubKey { vid, _marker: PhantomData }
     }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct TypeVariableSubValue {
-    span: Span,
+pub(crate) struct TypeVariableSubValue<'db> {
+    span: Span<'db>,
 }
 
-impl ut::UnifyKey for TyVidSubKey {
-    type Value = TypeVariableSubValue;
+impl<'db> ut::UnifyKey for TyVidSubKey<'db> {
+    type Value = TypeVariableSubValue<'db>;
     #[inline]
     fn index(&self) -> u32 {
         self.vid.as_u32()
     }
     #[inline]
-    fn from_index(i: u32) -> TyVidSubKey {
-        TyVidSubKey { vid: TyVid::from_u32(i) }
+    fn from_index(i: u32) -> TyVidSubKey<'db> {
+        TyVidSubKey::from(TyVid::from_u32(i))
     }
     fn tag() -> &'static str {
         "TyVidSubKey"
     }
 }
 
-impl ut::UnifyValue for TypeVariableSubValue {
+impl<'db> ut::UnifyValue for TypeVariableSubValue<'db> {
     type Error = ut::NoError;
 
     fn unify_values(value1: &Self, value2: &Self) -> Result<Self, Self::Error> {

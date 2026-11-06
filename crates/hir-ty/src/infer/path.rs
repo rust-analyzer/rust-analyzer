@@ -29,9 +29,9 @@ use super::InferenceContext;
 impl<'db> InferenceContext<'db> {
     pub(super) fn infer_path(
         &mut self,
-        path: &Path,
+        path: &Path<'db>,
         id: ExprOrPatIdPacked,
-    ) -> Option<(ValueNs, Ty<'db>)> {
+    ) -> Option<(ValueNs<'db>, Ty<'db>)> {
         let (value, self_subst) = self.resolve_value_path_inner(path, id, false)?;
 
         if let ValueNs::FunctionId(f) = value
@@ -60,9 +60,9 @@ impl<'db> InferenceContext<'db> {
 
     fn resolve_value_path(
         &mut self,
-        path: &Path,
+        path: &Path<'db>,
         id: ExprOrPatIdPacked,
-        value: ValueNs,
+        value: ValueNs<'db>,
         self_subst: Option<GenericArgs<'db>>,
     ) -> Option<ValuePathResolution<'db>> {
         let value_def: ValueTyDefId = match value {
@@ -145,10 +145,10 @@ impl<'db> InferenceContext<'db> {
 
     pub(super) fn resolve_value_path_inner(
         &mut self,
-        path: &Path,
+        path: &Path<'db>,
         id: ExprOrPatIdPacked,
         no_diagnostics: bool,
-    ) -> Option<(ValueNs, Option<GenericArgs<'db>>)> {
+    ) -> Option<(ValueNs<'db>, Option<GenericArgs<'db>>)> {
         // Don't use `self.make_ty()` here as we need `orig_ns`.
         let mut vars_ctx = InferenceTyLoweringVarsCtx {
             table: &mut self.table,
@@ -292,9 +292,9 @@ impl<'db> InferenceContext<'db> {
     fn resolve_trait_assoc_item(
         &mut self,
         trait_ref: TraitRef<'db>,
-        segment: PathSegment<'_>,
+        segment: PathSegment<'_, 'db>,
         id: ExprOrPatIdPacked,
-    ) -> Option<(ValueNs, GenericArgs<'db>)> {
+    ) -> Option<(ValueNs<'db>, GenericArgs<'db>)> {
         let trait_ = trait_ref.def_id.0;
         let item =
             trait_.trait_items(self.db).items.iter().map(|(_name, id)| *id).find_map(|item| {
@@ -331,7 +331,7 @@ impl<'db> InferenceContext<'db> {
         ty: Ty<'db>,
         name: &Name,
         id: ExprOrPatIdPacked,
-    ) -> Option<(ValueNs, GenericArgs<'db>)> {
+    ) -> Option<(ValueNs<'db>, GenericArgs<'db>)> {
         if ty.is_ty_error() {
             return None;
         }
@@ -400,7 +400,7 @@ impl<'db> InferenceContext<'db> {
         ty: Ty<'db>,
         name: &Name,
         id: ExprOrPatIdPacked,
-    ) -> Option<(ValueNs, GenericArgs<'db>)> {
+    ) -> Option<(ValueNs<'db>, GenericArgs<'db>)> {
         let ty = self.table.try_structurally_resolve_type(id.into(), ty);
         let (enum_id, subst) = match ty.as_adt() {
             Some((AdtId::EnumId(e), subst)) => (e, subst),

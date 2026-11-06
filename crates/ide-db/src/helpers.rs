@@ -16,7 +16,7 @@ use crate::{
     generated,
 };
 
-pub fn item_name(db: &RootDatabase, item: ItemInNs) -> Option<Name> {
+pub fn item_name(db: &RootDatabase, item: ItemInNs<'_>) -> Option<Name> {
     match item {
         ItemInNs::Types(module_def_id) => module_def_id.name(db),
         ItemInNs::Values(module_def_id) => module_def_id.name(db),

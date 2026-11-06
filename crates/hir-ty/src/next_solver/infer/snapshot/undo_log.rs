@@ -49,7 +49,7 @@ impl_from! {
     RegionConstraintCollector(region_constraints::UndoLog<'db>),
 
     TypeVariables(sv::UndoLog<ut::Delegate<type_variable::TyVidEqKey<'db>>>),
-    TypeVariables(sv::UndoLog<ut::Delegate<type_variable::TyVidSubKey>>),
+    TypeVariables(sv::UndoLog<ut::Delegate<type_variable::TyVidSubKey<'db>>>),
     TypeVariables(type_variable::UndoLog<'db>),
     IntUnificationTable(sv::UndoLog<ut::Delegate<IntVid>>),
     FloatUnificationTable(sv::UndoLog<ut::Delegate<FloatVid>>),

@@ -55,7 +55,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         _generic_args: GenericArgs<'db>,
         destination: Interval,
         _locals: &Locals<'a, 'db>,
-        _span: MirSpan,
+        _span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         match name {
             "and" | "or" | "xor" => {

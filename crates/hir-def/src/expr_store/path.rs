@@ -11,16 +11,17 @@ use hir_expand::{
     name::Name,
 };
 use intern::Interned;
+use salsa::SalsaValue;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Path {
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
+pub enum Path<'db> {
     /// `BarePath` is used when the path has neither generics nor type anchor, since the vast majority of paths
     /// are in this category, and splitting `Path` this way allows it to be more thin. When the path has either generics
     /// or type anchor, it is `Path::Normal` with the generics filled with `None` even if there are none (practically
     /// this is not a problem since many more paths have generics than a type anchor).
     BarePath(Interned<ModPath>),
     /// `Path::Normal` will always have either generics or type anchor.
-    Normal(Box<NormalPath>),
+    Normal(Box<NormalPath<'db>>),
     /// A link to a lang item. It is used in desugaring of things like `it?`. We can show these
     /// links via a normal path since they might be private and not accessible in the usage place.
     LangItem(LangItemTarget, Option<Name>),
@@ -29,14 +30,14 @@ pub enum Path {
 // This type is being used a lot, make sure it doesn't grow unintentionally.
 #[cfg(all(target_arch = "x86_64", target_pointer_width = "64"))]
 const _: () = {
-    assert!(size_of::<Path>() == 24);
-    assert!(size_of::<Option<Path>>() == 24);
+    assert!(size_of::<Path<'_>>() == 24);
+    assert!(size_of::<Option<Path<'_>>>() == 24);
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NormalPath {
-    pub generic_args: Box<[Option<GenericArgs>]>,
-    pub type_anchor: Option<TypeRefId>,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
+pub struct NormalPath<'db> {
+    pub generic_args: Box<[Option<GenericArgs<'db>>]>,
+    pub type_anchor: Option<TypeRefId<'db>>,
     pub mod_path: Interned<ModPath>,
 }
 
@@ -55,9 +56,9 @@ pub enum GenericArgsParentheses {
 
 /// Generic arguments to a path segment (e.g. the `i32` in `Option<i32>`). This
 /// also includes bindings of associated types, like in `Iterator<Item = Foo>`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct GenericArgs {
-    pub args: Box<[GenericArg]>,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
+pub struct GenericArgs<'db> {
+    pub args: Box<[GenericArg<'db>]>,
     /// This specifies whether the args contain a Self type as the first
     /// element. This is the case for path segments like `<T as Trait>`, where
     /// `T` is actually a type parameter for the path `Trait` specifying the
@@ -65,39 +66,42 @@ pub struct GenericArgs {
     /// is left out.
     pub has_self_type: bool,
     /// Associated type bindings like in `Iterator<Item = T>`.
-    pub bindings: Box<[AssociatedTypeBinding]>,
+    pub bindings: Box<[AssociatedTypeBinding<'db>]>,
     /// Whether these generic args were written with parentheses and how.
     pub parenthesized: GenericArgsParentheses,
 }
 
 /// An associated type binding like in `Iterator<Item = T>`.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct AssociatedTypeBinding {
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
+pub struct AssociatedTypeBinding<'db> {
     /// The name of the associated type.
     pub name: Name,
     /// The generic arguments to the associated type. e.g. For `Trait<Assoc<'a, T> = &'a T>`, this
     /// would be `['a, T]`.
-    pub args: Option<GenericArgs>,
+    pub args: Option<GenericArgs<'db>>,
     /// The type bound to this associated type (in `Item = T`, this would be the
     /// `T`). This can be `None` if there are bounds instead.
-    pub type_ref: Option<TypeRefId>,
+    pub type_ref: Option<TypeRefId<'db>>,
     /// Bounds for the associated type, like in `Iterator<Item:
     /// SomeOtherTrait>`. (This is the unstable `associated_type_bounds`
     /// feature.)
-    pub bounds: Box<[TypeBound]>,
+    pub bounds: Box<[TypeBound<'db>]>,
 }
 
 /// A single generic argument.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum GenericArg {
-    Type(TypeRefId),
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
+pub enum GenericArg<'db> {
+    Type(TypeRefId<'db>),
     Lifetime(LifetimeRefId),
-    Const(ConstRef),
+    Const(ConstRef<'db>),
 }
 
-impl Path {
+impl<'db> Path<'db> {
     /// Converts a known mod path to `Path`.
-    pub fn from_known_path(path: ModPath, generic_args: Vec<Option<GenericArgs>>) -> Path {
+    pub fn from_known_path(
+        path: ModPath,
+        generic_args: Vec<Option<GenericArgs<'db>>>,
+    ) -> Path<'db> {
         Path::Normal(Box::new(NormalPath {
             generic_args: generic_args.into_boxed_slice(),
             type_anchor: None,
@@ -106,7 +110,7 @@ impl Path {
     }
 
     /// Converts a known mod path to `Path`.
-    pub fn from_known_path_with_no_generic(path: ModPath) -> Path {
+    pub fn from_known_path_with_no_generic(path: ModPath) -> Path<'db> {
         Path::BarePath(Interned::new(path))
     }
 
@@ -120,7 +124,7 @@ impl Path {
     }
 
     #[inline]
-    pub fn type_anchor(&self) -> Option<TypeRefId> {
+    pub fn type_anchor(&self) -> Option<TypeRefId<'db>> {
         match self {
             Path::Normal(path) => path.type_anchor,
             Path::LangItem(..) | Path::BarePath(_) => None,
@@ -128,14 +132,14 @@ impl Path {
     }
 
     #[inline]
-    pub fn generic_args(&self) -> Option<&[Option<GenericArgs>]> {
+    pub fn generic_args(&self) -> Option<&[Option<GenericArgs<'db>>]> {
         match self {
             Path::Normal(path) => Some(&path.generic_args),
             Path::LangItem(..) | Path::BarePath(_) => None,
         }
     }
 
-    pub fn segments(&self) -> PathSegments<'_> {
+    pub fn segments(&self) -> PathSegments<'_, 'db> {
         match self {
             Path::BarePath(mod_path) => {
                 PathSegments { segments: mod_path.segments(), generic_args: None }
@@ -156,7 +160,7 @@ impl Path {
         }
     }
 
-    pub fn qualifier(&self) -> Option<Path> {
+    pub fn qualifier(&self) -> Option<Path<'db>> {
         match self {
             Path::BarePath(mod_path) => {
                 if mod_path.is_ident() {
@@ -207,38 +211,39 @@ impl Path {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct PathSegment<'a> {
+pub struct PathSegment<'a, 'db> {
     pub name: &'a Name,
-    pub args_and_bindings: Option<&'a GenericArgs>,
+    pub args_and_bindings: Option<&'a GenericArgs<'db>>,
 }
 
-impl PathSegment<'_> {
-    pub const MISSING: PathSegment<'static> =
+impl PathSegment<'_, '_> {
+    pub const MISSING: PathSegment<'static, 'static> =
         PathSegment { name: &Name::missing(), args_and_bindings: None };
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct PathSegments<'a> {
+pub struct PathSegments<'a, 'db> {
     segments: &'a [Name],
-    generic_args: Option<&'a [Option<GenericArgs>]>,
+    generic_args: Option<&'a [Option<GenericArgs<'db>>]>,
 }
 
-impl<'a> PathSegments<'a> {
-    pub const EMPTY: PathSegments<'static> = PathSegments { segments: &[], generic_args: None };
+impl<'a, 'db> PathSegments<'a, 'db> {
+    pub const EMPTY: PathSegments<'static, 'static> =
+        PathSegments { segments: &[], generic_args: None };
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
     pub fn len(&self) -> usize {
         self.segments.len()
     }
-    pub fn first(&self) -> Option<PathSegment<'a>> {
+    pub fn first(&self) -> Option<PathSegment<'a, 'db>> {
         self.get(0)
     }
-    pub fn last(&self) -> Option<PathSegment<'a>> {
+    pub fn last(&self) -> Option<PathSegment<'a, 'db>> {
         self.get(self.len().checked_sub(1)?)
     }
 
-    pub fn get(&self, idx: usize) -> Option<PathSegment<'a>> {
+    pub fn get(&self, idx: usize) -> Option<PathSegment<'a, 'db>> {
         let res = PathSegment {
             name: self.segments.get(idx)?,
             args_and_bindings: self.generic_args.and_then(|it| it.get(idx)?.as_ref()),
@@ -246,28 +251,28 @@ impl<'a> PathSegments<'a> {
         Some(res)
     }
 
-    pub fn skip(&self, len: usize) -> PathSegments<'a> {
+    pub fn skip(&self, len: usize) -> PathSegments<'a, 'db> {
         PathSegments {
             segments: self.segments.get(len..).unwrap_or(&[]),
             generic_args: self.generic_args.and_then(|it| it.get(len..)),
         }
     }
 
-    pub fn take(&self, len: usize) -> PathSegments<'a> {
+    pub fn take(&self, len: usize) -> PathSegments<'a, 'db> {
         PathSegments {
             segments: self.segments.get(..len).unwrap_or(self.segments),
             generic_args: self.generic_args.map(|it| it.get(..len).unwrap_or(it)),
         }
     }
 
-    pub fn strip_last(&self) -> PathSegments<'a> {
+    pub fn strip_last(&self) -> PathSegments<'a, 'db> {
         PathSegments {
             segments: self.segments.split_last().map_or(&[], |it| it.1),
             generic_args: self.generic_args.map(|it| it.split_last().map_or(&[][..], |it| it.1)),
         }
     }
 
-    pub fn strip_last_two(&self) -> PathSegments<'a> {
+    pub fn strip_last_two(&self) -> PathSegments<'a, 'db> {
         PathSegments {
             segments: self.segments.get(..self.segments.len().saturating_sub(2)).unwrap_or(&[]),
             generic_args: self
@@ -276,7 +281,7 @@ impl<'a> PathSegments<'a> {
         }
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = PathSegment<'a>> {
+    pub fn iter(&self) -> impl Iterator<Item = PathSegment<'a, 'db>> {
         self.segments
             .iter()
             .zip(self.generic_args.into_iter().flatten().chain(iter::repeat(&None)))
@@ -284,8 +289,8 @@ impl<'a> PathSegments<'a> {
     }
 }
 
-impl GenericArgs {
-    pub(crate) fn empty() -> GenericArgs {
+impl<'db> GenericArgs<'db> {
+    pub(crate) fn empty() -> GenericArgs<'db> {
         GenericArgs {
             args: Box::default(),
             has_self_type: false,
@@ -294,7 +299,7 @@ impl GenericArgs {
         }
     }
 
-    pub(crate) fn return_type_notation() -> GenericArgs {
+    pub(crate) fn return_type_notation() -> GenericArgs<'db> {
         GenericArgs {
             args: Box::default(),
             has_self_type: false,
@@ -304,8 +309,8 @@ impl GenericArgs {
     }
 }
 
-impl From<Name> for Path {
-    fn from(name: Name) -> Path {
+impl<'db> From<Name> for Path<'db> {
+    fn from(name: Name) -> Path<'db> {
         Path::BarePath(Interned::new(ModPath::from_segments(PathKind::Plain, iter::once(name))))
     }
 }

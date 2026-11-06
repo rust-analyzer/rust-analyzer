@@ -7,6 +7,7 @@
 
 use macros::{TypeFoldable, TypeVisitable};
 use rustc_type_ir::{PredicatePolarity, inherent::IntoKind};
+use salsa::SalsaValue;
 
 use crate::{
     Span,
@@ -19,9 +20,9 @@ use crate::{
     },
 };
 
-#[derive(Debug, Clone, PartialEq, Eq, TypeVisitable, TypeFoldable)]
-pub struct SolverDiagnostic {
-    pub span: Span,
+#[derive(Debug, Clone, PartialEq, Eq, TypeVisitable, TypeFoldable, SalsaValue)]
+pub struct SolverDiagnostic<'db> {
+    pub span: Span<'db>,
     pub kind: SolverDiagnosticKind,
 }
 
@@ -46,8 +47,8 @@ impl StoredTraitPredicate {
     }
 }
 
-impl SolverDiagnostic {
-    pub fn from_fulfillment_error(error: &FulfillmentError<'_>) -> Option<Self> {
+impl<'db> SolverDiagnostic<'db> {
+    pub fn from_fulfillment_error(error: &FulfillmentError<'db>) -> Option<Self> {
         let span = error.obligation.cause.span();
         if span.is_dummy() {
             return None;

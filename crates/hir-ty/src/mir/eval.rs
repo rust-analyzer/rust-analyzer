@@ -152,9 +152,9 @@ impl TlsData {
 
 struct StackFrame<'a, 'db> {
     locals: Locals<'a, 'db>,
-    destination: Option<BasicBlockId>,
+    destination: Option<BasicBlockId<'db>>,
     prev_stack_ptr: usize,
-    span: (MirSpan, InferBodyId<'db>),
+    span: (MirSpan<'db>, InferBodyId<'db>),
 }
 
 #[derive(Clone)]
@@ -359,7 +359,7 @@ pub enum MirEvalError<'db> {
     InvalidConst,
     InFunction(
         Box<MirEvalError<'db>>,
-        Vec<(Either<FunctionId, InternedClosureId<'db>>, MirSpan, InferBodyId<'db>)>,
+        Vec<(Either<FunctionId, InternedClosureId<'db>>, MirSpan<'db>, InferBodyId<'db>)>,
     ),
     ExecutionLimitExceeded,
     StackOverflow,
@@ -584,7 +584,11 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         self.cached_ptr_size
     }
 
-    fn caller_location_fields(&self, owner: InferBodyId<'db>, span: MirSpan) -> (String, u32, u32) {
+    fn caller_location_fields(
+        &self,
+        owner: InferBodyId<'db>,
+        span: MirSpan<'db>,
+    ) -> (String, u32, u32) {
         let Some((file_id, text_range)) = self.resolve_mir_span(owner, span) else {
             return (String::new(), 0, 0);
         };
@@ -598,7 +602,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
     fn resolve_mir_span(
         &self,
         owner: InferBodyId<'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Option<(FileId, TextRange)> {
         let (source_map, self_param_syntax) = match owner {
             InferBodyId::DefWithBodyId(def) => {
@@ -764,7 +768,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         Ok(self.place_addr_and_ty_and_metadata(p, locals)?.1)
     }
 
-    fn operand_ty(&self, o: &Operand, locals: &Locals<'a, 'db>) -> Result<'db, Ty<'db>> {
+    fn operand_ty(&self, o: &Operand<'db>, locals: &Locals<'a, 'db>) -> Result<'db, Ty<'db>> {
         Ok(match &o.kind {
             OperandKind::Copy(p) | OperandKind::Move(p) => self.place_ty(p, locals)?,
             OperandKind::Constant { konst: _, ty } => ty.as_ref(),
@@ -784,7 +788,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
 
     fn operand_ty_and_eval(
         &mut self,
-        o: &Operand,
+        o: &Operand<'db>,
         locals: &mut Locals<'a, 'db>,
     ) -> Result<'db, IntervalAndTy<'db>> {
         Ok(IntervalAndTy {
@@ -1028,7 +1032,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
 
     fn eval_rvalue(
         &mut self,
-        r: &Rvalue,
+        r: &Rvalue<'db>,
         locals: &mut Locals<'a, 'db>,
     ) -> Result<'db, IntervalOrOwned> {
         use IntervalOrOwned::*;
@@ -1785,7 +1789,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
 
     fn eval_operand(
         &mut self,
-        it: &Operand,
+        it: &Operand<'db>,
         locals: &mut Locals<'a, 'db>,
     ) -> Result<'db, Interval> {
         Ok(match &it.kind {
@@ -2552,8 +2556,8 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         destination: Interval,
         args: &[IntervalAndTy<'db>],
         locals: &Locals<'a, 'db>,
-        target_bb: Option<BasicBlockId>,
-        span: MirSpan,
+        target_bb: Option<BasicBlockId<'db>>,
+        span: MirSpan<'db>,
     ) -> Result<'db, Option<StackFrame<'a, 'db>>> {
         let id = from_bytes!(usize, bytes.get(self)?);
         let next_ty = self.vtable_map.ty(id)?;
@@ -2583,7 +2587,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         destination: Interval,
         args: &[IntervalAndTy<'db>],
         locals: &Locals<'a, 'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, Option<StackFrame<'a, 'db>>> {
         let mir_body = self
             .db
@@ -2621,8 +2625,8 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         destination: Interval,
         args: &[IntervalAndTy<'db>],
         locals: &Locals<'a, 'db>,
-        target_bb: Option<BasicBlockId>,
-        span: MirSpan,
+        target_bb: Option<BasicBlockId<'db>>,
+        span: MirSpan<'db>,
     ) -> Result<'db, Option<StackFrame<'a, 'db>>> {
         match def {
             CallableDefId::FunctionId(def) => {
@@ -2679,7 +2683,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         def: FunctionId,
         generic_args: GenericArgs<'db>,
         locals: &Locals<'a, 'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, MirOrDynIndex<'db>> {
         let pair = (def, generic_args);
         if let Some(r) = self.mir_or_dyn_index_cache.borrow().get(&pair) {
@@ -2722,8 +2726,8 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         generic_args: GenericArgs<'db>,
         locals: &Locals<'a, 'db>,
         destination: Interval,
-        target_bb: Option<BasicBlockId>,
-        span: MirSpan,
+        target_bb: Option<BasicBlockId<'db>>,
+        span: MirSpan<'db>,
     ) -> Result<'db, Option<StackFrame<'a, 'db>>> {
         if self.detect_and_exec_special_function(
             def,
@@ -2789,9 +2793,9 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         locals: &Locals<'a, 'db>,
         def: FunctionId,
         arg_bytes: impl Iterator<Item = IntervalOrOwned>,
-        span: MirSpan,
+        span: MirSpan<'db>,
         destination: Interval,
-        target_bb: Option<BasicBlockId>,
+        target_bb: Option<BasicBlockId<'db>>,
     ) -> Result<'db, Option<StackFrame<'a, 'db>>> {
         if let Some(target_bb) = target_bb {
             let (mut locals, prev_stack_ptr) =
@@ -2818,8 +2822,8 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         generic_args: GenericArgs<'db>,
         locals: &Locals<'a, 'db>,
         destination: Interval,
-        target_bb: Option<BasicBlockId>,
-        span: MirSpan,
+        target_bb: Option<BasicBlockId<'db>>,
+        span: MirSpan<'db>,
     ) -> Result<'db, Option<StackFrame<'a, 'db>>> {
         let func = args
             .first()
@@ -2936,7 +2940,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         &mut self,
         place: &StoredPlace,
         locals: &mut Locals<'a, 'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         let (addr, ty, metadata) = self.place_addr_and_ty_and_metadata(place, locals)?;
         if !locals.drop_flags.remove_place(place.as_ref()) {
@@ -2955,7 +2959,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
         locals: &Locals<'a, 'db>,
         addr: Address,
         metadata: &[u8],
-        span: MirSpan,
+        span: MirSpan<'db>,
     ) -> Result<'db, ()> {
         let Some(drop_fn) = self.lang_items().Drop_drop else {
             // in some tests we don't have drop trait in minicore, and

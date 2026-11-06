@@ -102,7 +102,7 @@ impl Module {
     }
 }
 
-impl HasSource for Field {
+impl<'db> HasSource for Field<'db> {
     type Ast = FieldSource;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         let var = VariantId::from(self.parent);
@@ -158,7 +158,7 @@ impl HasSource for EnumVariant {
         Some(self.id.lookup(db).source(db))
     }
 }
-impl HasSource for Function {
+impl HasSource for Function<'_> {
     type Ast = ast::Fn;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         match self.id {
@@ -225,7 +225,7 @@ impl HasSource for Macro {
         }
     }
 }
-impl HasSource for Impl {
+impl HasSource for Impl<'_> {
     type Ast = ast::Impl;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         match self.id {
@@ -249,7 +249,7 @@ impl HasSource for Impl {
     }
 }
 
-impl HasSource for TypeOrConstParam {
+impl<'db> HasSource for TypeOrConstParam<'db> {
     type Ast = Either<ast::TypeOrConstParam, ast::Trait>;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         let child_source = self.id.parent.child_source(db);
@@ -313,7 +313,7 @@ impl HasSource for Param<'_> {
     }
 }
 
-impl HasSource for SelfParam {
+impl HasSource for SelfParam<'_> {
     type Ast = ast::SelfParam;
 
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
@@ -343,7 +343,7 @@ impl HasSource for ExternCrateDecl {
     }
 }
 
-impl HasSource for InlineAsmOperand {
+impl<'db> HasSource for InlineAsmOperand<'db> {
     type Ast = ast::AsmOperandNamed;
     fn source(self, db: &dyn HirDatabase) -> Option<InFile<Self::Ast>> {
         let (_, source_map) = ExpressionStore::with_source_map(db, self.owner);

@@ -222,7 +222,7 @@ impl<'db> InferCtxt<'db> {
     /// This checks for cycles -- that is, whether `source_term` references `target_vid`.
     fn generalize<T: Into<Term<'db>> + Relate<DbInterner<'db>>>(
         &self,
-        span: Span,
+        span: Span<'db>,
         structurally_relate_aliases: StructurallyRelateAliases,
         target_vid: impl Into<TermVid>,
         ambient_variance: Variance,
@@ -274,7 +274,7 @@ impl<'db> InferCtxt<'db> {
 struct Generalizer<'me, 'db> {
     infcx: &'me InferCtxt<'db>,
 
-    span: Span,
+    span: Span<'db>,
 
     /// Whether aliases should be related structurally. If not, we have to
     /// be careful when generalizing aliases.

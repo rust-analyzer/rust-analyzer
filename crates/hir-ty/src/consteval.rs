@@ -297,7 +297,7 @@ pub(crate) fn path_to_const<'a, 'db>(
     resolver: &Resolver<'db>,
     generics: &dyn Fn() -> &'a Generics<'db>,
     forbid_params_after: Option<u32>,
-    path: &Path,
+    path: &Path<'db>,
 ) -> Result<Const<'db>, CreateConstError<'db>> {
     let interner = DbInterner::new_no_crate(db);
     let resolution = resolver
@@ -340,12 +340,12 @@ pub(crate) fn path_to_const<'a, 'db>(
 pub(crate) fn create_anon_const<'a, 'db>(
     interner: DbInterner<'db>,
     owner: ExpressionStoreOwnerId,
-    store: &ExpressionStore,
-    expr_id: ExprId,
+    store: &ExpressionStore<'db>,
+    expr_id: ExprId<'db>,
     resolver: &Resolver<'db>,
     expected_ty: Ty<'db>,
     generics: &dyn Fn() -> &'a Generics<'db>,
-    create_var: Option<&mut dyn FnMut(Span) -> Const<'db>>,
+    create_var: Option<&mut dyn FnMut(Span<'db>) -> Const<'db>>,
     lowering_mode: LoweringMode,
     forbid_params_after: Option<u32>,
     allow_anon_const_using_generic_params: bool,

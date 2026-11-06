@@ -443,8 +443,8 @@ impl flags::AnalysisStats {
     fn run_const_eval(
         &self,
         db: &RootDatabase,
-        bodies: &[DefWithBody],
-        _signatures: &[GenericDef],
+        bodies: &[DefWithBody<'_>],
+        _signatures: &[GenericDef<'_>],
         _variants: &[Variant],
         verbosity: Verbosity,
     ) {
@@ -721,8 +721,8 @@ impl flags::AnalysisStats {
     fn run_mir_lowering(
         &self,
         db: &RootDatabase,
-        bodies: &[DefWithBody],
-        _signatures: &[GenericDef],
+        bodies: &[DefWithBody<'_>],
+        _signatures: &[GenericDef<'_>],
         _variants: &[Variant],
         verbosity: Verbosity,
     ) {
@@ -775,8 +775,8 @@ impl flags::AnalysisStats {
         &self,
         db: &RootDatabase,
         vfs: &Vfs,
-        bodies: &[DefWithBody],
-        signatures: &[GenericDef],
+        bodies: &[DefWithBody<'_>],
+        signatures: &[GenericDef<'_>],
         _variants: &[Variant],
         verbosity: Verbosity,
     ) {
@@ -1163,8 +1163,8 @@ impl flags::AnalysisStats {
         &self,
         db: &RootDatabase,
         vfs: &Vfs,
-        bodies: &[DefWithBody],
-        signatures: &[GenericDef],
+        bodies: &[DefWithBody<'_>],
+        signatures: &[GenericDef<'_>],
         variants: &[Variant],
         verbosity: Verbosity,
     ) {
@@ -1495,7 +1495,12 @@ fn full_name(db: &RootDatabase, name: impl Fn() -> Option<Name>, module: hir::Mo
         .join("::")
 }
 
-fn location_csv_expr(db: &RootDatabase, vfs: &Vfs, sm: &BodySourceMap, expr_id: ExprId) -> String {
+fn location_csv_expr<'db>(
+    db: &RootDatabase,
+    vfs: &Vfs,
+    sm: &BodySourceMap<'db>,
+    expr_id: ExprId<'db>,
+) -> String {
     let src = match sm.expr_syntax(expr_id) {
         Ok(s) => s,
         Err(SyntheticSyntax) => return "synthetic,,".to_owned(),
@@ -1511,7 +1516,12 @@ fn location_csv_expr(db: &RootDatabase, vfs: &Vfs, sm: &BodySourceMap, expr_id: 
     format!("{path},{}:{},{}:{}", start.line + 1, start.col, end.line + 1, end.col)
 }
 
-fn location_csv_pat(db: &RootDatabase, vfs: &Vfs, sm: &BodySourceMap, pat_id: PatId) -> String {
+fn location_csv_pat<'db>(
+    db: &RootDatabase,
+    vfs: &Vfs,
+    sm: &BodySourceMap<'db>,
+    pat_id: PatId<'db>,
+) -> String {
     let src = match sm.pat_syntax(pat_id) {
         Ok(s) => s,
         Err(SyntheticSyntax) => return "synthetic,,".to_owned(),
@@ -1527,11 +1537,11 @@ fn location_csv_pat(db: &RootDatabase, vfs: &Vfs, sm: &BodySourceMap, pat_id: Pa
     format!("{path},{}:{},{}:{}", start.line + 1, start.col, end.line + 1, end.col)
 }
 
-fn expr_syntax_range<'a>(
+fn expr_syntax_range<'a, 'db>(
     db: &RootDatabase,
     vfs: &'a Vfs,
-    sm: &BodySourceMap,
-    expr_id: ExprId,
+    sm: &BodySourceMap<'db>,
+    expr_id: ExprId<'db>,
 ) -> Option<(&'a VfsPath, LineCol, LineCol)> {
     let src = sm.expr_syntax(expr_id);
     if let Ok(src) = src {
@@ -1548,11 +1558,11 @@ fn expr_syntax_range<'a>(
         None
     }
 }
-fn pat_syntax_range<'a>(
+fn pat_syntax_range<'a, 'db>(
     db: &RootDatabase,
     vfs: &'a Vfs,
-    sm: &BodySourceMap,
-    pat_id: PatId,
+    sm: &BodySourceMap<'db>,
+    pat_id: PatId<'db>,
 ) -> Option<(&'a VfsPath, LineCol, LineCol)> {
     let src = sm.pat_syntax(pat_id);
     if let Ok(src) = src {

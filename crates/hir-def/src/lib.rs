@@ -72,7 +72,7 @@ use hir_expand::{
 use intern::{Interned, sym};
 use nameres::DefMap;
 use rustc_abi::ExternAbi;
-use salsa::{Durability, Setter};
+use salsa::{Durability, SalsaValue, Setter};
 use span::{AstIdNode, Edition, FileAstId, SyntaxContext};
 use stdx::impl_from;
 use syntax::{AstNode, ast};
@@ -152,7 +152,7 @@ impl<N: AstIdNode> Hash for ItemLoc<N> {
     }
 }
 
-impl<N: AstIdNode> HasModule for ItemLoc<N> {
+impl<'db, N: AstIdNode> HasModule<'db> for ItemLoc<N> {
     #[inline]
     fn module(&self, _db: &dyn SourceDatabase) -> ModuleId {
         self.container
@@ -189,9 +189,9 @@ impl<N: AstIdNode> Hash for AssocItemLoc<N> {
     }
 }
 
-impl<N: AstIdNode> HasModule for AssocItemLoc<N> {
+impl<'db, N: AstIdNode> HasModule<'db> for AssocItemLoc<N> {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.container.module(db)
     }
 }
@@ -249,9 +249,9 @@ macro_rules! impl_loc {
             }
         }
 
-        impl HasModule for $loc {
+        impl<'db> HasModule<'db> for $loc {
             #[inline]
-            fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+            fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
                 self.$container.module(db)
             }
         }
@@ -264,15 +264,15 @@ impl_intern!(FunctionId, FunctionLoc);
 type StructLoc = ItemLoc<ast::Struct>;
 impl_intern!(StructId, StructLoc);
 
-impl StructId {
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+impl<'db> StructId {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self.into())
     }
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self.into());
         (&r.0, &r.1)
     }
@@ -281,15 +281,15 @@ impl StructId {
 pub type UnionLoc = ItemLoc<ast::Union>;
 impl_intern!(UnionId, UnionLoc);
 
-impl UnionId {
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+impl<'db> UnionId {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self.into())
     }
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self.into());
         (&r.0, &r.1)
     }
@@ -358,7 +358,7 @@ pub struct BuiltinDeriveImplLoc {
     pub derive_index: u32,
 }
 
-#[salsa::interned(debug, unsafe(no_lifetime), revisions = usize::MAX)]
+#[salsa::interned(debug, revisions = usize::MAX)]
 #[derive(PartialOrd, Ord)]
 pub struct BuiltinDeriveImplId {
     #[returns(ref)]
@@ -400,8 +400,8 @@ impl EnumVariantLoc {
     }
 }
 
-impl EnumVariantId {
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+impl<'db> EnumVariantId {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self.into())
     }
 
@@ -411,8 +411,8 @@ impl EnumVariantId {
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self.into());
         (&r.0, &r.1)
     }
@@ -568,7 +568,7 @@ impl<'db> ModuleIdLt<'db> {
         unsafe { std::mem::transmute(self) }
     }
 
-    pub fn def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap {
+    pub fn def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap<'db> {
         match self.block(db) {
             Some(block) => block_def_map(db, block),
             None => crate_def_map(db, self.krate(db)),
@@ -578,7 +578,7 @@ impl<'db> ModuleIdLt<'db> {
     pub(crate) fn local_def_map(
         self,
         db: &'db dyn SourceDatabase,
-    ) -> (&'db DefMap, &'db LocalDefMap) {
+    ) -> (&'db DefMap<'db>, &'db LocalDefMap) {
         match self.block(db) {
             Some(block) => (block_def_map(db, block), self.only_local_def_map(db)),
             None => {
@@ -592,7 +592,7 @@ impl<'db> ModuleIdLt<'db> {
         crate_local_def_map(db, self.krate(db)).local(db)
     }
 
-    pub fn crate_def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap {
+    pub fn crate_def_map(self, db: &'db dyn SourceDatabase) -> &'db DefMap<'db> {
         crate_def_map(db, self.krate(db))
     }
 
@@ -622,7 +622,7 @@ impl ModuleId {
     }
 }
 
-impl HasModule for ModuleId {
+impl<'db> HasModule<'db> for ModuleId {
     #[inline]
     fn module(&self, _db: &dyn SourceDatabase) -> ModuleId {
         *self
@@ -630,10 +630,10 @@ impl HasModule for ModuleId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
-pub struct FieldId {
+pub struct FieldId<'db> {
     // FIXME: Store this as an erased `salsa::Id` to save space
     pub parent: VariantId,
-    pub local_id: LocalFieldId,
+    pub local_id: LocalFieldId<'db>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::SalsaValue)]
@@ -645,30 +645,30 @@ pub struct TupleFieldId {
     pub index: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
-pub struct TypeOrConstParamId {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, SalsaValue)]
+pub struct TypeOrConstParamId<'db> {
     // FIXME: Store this as an erased `salsa::Id` to save space
     pub parent: GenericDefId,
-    pub local_id: LocalTypeOrConstParamId,
+    pub local_id: LocalTypeOrConstParamId<'db>,
 }
 
 /// A TypeOrConstParamId with an invariant that it actually belongs to a type
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct TypeParamId(TypeOrConstParamId);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
+pub struct TypeParamId<'db>(TypeOrConstParamId<'db>);
 
-impl TypeParamId {
+impl<'db> TypeParamId<'db> {
     #[inline]
     pub fn parent(&self) -> GenericDefId {
         self.0.parent
     }
 
     #[inline]
-    pub fn local_id(&self) -> LocalTypeOrConstParamId {
+    pub fn local_id(&self) -> LocalTypeOrConstParamId<'db> {
         self.0.local_id
     }
 
     #[inline]
-    pub fn trait_self(trait_: TraitId) -> TypeParamId {
+    pub fn trait_self(trait_: TraitId) -> TypeParamId<'db> {
         TypeParamId::from_unchecked(TypeOrConstParamId {
             parent: trait_.into(),
             local_id: GenericParams::SELF_PARAM_ID_IN_SELF,
@@ -677,39 +677,39 @@ impl TypeParamId {
 
     #[inline]
     /// Caller should check if this toc id really belongs to a type
-    pub fn from_unchecked(it: TypeOrConstParamId) -> Self {
+    pub fn from_unchecked(it: TypeOrConstParamId<'db>) -> Self {
         Self(it)
     }
 }
 
-impl From<TypeParamId> for TypeOrConstParamId {
-    fn from(it: TypeParamId) -> Self {
+impl<'db> From<TypeParamId<'db>> for TypeOrConstParamId<'db> {
+    fn from(it: TypeParamId<'db>) -> Self {
         it.0
     }
 }
 
 /// A TypeOrConstParamId with an invariant that it actually belongs to a const
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct ConstParamId(TypeOrConstParamId);
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, SalsaValue)]
+pub struct ConstParamId<'db>(TypeOrConstParamId<'db>);
 
-impl ConstParamId {
+impl<'db> ConstParamId<'db> {
     pub fn parent(&self) -> GenericDefId {
         self.0.parent
     }
-    pub fn local_id(&self) -> LocalTypeOrConstParamId {
+    pub fn local_id(&self) -> LocalTypeOrConstParamId<'db> {
         self.0.local_id
     }
 }
 
-impl ConstParamId {
+impl<'db> ConstParamId<'db> {
     /// Caller should check if this toc id really belongs to a const
-    pub fn from_unchecked(it: TypeOrConstParamId) -> Self {
+    pub fn from_unchecked(it: TypeOrConstParamId<'db>) -> Self {
         Self(it)
     }
 }
 
-impl From<ConstParamId> for TypeOrConstParamId {
-    fn from(it: ConstParamId) -> Self {
+impl<'db> From<ConstParamId<'db>> for TypeOrConstParamId<'db> {
+    fn from(it: ConstParamId<'db>) -> Self {
         it.0
     }
 }
@@ -746,7 +746,9 @@ pub enum AdtId {
 impl_from!(StructId, UnionId, EnumId for AdtId);
 
 /// A macro
-#[derive(Debug, PartialOrd, Ord, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype)]
+#[derive(
+    Debug, PartialOrd, Ord, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype, salsa::SalsaValue,
+)]
 pub enum MacroId {
     Macro2Id(Macro2Id),
     MacroRulesId(MacroRulesId),
@@ -818,13 +820,13 @@ impl MacroId {
 }
 
 /// A generic param
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum GenericParamId {
-    TypeParamId(TypeParamId),
-    ConstParamId(ConstParamId),
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, SalsaValue)]
+pub enum GenericParamId<'db> {
+    TypeParamId(TypeParamId<'db>),
+    ConstParamId(ConstParamId<'db>),
     LifetimeParamId(LifetimeParamId),
 }
-impl_from!(TypeParamId, LifetimeParamId, ConstParamId for GenericParamId);
+impl_from!(impl<'db> TypeParamId<'db>, LifetimeParamId, ConstParamId<'db> for GenericParamId<'db>);
 
 /// The defs which can be visible in the module.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -1012,12 +1014,12 @@ impl GenericDefId {
         self,
         db: &dyn SourceDatabase,
     ) -> (HirFileId, Option<ast::GenericParamList>) {
-        fn file_id_and_params_of_item_loc<Loc>(
-            db: &dyn SourceDatabase,
-            def: impl Lookup<Data = Loc>,
+        fn file_id_and_params_of_item_loc<'db, Loc>(
+            db: &'db dyn SourceDatabase,
+            def: impl Lookup<'db, Data = Loc>,
         ) -> (HirFileId, Option<ast::GenericParamList>)
         where
-            Loc: src::HasSource,
+            Loc: src::HasSource + 'db,
             Loc::Value: ast::HasGenericParams,
         {
             let src = def.lookup(db).source(db);
@@ -1143,7 +1145,7 @@ pub enum VariantId {
 }
 impl_from!(EnumVariantId, StructId, UnionId for VariantId);
 
-impl VariantId {
+impl<'db> VariantId {
     pub fn from_non_enum(adt_id: AdtId) -> Option<Self> {
         Some(match adt_id {
             AdtId::StructId(struct_id) => struct_id.into(),
@@ -1152,14 +1154,14 @@ impl VariantId {
         })
     }
 
-    pub fn fields(self, db: &dyn SourceDatabase) -> &VariantFields {
+    pub fn fields(self, db: &'db dyn SourceDatabase) -> &'db VariantFields<'db> {
         VariantFields::of(db, self)
     }
 
     pub fn fields_with_source_map(
         self,
-        db: &dyn SourceDatabase,
-    ) -> (&VariantFields, &ExpressionStoreSourceMap) {
+        db: &'db dyn SourceDatabase,
+    ) -> (&'db VariantFields<'db>, &'db ExpressionStoreSourceMap<'db>) {
         let r = VariantFields::with_source_map(db, self);
         (&r.0, &r.1)
     }
@@ -1181,38 +1183,38 @@ impl VariantId {
     }
 }
 
-pub trait HasModule {
+pub trait HasModule<'db> {
     /// Returns the enclosing module this thing is defined within.
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId;
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId;
     /// Returns the crate this thing is defined within.
     #[inline]
     #[doc(alias = "crate")]
-    fn krate(&self, db: &dyn SourceDatabase) -> Crate {
+    fn krate(&self, db: &'db dyn SourceDatabase) -> Crate {
         self.module(db).krate(db)
     }
 }
 
 // In theory this impl should work out for us, but rustc thinks it collides with all the other
 // manual impls that do not have a ModuleId container...
-// impl<N, ItemId, Data> HasModule for ItemId
+// impl<'db, N, ItemId, Data> HasModule<'db> for ItemId
 // where
 //     N: ItemTreeNode,
-//     ItemId: for<'db> Lookup<Database<'db> = dyn SourceDatabase + 'db, Data = Data> + Copy,
+//     ItemId: Lookup<Database<'db> = dyn SourceDatabase + 'db, Data = Data> + Copy,
 //     Data: ItemTreeLoc<Id = N, Container = ModuleId>,
 // {
 //     #[inline]
-//     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+//     fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
 //         self.lookup(db).container()
 //     }
 // }
 
-impl<N, ItemId> HasModule for ItemId
+impl<'db, N, ItemId> HasModule<'db> for ItemId
 where
-    N: AstIdNode,
-    ItemId: Lookup<Data = ItemLoc<N>> + Copy,
+    N: AstIdNode + 'db,
+    ItemId: Lookup<'db, Data = ItemLoc<N>> + Copy,
 {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
@@ -1225,7 +1227,7 @@ where
 //     ItemId: for<'db> Lookup<Database<'db> = dyn SourceDatabase + 'db, Data = AssocItemLoc<N>> + Copy,
 // {
 //     #[inline]
-//     fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+//     fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
 //         self.lookup(db).container.module(db)
 //     }
 // }
@@ -1233,85 +1235,85 @@ where
 // region: manual-assoc-has-module-impls
 #[inline]
 fn module_for_assoc_item_loc<'db>(
-    db: &(dyn 'db + SourceDatabase),
-    id: impl Lookup<Data = AssocItemLoc<impl AstIdNode>>,
+    db: &'db dyn SourceDatabase,
+    id: impl Lookup<'db, Data = AssocItemLoc<impl AstIdNode + 'db>>,
 ) -> ModuleId {
     id.lookup(db).container.module(db)
 }
 
-impl HasModule for BuiltinDeriveImplLoc {
+impl<'db> HasModule<'db> for BuiltinDeriveImplLoc {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.adt.module(db)
     }
 }
 
-impl HasModule for BuiltinDeriveImplId {
+impl<'db> HasModule<'db> for BuiltinDeriveImplId<'_> {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.loc(db).module(db)
     }
 }
 
-impl HasModule for FunctionId {
+impl<'db> HasModule<'db> for FunctionId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 
-impl HasModule for ConstId {
+impl<'db> HasModule<'db> for ConstId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 
-impl HasModule for StaticId {
+impl<'db> HasModule<'db> for StaticId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 
-impl HasModule for TypeAliasId {
+impl<'db> HasModule<'db> for TypeAliasId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         module_for_assoc_item_loc(db, *self)
     }
 }
 // endregion: manual-assoc-has-module-impls
 
-impl HasModule for EnumVariantId {
+impl<'db> HasModule<'db> for EnumVariantId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).parent.module(db)
     }
 }
 
-impl HasModule for MacroRulesId {
+impl<'db> HasModule<'db> for MacroRulesId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
 
-impl HasModule for Macro2Id {
+impl<'db> HasModule<'db> for Macro2Id {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
 
-impl HasModule for ProcMacroId {
+impl<'db> HasModule<'db> for ProcMacroId {
     #[inline]
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         self.lookup(db).container
     }
 }
 
-impl HasModule for ItemContainerId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for ItemContainerId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             ItemContainerId::ModuleId(it) => it,
             ItemContainerId::ImplId(it) => it.module(db),
@@ -1321,8 +1323,8 @@ impl HasModule for ItemContainerId {
     }
 }
 
-impl HasModule for AdtId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for AdtId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             AdtId::StructId(it) => it.module(db),
             AdtId::UnionId(it) => it.module(db),
@@ -1331,8 +1333,8 @@ impl HasModule for AdtId {
     }
 }
 
-impl HasModule for VariantId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for VariantId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             VariantId::EnumVariantId(it) => it.module(db),
             VariantId::StructId(it) => it.module(db),
@@ -1341,8 +1343,8 @@ impl HasModule for VariantId {
     }
 }
 
-impl HasModule for MacroId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for MacroId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match *self {
             MacroId::MacroRulesId(it) => it.module(db),
             MacroId::Macro2Id(it) => it.module(db),
@@ -1351,8 +1353,8 @@ impl HasModule for MacroId {
     }
 }
 
-impl HasModule for DefWithBodyId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for DefWithBodyId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             DefWithBodyId::FunctionId(it) => it.module(db),
             DefWithBodyId::StaticId(it) => it.module(db),
@@ -1362,8 +1364,8 @@ impl HasModule for DefWithBodyId {
     }
 }
 
-impl HasModule for ExpressionStoreOwnerId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for ExpressionStoreOwnerId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             ExpressionStoreOwnerId::Signature(def) => def.module(db),
             ExpressionStoreOwnerId::Body(def) => def.module(db),
@@ -1372,8 +1374,8 @@ impl HasModule for ExpressionStoreOwnerId {
     }
 }
 
-impl HasModule for GenericDefId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for GenericDefId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             GenericDefId::FunctionId(it) => it.module(db),
             GenericDefId::AdtId(it) => it.module(db),
@@ -1386,8 +1388,8 @@ impl HasModule for GenericDefId {
     }
 }
 
-impl HasModule for AttrDefId {
-    fn module(&self, db: &dyn SourceDatabase) -> ModuleId {
+impl<'db> HasModule<'db> for AttrDefId {
+    fn module(&self, db: &'db dyn SourceDatabase) -> ModuleId {
         match self {
             AttrDefId::ModuleId(it) => *it,
             AttrDefId::AdtId(it) => it.module(db),

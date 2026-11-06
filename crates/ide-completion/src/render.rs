@@ -38,7 +38,7 @@ use crate::{
 pub(crate) struct RenderContext<'a, 'db> {
     completion: &'a CompletionContext<'a, 'db>,
     is_private_editable: bool,
-    import_to_add: Option<LocatedImport>,
+    import_to_add: Option<LocatedImport<'db>>,
     doc_aliases: Vec<SmolStr>,
 }
 
@@ -57,7 +57,7 @@ impl<'a, 'db> RenderContext<'a, 'db> {
         self
     }
 
-    pub(crate) fn import_to_add(mut self, import_to_add: Option<LocatedImport>) -> Self {
+    pub(crate) fn import_to_add(mut self, import_to_add: Option<LocatedImport<'db>>) -> Self {
         self.import_to_add = import_to_add;
         self
     }
@@ -110,7 +110,11 @@ impl<'a, 'db> RenderContext<'a, 'db> {
     /// ```
     ///
     /// [`try_as_dyn`]: https://doc.rust-lang.org/std/any/fn.try_as_dyn.html
-    fn is_deprecated(&self, def: impl HasAttrs, def_as_assoc_item: Option<hir::AssocItem>) -> bool {
+    fn is_deprecated(
+        &self,
+        def: impl HasAttrs<'db>,
+        def_as_assoc_item: Option<hir::AssocItem<'_>>,
+    ) -> bool {
         let db = self.db();
         def.attrs(db).is_deprecated()
             || def_as_assoc_item
@@ -130,16 +134,16 @@ impl<'a, 'db> RenderContext<'a, 'db> {
     }
 
     // FIXME: remove this
-    fn docs(&self, def: impl HasDocs) -> Option<Documentation<'a>> {
+    fn docs(&self, def: impl HasDocs<'db>) -> Option<Documentation<'a>> {
         def.docs(self.db())
     }
 }
 
-pub(crate) fn render_field(
-    ctx: RenderContext<'_, '_>,
+pub(crate) fn render_field<'db>(
+    ctx: RenderContext<'_, 'db>,
     dot_access: &DotAccess<'_>,
     receiver: Option<SmolStr>,
-    field: hir::Field,
+    field: hir::Field<'db>,
     ty: &hir::Type<'_>,
 ) -> CompletionItem {
     let db = ctx.db();
@@ -258,7 +262,7 @@ pub(crate) fn render_path_resolution<'db>(
     path_ctx: &PathCompletionCtx<'_>,
     local_name: hir::Name,
     resolution: ScopeDef<'db>,
-) -> Builder {
+) -> Builder<'db> {
     render_resolution_path(ctx, path_ctx, local_name, None, resolution)
 }
 
@@ -267,15 +271,15 @@ pub(crate) fn render_pattern_resolution<'db>(
     pattern_ctx: &PatternContext,
     local_name: hir::Name,
     resolution: ScopeDef<'db>,
-) -> Builder {
+) -> Builder<'db> {
     render_resolution_pat(ctx, pattern_ctx, local_name, None, resolution)
 }
 
-pub(crate) fn render_resolution_with_import(
-    ctx: RenderContext<'_, '_>,
+pub(crate) fn render_resolution_with_import<'db>(
+    ctx: RenderContext<'_, 'db>,
     path_ctx: &PathCompletionCtx<'_>,
-    import_edit: LocatedImport,
-) -> Option<Builder> {
+    import_edit: LocatedImport<'db>,
+) -> Option<Builder<'db>> {
     let resolution = ScopeDef::from(import_edit.original_item);
     let local_name = get_import_name(resolution, &ctx, &import_edit)?;
     // This now just renders the alias text, but we need to find the aliases earlier and call this with the alias instead.
@@ -284,11 +288,11 @@ pub(crate) fn render_resolution_with_import(
     Some(render_resolution_path(ctx, path_ctx, local_name, Some(import_edit), resolution))
 }
 
-pub(crate) fn render_resolution_with_import_pat(
-    ctx: RenderContext<'_, '_>,
+pub(crate) fn render_resolution_with_import_pat<'db>(
+    ctx: RenderContext<'_, 'db>,
     pattern_ctx: &PatternContext,
-    import_edit: LocatedImport,
-) -> Option<Builder> {
+    import_edit: LocatedImport<'db>,
+) -> Option<Builder<'db>> {
     let resolution = ScopeDef::from(import_edit.original_item);
     let local_name = get_import_name(resolution, &ctx, &import_edit)?;
     Some(render_resolution_pat(ctx, pattern_ctx, local_name, Some(import_edit), resolution))
@@ -297,7 +301,7 @@ pub(crate) fn render_resolution_with_import_pat(
 pub(crate) fn render_expr<'db>(
     ctx: &CompletionContext<'_, 'db>,
     expr: &hir::term_search::Expr<'db>,
-) -> Option<Builder> {
+) -> Option<Builder<'db>> {
     let mut i = 1;
     let mut snippet_formatter = |ty: &hir::Type<'_>| {
         let arg_name = ty
@@ -359,7 +363,7 @@ pub(crate) fn render_expr<'db>(
 fn get_import_name<'db>(
     resolution: ScopeDef<'db>,
     ctx: &RenderContext<'_, 'db>,
-    import_edit: &LocatedImport,
+    import_edit: &LocatedImport<'db>,
 ) -> Option<hir::Name> {
     // FIXME: Temporary workaround for handling aliased import.
     // This should be removed after we have proper support for importing alias.
@@ -377,7 +381,7 @@ fn get_import_name<'db>(
 fn scope_def_to_name<'db>(
     resolution: ScopeDef<'db>,
     ctx: &RenderContext<'_, 'db>,
-    import_edit: &LocatedImport,
+    import_edit: &LocatedImport<'db>,
 ) -> Option<hir::Name> {
     Some(match resolution {
         ScopeDef::ModuleDef(hir::ModuleDef::Function(f)) => f.name(ctx.completion.db),
@@ -391,9 +395,9 @@ fn render_resolution_pat<'db>(
     ctx: RenderContext<'_, 'db>,
     pattern_ctx: &PatternContext,
     local_name: hir::Name,
-    import_to_add: Option<LocatedImport>,
+    import_to_add: Option<LocatedImport<'db>>,
     resolution: ScopeDef<'db>,
-) -> Builder {
+) -> Builder<'db> {
     let _p = tracing::info_span!("render_resolution_pat").entered();
     use hir::ModuleDef::*;
 
@@ -409,9 +413,9 @@ fn render_resolution_path<'db>(
     ctx: RenderContext<'_, 'db>,
     path_ctx: &PathCompletionCtx<'_>,
     local_name: hir::Name,
-    import_to_add: Option<LocatedImport>,
+    import_to_add: Option<LocatedImport<'db>>,
     resolution: ScopeDef<'db>,
-) -> Builder {
+) -> Builder<'db> {
     let _p = tracing::info_span!("render_resolution_path").entered();
     use hir::ModuleDef::*;
 
@@ -535,9 +539,9 @@ fn render_resolution_path<'db>(
 fn render_resolution_simple_<'db>(
     ctx: RenderContext<'_, 'db>,
     local_name: &hir::Name,
-    import_to_add: Option<LocatedImport>,
+    import_to_add: Option<LocatedImport<'db>>,
     resolution: ScopeDef<'db>,
-) -> Builder {
+) -> Builder<'db> {
     let _p = tracing::info_span!("render_resolution_simple_").entered();
 
     let db = ctx.db();
@@ -613,7 +617,7 @@ fn scope_def_docs<'db>(
     }
 }
 
-fn scope_def_is_deprecated(ctx: &RenderContext<'_, '_>, resolution: ScopeDef<'_>) -> bool {
+fn scope_def_is_deprecated<'db>(ctx: &RenderContext<'_, 'db>, resolution: ScopeDef<'db>) -> bool {
     let db = ctx.db();
     match resolution {
         ScopeDef::ModuleDef(hir::ModuleDef::EnumVariant(it)) => ctx.is_variant_deprecated(it),
@@ -628,12 +632,12 @@ fn scope_def_is_deprecated(ctx: &RenderContext<'_, '_>, resolution: ScopeDef<'_>
     }
 }
 
-pub(crate) fn render_type_keyword_snippet(
+pub(crate) fn render_type_keyword_snippet<'db>(
     ctx: &CompletionContext<'_, '_>,
     path_ctx: &PathCompletionCtx<'_>,
     label: &str,
     snippet: &str,
-) -> Builder {
+) -> Builder<'db> {
     let source_range = ctx.source_range();
     let mut item =
         CompletionItem::new(CompletionItemKind::Keyword, source_range, label, ctx.edition);
@@ -655,7 +659,7 @@ pub(crate) fn render_type_keyword_snippet(
 fn adds_ret_type_arrow(
     ctx: &CompletionContext<'_, '_>,
     path_ctx: &PathCompletionCtx<'_>,
-    item: &mut Builder,
+    item: &mut Builder<'_>,
     insert_text: String,
 ) {
     if let Some((arrow, at)) = path_ctx.required_thin_arrow(&ctx.sema) {
@@ -774,7 +778,7 @@ fn path_ref_match(
     completion: &CompletionContext<'_, '_>,
     path_ctx: &PathCompletionCtx<'_>,
     ty: &hir::Type<'_>,
-    item: &mut Builder,
+    item: &mut Builder<'_>,
 ) {
     if let Some(original_path) = &path_ctx.original_path {
         // At least one char was typed by the user already, in that case look for the original path

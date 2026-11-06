@@ -94,7 +94,7 @@ dependencies = [
  "dashmap",
  "indexmap",
  "intern",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "rustc-hash 2.1.2",
  "salsa",
  "semver",
@@ -228,6 +228,7 @@ dependencies = [
  "intern",
  "oorandom",
  "rustc-hash 2.1.2",
+ "salsa",
  "syntax",
  "syntax-bridge",
  "tracing",
@@ -811,7 +812,7 @@ dependencies = [
  "hir-ide",
  "intern",
  "itertools 0.15.0",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "ra-ap-rustc_type_ir",
  "rustc-hash 2.1.2",
  "salsa",
@@ -847,7 +848,7 @@ dependencies = [
  "indexmap",
  "intern",
  "itertools 0.15.0",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "ra-ap-rustc_abi",
  "ra-ap-rustc_parse_format",
  "ra-ap-rustc_type_ir",
@@ -906,7 +907,7 @@ dependencies = [
  "hir-ty",
  "intern",
  "itertools 0.15.0",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "macros",
  "project-model",
  "ra-ap-rustc_abi",
@@ -942,7 +943,7 @@ dependencies = [
  "indexmap",
  "intern",
  "itertools 0.15.0",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "macros",
  "oorandom",
  "petgraph",
@@ -1261,6 +1262,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "rayon",
  "rustc-hash 2.1.2",
+ "salsa",
  "triomphe",
 ]
 
@@ -1347,12 +1349,9 @@ dependencies = [
 [[package]]
 name = "la-arena"
 version = "0.3.1"
-
-[[package]]
-name = "la-arena"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3752f229dcc5a481d60f385fa479ff46818033d881d2d801aa27dffcfb5e8306"
+dependencies = [
+ "salsa",
+]
 
 [[package]]
 name = "lazy_static"
@@ -1998,7 +1997,7 @@ dependencies = [
  "expect-test",
  "intern",
  "itertools 0.15.0",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "paths",
  "rustc-hash 2.1.2",
  "semver",
@@ -2686,7 +2685,7 @@ name = "span"
 version = "0.0.0"
 dependencies = [
  "hashbrown 0.17.1",
- "la-arena 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "la-arena",
  "rustc-hash 2.1.2",
  "salsa",
  "stdx",

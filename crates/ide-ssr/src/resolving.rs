@@ -38,7 +38,7 @@ pub(crate) struct ResolvedPath<'db> {
 
 pub(crate) struct UfcsCallInfo<'db> {
     pub(crate) call_expr: ast::CallExpr,
-    pub(crate) function: hir::Function,
+    pub(crate) function: hir::Function<'db>,
     pub(crate) qualifier_type: Option<hir::Type<'db>>,
 }
 

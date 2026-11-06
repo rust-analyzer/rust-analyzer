@@ -31,7 +31,7 @@ use crate::{Crate, HasCrate, Module, ModuleDef, Semantics};
 #[derive(Clone, PartialEq, Eq, Hash, SalsaValue)]
 pub struct FileSymbol<'db> {
     pub name: Symbol,
-    pub def: ModuleDef,
+    pub def: ModuleDef<'db>,
     pub loc: DeclarationLocation,
     pub container_name: Option<Symbol>,
     /// Whether this symbol is a doc alias for the original symbol.
@@ -485,9 +485,9 @@ impl<'a> SymbolCollector<'a> {
         trait_do_not_complete: Option<Complete>,
     ) -> Complete
     where
-        L: Lookup + Into<ModuleDefId>,
-        <L as Lookup>::Data: HasSource,
-        <<L as Lookup>::Data as HasSource>::Value: HasName,
+        L: Lookup<'a> + Into<ModuleDefId> + 'a,
+        <L as Lookup<'a>>::Data: HasSource,
+        <<L as Lookup<'a>>::Data as HasSource>::Value: HasName,
     {
         let loc = id.lookup(self.db);
         let source = loc.source(self.db);

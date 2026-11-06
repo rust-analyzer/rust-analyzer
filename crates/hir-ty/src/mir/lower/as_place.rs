@@ -12,9 +12,9 @@ use crate::{
 impl<'db> MirLowerCtx<'_, 'db> {
     fn lower_expr_to_some_place_without_adjust(
         &mut self,
-        expr_id: ExprId,
-        prev_block: BasicBlockId,
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+        expr_id: ExprId<'db>,
+        prev_block: BasicBlockId<'db>,
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         let ty = self.expr_ty_without_adjust(expr_id);
         let place = self.temp(ty, prev_block, expr_id.into())?.into();
         let Some(current) = self.lower_expr_to_place_without_adjust(expr_id, place, prev_block)?
@@ -26,10 +26,10 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn lower_expr_to_some_place_with_adjust(
         &mut self,
-        expr_id: ExprId,
-        prev_block: BasicBlockId,
+        expr_id: ExprId<'db>,
+        prev_block: BasicBlockId<'db>,
         adjustments: &[Adjustment],
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         let ty = adjustments
             .last()
             .map(|it| it.target.as_ref())
@@ -45,11 +45,11 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     pub(super) fn lower_expr_as_place_with_adjust(
         &mut self,
-        current: BasicBlockId,
-        expr_id: ExprId,
+        current: BasicBlockId<'db>,
+        expr_id: ExprId<'db>,
         upgrade_rvalue: bool,
         adjustments: &[Adjustment],
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         let try_rvalue = |this: &mut MirLowerCtx<'_, 'db>| {
             if !upgrade_rvalue {
                 return Err(MirLowerError::MutatingRvalue);
@@ -104,10 +104,10 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     pub(super) fn lower_expr_as_place(
         &mut self,
-        current: BasicBlockId,
-        expr_id: ExprId,
+        current: BasicBlockId<'db>,
+        expr_id: ExprId<'db>,
         upgrade_rvalue: bool,
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         match self.infer.expr_adjustments.get(&expr_id) {
             Some(a) => self.lower_expr_as_place_with_adjust(current, expr_id, upgrade_rvalue, a),
             None => self.lower_expr_as_place_without_adjust(current, expr_id, upgrade_rvalue),
@@ -116,10 +116,10 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     pub(super) fn lower_expr_as_place_without_adjust(
         &mut self,
-        current: BasicBlockId,
-        expr_id: ExprId,
+        current: BasicBlockId<'db>,
+        expr_id: ExprId<'db>,
         upgrade_rvalue: bool,
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         let try_rvalue = |this: &mut MirLowerCtx<'_, 'db>| {
             if !upgrade_rvalue {
                 return Err(MirLowerError::MutatingRvalue);
@@ -261,14 +261,14 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn lower_overloaded_index(
         &mut self,
-        current: BasicBlockId,
+        current: BasicBlockId<'db>,
         place: Place<'db>,
         base_ty: Ty<'db>,
         result_ty: Ty<'db>,
-        index_operand: Operand,
-        span: MirSpan,
+        index_operand: Operand<'db>,
+        span: MirSpan<'db>,
         index_fn: (FunctionId, GenericArgs<'db>),
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         let mutability = match base_ty.as_reference() {
             Some((_, _, mutability)) => mutability,
             None => Mutability::Not,
@@ -301,13 +301,13 @@ impl<'db> MirLowerCtx<'_, 'db> {
 
     fn lower_overloaded_deref(
         &mut self,
-        current: BasicBlockId,
+        current: BasicBlockId<'db>,
         place: Place<'db>,
         source_ty: Ty<'db>,
         target_ty: Ty<'db>,
-        span: MirSpan,
+        span: MirSpan<'db>,
         mutability: bool,
-    ) -> Result<'db, Option<(Place<'db>, BasicBlockId)>> {
+    ) -> Result<'db, Option<(Place<'db>, BasicBlockId<'db>)>> {
         let lang_items = self.lang_items();
         let (mutability, deref_fn, borrow_kind) = if !mutability {
             (Mutability::Not, lang_items.Deref_deref, BorrowKind::Shared)

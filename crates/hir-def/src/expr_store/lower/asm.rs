@@ -13,12 +13,12 @@ use crate::{
     hir::{AsmOperand, AsmOptions, Expr, ExprId, InlineAsm, InlineAsmKind, InlineAsmRegOrRegClass},
 };
 
-impl ExprCollector<'_> {
+impl<'db> ExprCollector<'db> {
     pub(super) fn lower_inline_asm(
         &mut self,
         asm: ast::AsmExpr,
         syntax_ptr: AstPtr<ast::Expr>,
-    ) -> ExprId {
+    ) -> ExprId<'db> {
         let mut clobber_abis = FxIndexSet::default();
         let mut operands = vec![];
         let mut options = AsmOptions::empty();

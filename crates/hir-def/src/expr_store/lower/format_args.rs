@@ -27,7 +27,7 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         f: ast::FormatArgsExpr,
         syntax_ptr: AstPtr<ast::Expr>,
-    ) -> ExprId {
+    ) -> ExprId<'db> {
         let mut args = FormatArgumentsCollector::default();
         f.args().for_each(|arg| {
             let expr = arg.expr();
@@ -110,8 +110,8 @@ impl<'db> ExprCollector<'db> {
     fn collect_format_args_impl(
         &mut self,
         syntax_ptr: AstPtr<ast::Expr>,
-        fmt: FormatArgs,
-    ) -> ExprId {
+        fmt: FormatArgs<'db>,
+    ) -> ExprId<'db> {
         let lang_items = self.lang_items();
 
         // Create a list of all _unique_ (argument, format trait) combinations.
@@ -448,9 +448,9 @@ impl<'db> ExprCollector<'db> {
     fn make_argument(
         &mut self,
         arg_ptr: Option<AstPtr<ast::Expr>>,
-        arg: ExprId,
+        arg: ExprId<'db>,
         ty: ArgumentType,
-    ) -> ExprId {
+    ) -> ExprId<'db> {
         use ArgumentType::*;
         use FormatTrait::*;
 
@@ -492,7 +492,7 @@ impl<'db> ExprCollector<'db> {
         &mut self,
         lang: Option<impl Into<LangItemTarget>>,
         relative_name: Symbol,
-    ) -> ExprId {
+    ) -> ExprId<'db> {
         self.alloc_expr_desugared(self.ty_rel_lang_path_expr(lang, relative_name))
     }
 }

@@ -39,7 +39,7 @@ use crate::{
 struct ConfirmContext<'a, 'db> {
     ctx: &'a mut InferenceContext<'db>,
     candidate: FunctionId,
-    call_expr: ExprId,
+    call_expr: ExprId<'db>,
 }
 
 #[derive(Debug)]
@@ -54,8 +54,8 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         pick: &probe::Pick<'db>,
         unadjusted_self_ty: Ty<'db>,
-        expr: ExprId,
-        generic_args: Option<&HirGenericArgs>,
+        expr: ExprId<'db>,
+        generic_args: Option<&HirGenericArgs<'db>>,
     ) -> ConfirmResult<'db> {
         debug!(
             "confirm(unadjusted_self_ty={:?}, pick={:?}, generic_args={:?})",
@@ -74,7 +74,7 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
     fn new(
         ctx: &'a mut InferenceContext<'db>,
         candidate: FunctionId,
-        call_expr: ExprId,
+        call_expr: ExprId<'db>,
     ) -> ConfirmContext<'a, 'db> {
         ConfirmContext { ctx, candidate, call_expr }
     }
@@ -98,7 +98,7 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
         &mut self,
         unadjusted_self_ty: Ty<'db>,
         pick: &probe::Pick<'db>,
-        generic_args: Option<&HirGenericArgs>,
+        generic_args: Option<&HirGenericArgs<'db>>,
     ) -> ConfirmResult<'db> {
         // Adjust the self expression the user provided and obtain the adjusted type.
         let (self_ty, adjustments) = self.adjust_self_ty(unadjusted_self_ty, pick);
@@ -345,12 +345,12 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
 
     fn instantiate_method_args(
         &mut self,
-        generic_args: Option<&HirGenericArgs>,
+        generic_args: Option<&HirGenericArgs<'db>>,
         parent_args: GenericArgs<'db>,
     ) -> GenericArgs<'db> {
         struct LowererCtx<'a, 'db> {
             ctx: &'a mut InferenceContext<'db>,
-            expr: ExprId,
+            expr: ExprId<'db>,
             parent_args: &'a [GenericArg<'db>],
         }
 
@@ -373,7 +373,7 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
 
             fn report_arg_mismatch(
                 &mut self,
-                param_id: GenericParamId,
+                param_id: GenericParamId<'db>,
                 arg_idx: u32,
                 has_self_arg: bool,
             ) {
@@ -387,9 +387,9 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
 
             fn provided_kind(
                 &mut self,
-                param_id: GenericParamId,
+                param_id: GenericParamId<'db>,
                 param: GenericParamDataRef<'_>,
-                arg: &HirGenericArg,
+                arg: &HirGenericArg<'db>,
             ) -> GenericArg<'db> {
                 match (param, arg) {
                     (
@@ -412,9 +412,9 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
 
             fn provided_type_like_const(
                 &mut self,
-                _type_ref: TypeRefId,
+                _type_ref: TypeRefId<'db>,
                 _const_ty: Ty<'db>,
-                arg: TypeLikeConst<'_>,
+                arg: TypeLikeConst<'_, 'db>,
             ) -> Const<'db> {
                 match arg {
                     TypeLikeConst::Path(path) => self.ctx.make_path_as_const(path),
@@ -425,7 +425,7 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
             fn inferred_kind(
                 &mut self,
                 _def: GenericDefId,
-                param_id: GenericParamId,
+                param_id: GenericParamId<'db>,
                 _param: GenericParamDataRef<'_>,
                 infer_args: bool,
                 _preceding_args: &[GenericArg<'db>],
@@ -438,7 +438,11 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
                 self.ctx.table.var_for_def(param_id, span)
             }
 
-            fn parent_arg(&mut self, param_idx: u32, _param_id: GenericParamId) -> GenericArg<'db> {
+            fn parent_arg(
+                &mut self,
+                param_idx: u32,
+                _param_id: GenericParamId<'db>,
+            ) -> GenericArg<'db> {
                 self.parent_args[param_idx as usize]
             }
 

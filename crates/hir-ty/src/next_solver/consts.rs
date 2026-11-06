@@ -80,7 +80,7 @@ impl<'db> Const<'db> {
         interner.default_types().consts.error
     }
 
-    pub fn new_param(interner: DbInterner<'db>, param: ParamConst) -> Self {
+    pub fn new_param(interner: DbInterner<'db>, param: ParamConst<'db>) -> Self {
         Const::new(interner, ConstKind::Param(param))
     }
 
@@ -181,20 +181,20 @@ impl<'db> std::fmt::Debug for Const<'db> {
 pub type PlaceholderConst<'db> = rustc_type_ir::PlaceholderConst<DbInterner<'db>>;
 
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
-pub struct ParamConst {
+pub struct ParamConst<'db> {
     // FIXME: See `ParamTy`.
-    pub id: ConstParamId,
+    pub id: ConstParamId<'db>,
     pub index: u32,
 }
 
-impl std::fmt::Debug for ParamConst {
+impl<'db> std::fmt::Debug for ParamConst<'db> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "#{}", self.index)
     }
 }
 
-impl ParamConst {
-    pub fn find_const_ty_from_env<'db>(self, env: ParamEnv<'db>) -> Ty<'db> {
+impl<'db> ParamConst<'db> {
+    pub fn find_const_ty_from_env(self, env: ParamEnv<'db>) -> Ty<'db> {
         let mut candidates = env.clauses.iter().filter_map(|clause| {
             // `ConstArgHasType` are never desugared to be higher ranked.
             match clause.kind().skip_binder() {
@@ -232,7 +232,7 @@ impl ParamConst {
 )]
 pub struct ExprConst;
 
-impl rustc_type_ir::inherent::ParamLike for ParamConst {
+impl<'db> rustc_type_ir::inherent::ParamLike for ParamConst<'db> {
     fn index(self) -> u32 {
         self.index
     }

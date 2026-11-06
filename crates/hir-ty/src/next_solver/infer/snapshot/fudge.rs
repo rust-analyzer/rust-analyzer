@@ -35,7 +35,7 @@ where
 fn const_vars_since_snapshot<'db>(
     table: &mut UnificationTable<'_, 'db, ConstVidKey<'db>>,
     snapshot_var_len: usize,
-) -> (Range<ConstVid>, Vec<Span>) {
+) -> (Range<ConstVid>, Vec<Span<'db>>) {
     let range = vars_since_snapshot(table, snapshot_var_len);
     let range = range.start.vid..range.end.vid;
 
@@ -116,7 +116,7 @@ impl<'db> InferCtxt<'db> {
 
     fn fudge_inference<T: TypeFoldable<DbInterner<'db>>>(
         &self,
-        snapshot_vars: SnapshotVarData,
+        snapshot_vars: SnapshotVarData<'db>,
         value: T,
     ) -> T {
         // Micro-optimization: if no variables have been created, then
@@ -129,16 +129,16 @@ impl<'db> InferCtxt<'db> {
     }
 }
 
-struct SnapshotVarData {
-    region_vars: (Range<RegionVid>, Vec<Span>),
-    type_vars: (Range<TyVid>, Vec<Span>),
+struct SnapshotVarData<'db> {
+    region_vars: (Range<RegionVid>, Vec<Span<'db>>),
+    type_vars: (Range<TyVid>, Vec<Span<'db>>),
     int_vars: Range<IntVid>,
     float_vars: Range<FloatVid>,
-    const_vars: (Range<ConstVid>, Vec<Span>),
+    const_vars: (Range<ConstVid>, Vec<Span<'db>>),
 }
 
-impl SnapshotVarData {
-    fn new(infcx: &InferCtxt<'_>, vars_pre_snapshot: VariableLengths) -> SnapshotVarData {
+impl<'db> SnapshotVarData<'db> {
+    fn new(infcx: &InferCtxt<'db>, vars_pre_snapshot: VariableLengths) -> SnapshotVarData<'db> {
         let mut inner = infcx.inner.borrow_mut();
         let region_vars = inner
             .unwrap_region_constraints()
@@ -168,7 +168,7 @@ impl SnapshotVarData {
 
 struct InferenceFudger<'a, 'db> {
     infcx: &'a InferCtxt<'db>,
-    snapshot_vars: SnapshotVarData,
+    snapshot_vars: SnapshotVarData<'db>,
 }
 
 impl<'a, 'db> TypeFolder<DbInterner<'db>> for InferenceFudger<'a, 'db> {

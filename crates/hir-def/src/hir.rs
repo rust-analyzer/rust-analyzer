@@ -18,12 +18,13 @@ pub mod format_args;
 pub mod generics;
 pub mod type_ref;
 
-use std::{fmt, mem};
+use std::{fmt, marker::PhantomData, mem};
 
 use hir_expand::{MacroDefId, name::Name};
 use intern::Symbol;
 use la_arena::{Idx, RawIdx};
 use rustc_apfloat::ieee::{Double, Half, Quad, Single};
+use salsa::SalsaValue;
 use syntax::ast;
 use thin_vec::ThinVec;
 use type_ref::TypeRefId;
@@ -42,18 +43,18 @@ pub use syntax::ast::{ArithOp, BinaryOp, CmpOp, LogicOp, Ordering, RangeOp, Unar
 
 pub type BindingId = Idx<Binding>;
 
-pub type ExprId = Idx<Expr>;
+pub type ExprId<'db> = Idx<Expr<'db>>;
 
-pub type PatId = Idx<Pat>;
+pub type PatId<'db> = Idx<Pat<'db>>;
 
-#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
-pub enum ExprOrPatId {
-    ExprId(ExprId),
-    PatId(PatId),
+#[derive(Debug, Copy, Clone, Hash, PartialEq, Eq, SalsaValue)]
+pub enum ExprOrPatId<'db> {
+    ExprId(ExprId<'db>),
+    PatId(PatId<'db>),
 }
 
-impl ExprOrPatId {
-    pub fn as_expr(self) -> Option<ExprId> {
+impl<'db> ExprOrPatId<'db> {
+    pub fn as_expr(self) -> Option<ExprId<'db>> {
         match self {
             Self::ExprId(v) => Some(v),
             _ => None,
@@ -64,7 +65,7 @@ impl ExprOrPatId {
         matches!(self, Self::ExprId(_))
     }
 
-    pub fn as_pat(self) -> Option<PatId> {
+    pub fn as_pat(self) -> Option<PatId<'db>> {
         match self {
             Self::PatId(v) => Some(v),
             _ => None,
@@ -85,7 +86,7 @@ impl ExprOrPatIdPacked {
     const PAT_BIT: u32 = 1 << (u32::BITS - 1);
     const INDEX_MASK: u32 = !Self::PAT_BIT;
 
-    pub fn unpack(self) -> ExprOrPatId {
+    pub fn unpack(self) -> ExprOrPatId<'static> {
         match self.is_expr() {
             true => ExprOrPatId::ExprId(ExprId::from_raw(RawIdx::from_u32(self.0))),
             false => {
@@ -95,7 +96,7 @@ impl ExprOrPatIdPacked {
     }
 
     #[inline]
-    pub fn as_expr(self) -> Option<ExprId> {
+    pub fn as_expr(self) -> Option<ExprId<'static>> {
         self.is_expr().then(|| ExprId::from_raw(RawIdx::from_u32(self.0)))
     }
 
@@ -105,7 +106,7 @@ impl ExprOrPatIdPacked {
     }
 
     #[inline]
-    pub fn as_pat(self) -> Option<PatId> {
+    pub fn as_pat(self) -> Option<PatId<'static>> {
         self.is_pat().then(|| PatId::from_raw(RawIdx::from_u32(self.0 & Self::INDEX_MASK)))
     }
 
@@ -124,8 +125,8 @@ impl fmt::Debug for ExprOrPatIdPacked {
     }
 }
 
-impl From<ExprId> for ExprOrPatIdPacked {
-    fn from(value: ExprId) -> Self {
+impl<'db> From<ExprId<'db>> for ExprOrPatIdPacked {
+    fn from(value: ExprId<'db>) -> Self {
         let value = value.into_raw().into_u32();
         // virtually impossible to have IDs that high
         debug_assert_eq!(value & Self::PAT_BIT, 0);
@@ -133,19 +134,19 @@ impl From<ExprId> for ExprOrPatIdPacked {
     }
 }
 
-impl From<PatId> for ExprOrPatId {
-    fn from(value: PatId) -> Self {
+impl<'db> From<PatId<'db>> for ExprOrPatId<'db> {
+    fn from(value: PatId<'db>) -> Self {
         ExprOrPatId::PatId(value)
     }
 }
-impl From<ExprId> for ExprOrPatId {
-    fn from(value: ExprId) -> Self {
+impl<'db> From<ExprId<'db>> for ExprOrPatId<'db> {
+    fn from(value: ExprId<'db>) -> Self {
         ExprOrPatId::ExprId(value)
     }
 }
 
-impl From<PatId> for ExprOrPatIdPacked {
-    fn from(value: PatId) -> Self {
+impl<'db> From<PatId<'db>> for ExprOrPatIdPacked {
+    fn from(value: PatId<'db>) -> Self {
         let value = value.into_raw().into_u32();
         // virtually impossible to have IDs that high
         debug_assert_eq!(value & Self::PAT_BIT, 0);
@@ -211,9 +212,9 @@ pub enum Literal {
 
 #[derive(Debug, Clone, Eq, PartialEq)]
 /// Used in range patterns.
-pub enum LiteralOrConst {
+pub enum LiteralOrConst<'db> {
     Literal(Literal),
-    Const(PatId),
+    Const(PatId<'db>),
 }
 
 impl Literal {
@@ -264,11 +265,11 @@ impl From<ast::LiteralKind> for Literal {
     }
 }
 
-#[derive(Debug, Clone, Eq, PartialEq, Copy)]
-pub enum RecordSpread {
+#[derive(Debug, Clone, Eq, PartialEq, Copy, SalsaValue)]
+pub enum RecordSpread<'db> {
     None,
     FieldDefaults,
-    Expr(ExprId),
+    Expr(ExprId<'db>),
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -277,129 +278,129 @@ pub enum Unsafe {
     No,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Expr {
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub enum Expr<'db> {
     /// This is produced if the syntax tree does not have a required expression piece.
     Missing,
-    Path(Path),
+    Path(Path<'db>),
     If {
-        condition: ExprId,
-        then_branch: ExprId,
-        else_branch: Option<ExprId>,
+        condition: ExprId<'db>,
+        then_branch: ExprId<'db>,
+        else_branch: Option<ExprId<'db>>,
     },
     Let {
-        pat: PatId,
-        expr: ExprId,
+        pat: PatId<'db>,
+        expr: ExprId<'db>,
     },
     Block {
         id: Option<BlockId>,
-        statements: Box<[Statement]>,
-        tail: Option<ExprId>,
+        statements: Box<[Statement<'db>]>,
+        tail: Option<ExprId<'db>>,
         label: Option<LabelId>,
         unsafe_: Unsafe,
     },
-    Const(ExprId),
+    Const(ExprId<'db>),
     Loop {
-        body: ExprId,
+        body: ExprId<'db>,
         label: Option<LabelId>,
         source: LoopSource,
     },
     Call {
-        callee: ExprId,
-        args: Box<[ExprId]>,
+        callee: ExprId<'db>,
+        args: Box<[ExprId<'db>]>,
     },
     MethodCall {
-        receiver: ExprId,
+        receiver: ExprId<'db>,
         method_name: Name,
-        args: Box<[ExprId]>,
-        generic_args: Option<Box<GenericArgs>>,
+        args: Box<[ExprId<'db>]>,
+        generic_args: Option<Box<GenericArgs<'db>>>,
     },
     Match {
-        expr: ExprId,
-        arms: Box<[MatchArm]>,
+        expr: ExprId<'db>,
+        arms: Box<[MatchArm<'db>]>,
     },
     Continue {
         label: Option<LabelId>,
     },
     Break {
-        expr: Option<ExprId>,
+        expr: Option<ExprId<'db>>,
         label: Option<LabelId>,
     },
     Return {
-        expr: Option<ExprId>,
+        expr: Option<ExprId<'db>>,
     },
     Become {
-        expr: ExprId,
+        expr: ExprId<'db>,
     },
     Yield {
-        expr: Option<ExprId>,
+        expr: Option<ExprId<'db>>,
     },
     Yeet {
-        expr: Option<ExprId>,
+        expr: Option<ExprId<'db>>,
     },
     RecordLit {
-        path: Path,
-        fields: ThinVec<RecordLitField>,
-        spread: RecordSpread,
+        path: Path<'db>,
+        fields: ThinVec<RecordLitField<'db>>,
+        spread: RecordSpread<'db>,
     },
     Field {
-        expr: ExprId,
+        expr: ExprId<'db>,
         name: Name,
     },
     Await {
-        expr: ExprId,
+        expr: ExprId<'db>,
     },
     Cast {
-        expr: ExprId,
-        type_ref: TypeRefId,
+        expr: ExprId<'db>,
+        type_ref: TypeRefId<'db>,
     },
     Ref {
-        expr: ExprId,
+        expr: ExprId<'db>,
         rawness: Rawness,
         mutability: Mutability,
     },
     UnaryOp {
-        expr: ExprId,
+        expr: ExprId<'db>,
         op: UnaryOp,
     },
     /// `op` cannot be bare `=` (but can be `op=`), these are lowered to `Assignment` instead.
     BinaryOp {
-        lhs: ExprId,
-        rhs: ExprId,
+        lhs: ExprId<'db>,
+        rhs: ExprId<'db>,
         op: Option<BinaryOp>,
     },
     // Assignments need a special treatment because of destructuring assignment.
     Assignment {
-        target: PatId,
-        value: ExprId,
+        target: PatId<'db>,
+        value: ExprId<'db>,
     },
     Index {
-        base: ExprId,
-        index: ExprId,
+        base: ExprId<'db>,
+        index: ExprId<'db>,
     },
     Closure {
-        args: Box<[PatId]>,
-        arg_types: Box<[Option<TypeRefId>]>,
-        ret_type: Option<TypeRefId>,
-        body: ExprId,
+        args: Box<[PatId<'db>]>,
+        arg_types: Box<[Option<TypeRefId<'db>>]>,
+        ret_type: Option<TypeRefId<'db>>,
+        body: ExprId<'db>,
         closure_kind: ClosureKind,
         capture_by: CaptureBy,
     },
     Tuple {
-        exprs: Box<[ExprId]>,
+        exprs: Box<[ExprId<'db>]>,
     },
-    Array(Array),
+    Array(Array<'db>),
     Literal(Literal),
     Underscore,
-    OffsetOf(OffsetOf),
-    InlineAsm(InlineAsm),
+    OffsetOf(OffsetOf<'db>),
+    InlineAsm(InlineAsm<'db>),
     IncludeBytes,
 }
 
 #[cfg(target_pointer_width = "64")]
-const _: () = assert!(std::mem::size_of::<Expr>() == 48);
+const _: () = assert!(std::mem::size_of::<Expr<'_>>() == 48);
 
-impl Expr {
+impl<'db> Expr<'db> {
     pub fn precedence(&self) -> ast::prec::ExprPrecedence {
         use ast::prec::ExprPrecedence;
 
@@ -471,15 +472,15 @@ pub enum LoopSource {
     ForLoop,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OffsetOf {
-    pub container: TypeRefId,
+#[derive(Debug, Clone, PartialEq, Eq, SalsaValue)]
+pub struct OffsetOf<'db> {
+    pub container: TypeRefId<'db>,
     pub fields: Box<[Name]>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InlineAsm {
-    pub operands: Box<[(Option<Name>, AsmOperand)]>,
+#[derive(Debug, Clone, PartialEq, Eq, SalsaValue)]
+pub struct InlineAsm<'db> {
+    pub operands: Box<[(Option<Name>, AsmOperand<'db>)]>,
     pub options: AsmOptions,
     pub kind: InlineAsmKind,
 }
@@ -557,34 +558,34 @@ impl std::fmt::Debug for AsmOptions {
     }
 }
 
-#[derive(Clone, Debug, Eq, PartialEq, Hash)]
-pub enum AsmOperand {
+#[derive(Clone, Debug, Eq, PartialEq, Hash, SalsaValue)]
+pub enum AsmOperand<'db> {
     In {
         reg: InlineAsmRegOrRegClass,
-        expr: ExprId,
+        expr: ExprId<'db>,
     },
     Out {
         reg: InlineAsmRegOrRegClass,
-        expr: Option<ExprId>,
+        expr: Option<ExprId<'db>>,
         late: bool,
     },
     InOut {
         reg: InlineAsmRegOrRegClass,
-        expr: ExprId,
+        expr: ExprId<'db>,
         late: bool,
     },
     SplitInOut {
         reg: InlineAsmRegOrRegClass,
-        in_expr: ExprId,
-        out_expr: Option<ExprId>,
+        in_expr: ExprId<'db>,
+        out_expr: Option<ExprId<'db>>,
         late: bool,
     },
-    Label(ExprId),
-    Const(ExprId),
-    Sym(Path),
+    Label(ExprId<'db>),
+    Const(ExprId<'db>),
+    Sym(Path<'db>),
 }
 
-impl AsmOperand {
+impl<'db> AsmOperand<'db> {
     pub fn reg(&self) -> Option<&InlineAsmRegOrRegClass> {
         match self {
             Self::In { reg, .. }
@@ -652,43 +653,45 @@ pub enum Movability {
     Movable,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Array {
-    ElementList { elements: Box<[ExprId]> },
-    Repeat { initializer: ExprId, repeat: ExprId },
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub enum Array<'db> {
+    ElementList { elements: Box<[ExprId<'db>]> },
+    Repeat { initializer: ExprId<'db>, repeat: ExprId<'db> },
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct MatchArm {
-    pub pat: PatId,
-    pub guard: Option<ExprId>,
-    pub expr: ExprId,
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub struct MatchArm<'db> {
+    pub pat: PatId<'db>,
+    pub guard: Option<ExprId<'db>>,
+    pub expr: ExprId<'db>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RecordLitField {
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub struct RecordLitField<'db> {
     pub name: Name,
-    pub expr: ExprId,
+    pub expr: ExprId<'db>,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Statement {
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub enum Statement<'db> {
     Let {
-        pat: PatId,
-        type_ref: Option<TypeRefId>,
-        initializer: Option<ExprId>,
-        else_branch: Option<ExprId>,
+        pat: PatId<'db>,
+        type_ref: Option<TypeRefId<'db>>,
+        initializer: Option<ExprId<'db>>,
+        else_branch: Option<ExprId<'db>>,
     },
     Expr {
-        expr: ExprId,
+        expr: ExprId<'db>,
         has_semi: bool,
     },
-    Item(Item),
+    Item(Item<'db>),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Item {
-    MacroDef(Box<MacroDefId>),
+#[derive(Debug, Clone, PartialEq, Eq, SalsaValue)]
+pub enum Item<'db> {
+    // FIXME(ada4a): the `PhantomData` is a stand-in for the lifetime that `MacroDefId` will get
+    // once we add a lifetime to `MacroCallId`. Remove it when we do.
+    MacroDef(Box<MacroDefId>, PhantomData<&'db ()>),
     Other,
 }
 
@@ -745,69 +748,69 @@ pub struct Binding {
     pub hygiene: HygieneId,
 }
 
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub struct RecordFieldPat {
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub struct RecordFieldPat<'db> {
     pub name: Name,
-    pub pat: PatId,
+    pub pat: PatId<'db>,
 }
 
 /// Close relative to rustc's hir::PatKind
-#[derive(Debug, Clone, Eq, PartialEq)]
-pub enum Pat {
+#[derive(Debug, Clone, Eq, PartialEq, SalsaValue)]
+pub enum Pat<'db> {
     Missing,
     /// A rest pattern. Not valid outside special context.
     Rest,
     Wild,
     Tuple {
-        args: Box<[PatId]>,
+        args: Box<[PatId<'db>]>,
         ellipsis: Option<u32>,
     },
-    Or(Box<[PatId]>),
+    Or(Box<[PatId<'db>]>),
     Record {
-        path: Path,
-        args: Box<[RecordFieldPat]>,
+        path: Path<'db>,
+        args: Box<[RecordFieldPat<'db>]>,
         ellipsis: bool,
     },
     Range {
-        start: Option<ExprId>,
-        end: Option<ExprId>,
+        start: Option<ExprId<'db>>,
+        end: Option<ExprId<'db>>,
         range_type: RangeOp,
     },
     Slice {
-        prefix: Box<[PatId]>,
-        slice: Option<PatId>,
-        suffix: Box<[PatId]>,
+        prefix: Box<[PatId<'db>]>,
+        slice: Option<PatId<'db>>,
+        suffix: Box<[PatId<'db>]>,
     },
-    Path(Path),
-    Lit(ExprId),
+    Path(Path<'db>),
+    Lit(ExprId<'db>),
     Bind {
         id: BindingId,
-        subpat: Option<PatId>,
+        subpat: Option<PatId<'db>>,
     },
     TupleStruct {
-        path: Path,
-        args: Box<[PatId]>,
+        path: Path<'db>,
+        args: Box<[PatId<'db>]>,
         ellipsis: Option<u32>,
     },
     Ref {
-        pat: PatId,
+        pat: PatId<'db>,
         mutability: Mutability,
     },
     Box {
-        inner: PatId,
+        inner: PatId<'db>,
     },
     Deref {
-        inner: PatId,
+        inner: PatId<'db>,
     },
     NotNull,
     /// An expression inside a pattern. That can only occur inside assignments.
     ///
     /// E.g. in `(a, *b) = (1, &mut 2)`, `*b` is an expression.
-    Expr(ExprId),
+    Expr(ExprId<'db>),
 }
 
-impl Pat {
-    pub fn walk_child_pats(&self, mut f: impl FnMut(PatId)) {
+impl<'db> Pat<'db> {
+    pub fn walk_child_pats(&self, mut f: impl FnMut(PatId<'db>)) {
         match self {
             Pat::Range { .. }
             | Pat::Lit(..)

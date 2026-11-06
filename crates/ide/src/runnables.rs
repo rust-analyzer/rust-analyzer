@@ -316,7 +316,7 @@ fn parent_test_module(sema: &Semantics<'_, RootDatabase>, fn_def: &ast::Fn) -> O
 
 pub(crate) fn runnable_fn(
     sema: &Semantics<'_, RootDatabase>,
-    def: hir::Function,
+    def: hir::Function<'_>,
 ) -> Option<Runnable> {
     let edition = def.krate(sema.db).edition(sema.db);
     let under_cfg_test = has_cfg_test(def.module(sema.db).attrs(sema.db).cfgs(sema.db));
@@ -325,7 +325,7 @@ pub(crate) fn runnable_fn(
     } else {
         let test_id = || {
             let canonical_path = {
-                let def: hir::ModuleDef = def.into();
+                let def: hir::ModuleDef<'_> = def.into();
                 def.canonical_path(sema.db, edition)
             };
             canonical_path
@@ -398,7 +398,7 @@ pub(crate) fn runnable_mod(
 
 pub(crate) fn runnable_impl(
     sema: &Semantics<'_, RootDatabase>,
-    def: &hir::Impl,
+    def: &hir::Impl<'_>,
 ) -> Option<Runnable> {
     let display_target = def.module(sema.db).krate(sema.db).to_display_target(sema.db);
     let edition = display_target.edition;
@@ -487,7 +487,10 @@ fn runnable_mod_outline_definition(
     })
 }
 
-fn module_def_doctest(sema: &Semantics<'_, RootDatabase>, def: Definition<'_>) -> Option<Runnable> {
+fn module_def_doctest<'db>(
+    sema: &Semantics<'db, RootDatabase>,
+    def: Definition<'db>,
+) -> Option<Runnable> {
     let db = sema.db;
     let attrs = match def {
         Definition::Module(it) => it.attrs(db),
@@ -556,7 +559,7 @@ fn module_def_doctest(sema: &Semantics<'_, RootDatabase>, def: Definition<'_>) -
     Some(res)
 }
 
-fn has_runnable_doc_test(db: &RootDatabase, attrs: &hir::AttrsWithOwner) -> bool {
+fn has_runnable_doc_test(db: &RootDatabase, attrs: &hir::AttrsWithOwner<'_>) -> bool {
     const RUSTDOC_FENCES: [&str; 2] = ["```", "~~~"];
     const RUSTDOC_CODE_BLOCK_ATTRIBUTES_RUNNABLE: &[&str] =
         &["", "rust", "should_panic", "edition2015", "edition2018", "edition2021"];

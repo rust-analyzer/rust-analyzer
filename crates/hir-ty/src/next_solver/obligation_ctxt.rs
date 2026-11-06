@@ -47,7 +47,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
     /// parameters (except for `Self`).
     pub fn register_bound(
         &mut self,
-        cause: ObligationCause,
+        cause: ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         ty: Ty<'db>,
         def_id: TraitId,
@@ -63,7 +63,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
 
     pub fn eq<T: ToTrace<'db>>(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         expected: T,
         actual: T,
@@ -77,7 +77,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
     /// Checks whether `expected` is a subtype of `actual`: `expected <: actual`.
     pub fn sub<T: ToTrace<'db>>(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         expected: T,
         actual: T,
@@ -90,7 +90,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
 
     pub fn relate<T: ToTrace<'db>>(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         variance: Variance,
         expected: T,
@@ -105,7 +105,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
     /// Checks whether `expected` is a supertype of `actual`: `expected :> actual`.
     pub fn sup<T: ToTrace<'db>>(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         expected: T,
         actual: T,
@@ -119,7 +119,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
     /// Computes the least-upper-bound, or mutual supertype, of two values.
     pub fn lub<T: ToTrace<'db>>(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         expected: T,
         actual: T,
@@ -154,7 +154,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
 
     pub fn deeply_normalize<T: TypeFoldable<DbInterner<'db>>>(
         &self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         value: T,
     ) -> Result<T, Vec<NextSolverError<'db>>> {
@@ -163,7 +163,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
 
     pub fn structurally_normalize_ty(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         value: Ty<'db>,
     ) -> Result<Ty<'db>, Vec<NextSolverError<'db>>> {
@@ -172,7 +172,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
 
     pub fn structurally_normalize_const(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         value: Const<'db>,
     ) -> Result<Const<'db>, Vec<NextSolverError<'db>>> {
@@ -181,7 +181,7 @@ impl<'a, 'db> ObligationCtxt<'a, 'db> {
 
     pub fn structurally_normalize_term(
         &mut self,
-        cause: &ObligationCause,
+        cause: &ObligationCause<'db>,
         param_env: ParamEnv<'db>,
         value: Term<'db>,
     ) -> Result<Term<'db>, Vec<NextSolverError<'db>>> {

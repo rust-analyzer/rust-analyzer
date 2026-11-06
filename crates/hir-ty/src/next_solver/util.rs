@@ -798,7 +798,7 @@ pub(crate) fn upcast_choices<'db>(
 #[inline]
 pub(crate) fn clauses_as_obligations<'db>(
     clauses: impl IntoIterator<Item = Clause<'db>>,
-    cause: ObligationCause,
+    cause: ObligationCause<'db>,
     param_env: ParamEnv<'db>,
 ) -> impl Iterator<Item = PredicateObligation<'db>> {
     clauses.into_iter().map(move |clause| Obligation {

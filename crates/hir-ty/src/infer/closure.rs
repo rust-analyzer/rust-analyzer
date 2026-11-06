@@ -67,12 +67,12 @@ impl<'db> InferenceContext<'db> {
 
     pub(super) fn infer_closure(
         &mut self,
-        body: ExprId,
-        args: &[PatId],
-        ret_type: Option<TypeRefId>,
-        arg_types: &[Option<TypeRefId>],
+        body: ExprId<'db>,
+        args: &[PatId<'db>],
+        ret_type: Option<TypeRefId<'db>>,
+        arg_types: &[Option<TypeRefId<'db>>],
         closure_kind: ClosureKind,
-        closure_expr: ExprId,
+        closure_expr: ExprId<'db>,
         expected: &Expectation<'db>,
     ) -> Ty<'db> {
         assert_eq!(args.len(), arg_types.len());
@@ -368,7 +368,7 @@ impl<'db> InferenceContext<'db> {
     /// are about to type check:
     fn deduce_closure_signature(
         &mut self,
-        closure_expr: ExprId,
+        closure_expr: ExprId<'db>,
         expected_ty: Ty<'db>,
         closure_kind: ClosureKind,
     ) -> (Option<PolyFnSig<'db>>, Option<rustc_type_ir::ClosureKind>) {
@@ -420,7 +420,7 @@ impl<'db> InferenceContext<'db> {
 
     fn deduce_closure_signature_from_predicates(
         &mut self,
-        closure_expr: ExprId,
+        closure_expr: ExprId<'db>,
         expected_ty: Ty<'db>,
         closure_kind: ClosureKind,
         predicates: impl DoubleEndedIterator<Item = Predicate<'db>>,
@@ -563,7 +563,7 @@ impl<'db> InferenceContext<'db> {
     /// know that.
     fn deduce_sig_from_projection(
         &mut self,
-        closure_expr: ExprId,
+        closure_expr: ExprId<'db>,
         closure_kind: ClosureKind,
         projection: PolyProjectionPredicate<'db>,
     ) -> Option<PolyFnSig<'db>> {
@@ -641,7 +641,7 @@ impl<'db> InferenceContext<'db> {
     /// projection, and the output will be an unconstrained type variable instead.
     fn extract_sig_from_projection_and_future_bound(
         &mut self,
-        closure_expr: ExprId,
+        closure_expr: ExprId<'db>,
         projection: PolyProjectionPredicate<'db>,
     ) -> Option<PolyFnSig<'db>> {
         let projection = self.resolve_vars_if_possible(projection);
@@ -702,10 +702,10 @@ impl<'db> InferenceContext<'db> {
 
     fn sig_of_closure(
         &mut self,
-        closure_expr: ExprId,
-        decl_inputs: &[PatId],
-        decl_input_tys: &[Option<TypeRefId>],
-        decl_output_ty: Option<TypeRefId>,
+        closure_expr: ExprId<'db>,
+        decl_inputs: &[PatId<'db>],
+        decl_input_tys: &[Option<TypeRefId<'db>>],
+        decl_output_ty: Option<TypeRefId<'db>>,
         expected_sig: Option<PolyFnSig<'db>>,
         closure_kind: ClosureKind,
     ) -> ClosureSignatures<'db> {
@@ -732,9 +732,9 @@ impl<'db> InferenceContext<'db> {
     /// types that the user gave into a signature.
     fn sig_of_closure_no_expectation(
         &mut self,
-        closure_expr: ExprId,
-        decl_inputs: &[Option<TypeRefId>],
-        decl_output: Option<TypeRefId>,
+        closure_expr: ExprId<'db>,
+        decl_inputs: &[Option<TypeRefId<'db>>],
+        decl_output: Option<TypeRefId<'db>>,
         closure_kind: ClosureKind,
     ) -> ClosureSignatures<'db> {
         let bound_sig =
@@ -792,10 +792,10 @@ impl<'db> InferenceContext<'db> {
     ///   regions with depth 1, which are bound then by the closure.
     fn sig_of_closure_with_expectation(
         &mut self,
-        closure_expr: ExprId,
-        decl_inputs: &[PatId],
-        decl_input_tys: &[Option<TypeRefId>],
-        decl_output_ty: Option<TypeRefId>,
+        closure_expr: ExprId<'db>,
+        decl_inputs: &[PatId<'db>],
+        decl_input_tys: &[Option<TypeRefId<'db>>],
+        decl_output_ty: Option<TypeRefId<'db>>,
         expected_sig: PolyFnSig<'db>,
         closure_kind: ClosureKind,
     ) -> ClosureSignatures<'db> {
@@ -862,8 +862,8 @@ impl<'db> InferenceContext<'db> {
 
     fn sig_of_closure_with_mismatched_number_of_arguments(
         &mut self,
-        decl_inputs: &[Option<TypeRefId>],
-        decl_output: Option<TypeRefId>,
+        decl_inputs: &[Option<TypeRefId<'db>>],
+        decl_output: Option<TypeRefId<'db>>,
     ) -> ClosureSignatures<'db> {
         let error_sig = self.error_sig_of_closure(decl_inputs, decl_output);
 
@@ -875,10 +875,10 @@ impl<'db> InferenceContext<'db> {
     /// strategy.
     fn merge_supplied_sig_with_expectation(
         &mut self,
-        closure_expr: ExprId,
-        decl_inputs: &[PatId],
-        decl_input_tys: &[Option<TypeRefId>],
-        decl_output_ty: Option<TypeRefId>,
+        closure_expr: ExprId<'db>,
+        decl_inputs: &[PatId<'db>],
+        decl_input_tys: &[Option<TypeRefId<'db>>],
+        decl_output_ty: Option<TypeRefId<'db>>,
         mut expected_sigs: ClosureSignatures<'db>,
         closure_kind: ClosureKind,
     ) -> InferResult<'db, ClosureSignatures<'db>> {
@@ -962,9 +962,9 @@ impl<'db> InferenceContext<'db> {
     /// Also, record this closure signature for later.
     fn supplied_sig_of_closure(
         &mut self,
-        closure_expr: ExprId,
-        decl_inputs: &[Option<TypeRefId>],
-        decl_output: Option<TypeRefId>,
+        closure_expr: ExprId<'db>,
+        decl_inputs: &[Option<TypeRefId<'db>>],
+        decl_output: Option<TypeRefId<'db>>,
         closure_kind: ClosureKind,
     ) -> PolyFnSig<'db> {
         let interner = self.interner();
@@ -1028,7 +1028,10 @@ impl<'db> InferenceContext<'db> {
     /// Future<Output = T>`, so we do this by searching through the
     /// obligations to extract the `T`.
     #[instrument(skip(self), level = "debug", ret)]
-    fn deduce_future_output_from_obligations(&mut self, body_def_id: ExprId) -> Option<Ty<'db>> {
+    fn deduce_future_output_from_obligations(
+        &mut self,
+        body_def_id: ExprId<'db>,
+    ) -> Option<Ty<'db>> {
         let ret_coercion = self
             .return_coercion
             .as_ref()
@@ -1130,8 +1133,8 @@ impl<'db> InferenceContext<'db> {
     /// all parameters are of type `ty::Error`.
     fn error_sig_of_closure(
         &mut self,
-        decl_inputs: &[Option<TypeRefId>],
-        decl_output: Option<TypeRefId>,
+        decl_inputs: &[Option<TypeRefId<'db>>],
+        decl_output: Option<TypeRefId<'db>>,
     ) -> PolyFnSig<'db> {
         let interner = self.interner();
         let err_ty = Ty::new_error(interner, ErrorGuaranteed);

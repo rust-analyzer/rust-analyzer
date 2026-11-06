@@ -426,7 +426,7 @@ fn find_negated_usage(name: &ast::NameLike) -> Option<(ast::PrefixExpr, ast::Exp
 
 fn find_record_expr_usage(
     name: &ast::NameLike,
-    got_field: hir::Field,
+    got_field: hir::Field<'_>,
     target_definition: Definition<'_>,
 ) -> Option<(ast::RecordExprField, ast::Expr)> {
     let name_ref = name.as_name_ref()?;

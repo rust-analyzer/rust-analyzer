@@ -64,7 +64,7 @@ struct ProbeContext<'a, 'db, Choice> {
 
     /// Collects near misses when the candidate functions are missing a `self` keyword and is only
     /// used for error reporting
-    static_candidates: Vec<CandidateSource>,
+    static_candidates: Vec<CandidateSource<'db>>,
 
     choice: Choice,
 }
@@ -1520,7 +1520,11 @@ impl<'a, 'db, Choice: ProbeChoice<'db>> ProbeContext<'a, 'db, Choice> {
 
     /// Used for ambiguous method call error reporting. Uses probing that throws away the result internally,
     /// so do not use to make a decision that may lead to a successful compilation.
-    fn candidate_source(&self, candidate: &Candidate<'db>, self_ty: Ty<'db>) -> CandidateSource {
+    fn candidate_source(
+        &self,
+        candidate: &Candidate<'db>,
+        self_ty: Ty<'db>,
+    ) -> CandidateSource<'db> {
         match candidate.kind {
             InherentImplCandidate { impl_def_id, .. } => CandidateSource::Impl(impl_def_id.into()),
             ObjectCandidate(trait_ref) | WhereClauseCandidate(trait_ref) => {
@@ -1555,7 +1559,7 @@ impl<'a, 'db, Choice: ProbeChoice<'db>> ProbeContext<'a, 'db, Choice> {
         }
     }
 
-    fn candidate_source_from_pick(&self, pick: &Pick<'db>) -> CandidateSource {
+    fn candidate_source_from_pick(&self, pick: &Pick<'db>) -> CandidateSource<'db> {
         match pick.kind {
             InherentImplPick(impl_) => CandidateSource::Impl(impl_.into()),
             ObjectPick(trait_) | TraitPick(trait_) => CandidateSource::Trait(trait_),
@@ -2005,7 +2009,7 @@ impl<'a, 'db, Choice: ProbeChoice<'db>> ProbeContext<'a, 'db, Choice> {
         // -- but this could be overcome.
     }
 
-    fn record_static_candidate(&mut self, source: CandidateSource) {
+    fn record_static_candidate(&mut self, source: CandidateSource<'db>) {
         self.static_candidates.push(source);
     }
 

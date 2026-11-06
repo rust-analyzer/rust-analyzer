@@ -310,12 +310,12 @@ impl FunctionBuilder {
         })
     }
 
-    fn from_method_call(
+    fn from_method_call<'db>(
         make: &SyntaxFactory,
-        ctx: &AssistContext<'_, '_>,
+        ctx: &AssistContext<'_, 'db>,
         call: &ast::MethodCallExpr,
         name: &ast::NameRef,
-        receiver_ty: Type<'_>,
+        receiver_ty: Type<'db>,
         target_module: Module,
         target: GeneratedFunctionTarget,
     ) -> Option<Self> {
@@ -402,12 +402,12 @@ impl FunctionBuilder {
 ///   the correct return type).
 /// * If we could infer the return type, don't focus it (and thus focus the function body) so the
 ///   user can change the `todo!` function body.
-fn make_return_type(
+fn make_return_type<'db>(
     make: &SyntaxFactory,
-    ctx: &AssistContext<'_, '_>,
+    ctx: &AssistContext<'_, 'db>,
     expr: &ast::Expr,
     target_module: Module,
-    necessary_generic_params: &mut FxHashSet<hir::GenericParam>,
+    necessary_generic_params: &mut FxHashSet<hir::GenericParam<'db>>,
 ) -> (Option<ast::RetType>, bool) {
     let (ret_ty, should_focus_return_type) =
         match ctx.sema.type_of_expr(expr).map(TypeInfo::original) {
@@ -804,12 +804,12 @@ impl AdtInfo {
 }
 
 /// Computes parameter list for the generated function.
-fn fn_args(
+fn fn_args<'db>(
     make: &SyntaxFactory,
-    ctx: &AssistContext<'_, '_>,
+    ctx: &AssistContext<'_, 'db>,
     target_module: Module,
     call: ast::CallableExpr,
-    necessary_generic_params: &mut FxHashSet<hir::GenericParam>,
+    necessary_generic_params: &mut FxHashSet<hir::GenericParam<'db>>,
 ) -> Option<ast::ParamList> {
     let mut arg_names = Vec::new();
     let mut arg_types = Vec::new();
@@ -840,10 +840,10 @@ fn fn_args(
 /// NOTE: Generic parameters returned from this function may cause name clash at `target`. We don't
 /// currently do anything about it because it's actually easy to resolve it after the assist: just
 /// use the Rename functionality.
-fn fn_generic_params(
+fn fn_generic_params<'db>(
     make: &SyntaxFactory,
-    ctx: &AssistContext<'_, '_>,
-    necessary_params: FxHashSet<hir::GenericParam>,
+    ctx: &AssistContext<'_, 'db>,
+    necessary_params: FxHashSet<hir::GenericParam<'db>>,
     target: &GeneratedFunctionTarget,
 ) -> Option<(Option<ast::GenericParamList>, Option<ast::WhereClause>)> {
     if necessary_params.is_empty() {
@@ -947,7 +947,7 @@ fn params_and_where_preds_in_scope(
     (generic_params, where_clauses)
 }
 
-fn containing_body(ctx: &AssistContext<'_, '_>) -> Option<hir::DefWithBody> {
+fn containing_body<'db>(ctx: &AssistContext<'_, 'db>) -> Option<hir::DefWithBody<'db>> {
     let item: ast::Item = ctx.find_node_at_offset()?;
     let def = match item {
         ast::Item::Fn(it) => ctx.sema.to_def(&it)?.into(),
@@ -975,7 +975,7 @@ where
 }
 
 #[derive(Debug)]
-struct ParamBoundWithParams {
+struct ParamBoundWithParams<'db> {
     node: ast::GenericParam,
     /// Generic parameter `node` introduces.
     ///
@@ -987,7 +987,7 @@ struct ParamBoundWithParams {
     /// ```
     ///
     /// `U` in this example.
-    self_ty_param: hir::GenericParam,
+    self_ty_param: hir::GenericParam<'db>,
     /// Generic parameters contained in the trait reference of this bound.
     ///
     /// ```text
@@ -998,11 +998,11 @@ struct ParamBoundWithParams {
     /// ```
     ///
     /// `T` in this example.
-    other_params: FxHashSet<hir::GenericParam>,
+    other_params: FxHashSet<hir::GenericParam<'db>>,
 }
 
 #[derive(Debug)]
-struct WherePredWithParams {
+struct WherePredWithParams<'db> {
     node: ast::WherePred,
     /// Generic parameters contained in the "self type" of this where predicate.
     ///
@@ -1012,7 +1012,7 @@ struct WherePredWithParams {
     /// ```
     ///
     /// `T` and `U` in this example.
-    self_ty_params: FxHashSet<hir::GenericParam>,
+    self_ty_params: FxHashSet<hir::GenericParam<'db>>,
     /// Generic parameters contained in the trait reference of this where predicate.
     ///
     /// ```text
@@ -1021,13 +1021,13 @@ struct WherePredWithParams {
     /// ```
     ///
     /// `T` and `V` in this example.
-    other_params: FxHashSet<hir::GenericParam>,
+    other_params: FxHashSet<hir::GenericParam<'db>>,
 }
 
-fn compute_contained_params_in_generic_param(
-    ctx: &AssistContext<'_, '_>,
+fn compute_contained_params_in_generic_param<'db>(
+    ctx: &AssistContext<'_, 'db>,
     node: ast::GenericParam,
-) -> Option<ParamBoundWithParams> {
+) -> Option<ParamBoundWithParams<'db>> {
     match &node {
         ast::GenericParam::TypeParam(ty) => {
             let self_ty_param = ctx.sema.to_def(ty)?.into();
@@ -1053,10 +1053,10 @@ fn compute_contained_params_in_generic_param(
     }
 }
 
-fn compute_contained_params_in_where_pred(
-    ctx: &AssistContext<'_, '_>,
+fn compute_contained_params_in_where_pred<'db>(
+    ctx: &AssistContext<'_, 'db>,
     node: ast::WherePred,
-) -> Option<WherePredWithParams> {
+) -> Option<WherePredWithParams<'db>> {
     let self_ty = node.ty()?;
     let bound_list = node.type_bound_list()?;
 
@@ -1075,10 +1075,10 @@ fn compute_contained_params_in_where_pred(
     Some(WherePredWithParams { node, self_ty_params, other_params })
 }
 
-fn filter_generic_params(
-    ctx: &AssistContext<'_, '_>,
+fn filter_generic_params<'db>(
+    ctx: &AssistContext<'_, 'db>,
     node: SyntaxNode,
-) -> Option<hir::GenericParam> {
+) -> Option<hir::GenericParam<'db>> {
     let path = ast::Path::cast(node)?;
     match ctx.sema.resolve_path(&path)? {
         PathResolution::TypeParam(it) => Some(it.into()),
@@ -1112,13 +1112,13 @@ fn filter_generic_params(
 /// nodes that represent params in `necessary_params` by usual and boring DFS.
 ///
 /// The time complexity is O(|generic_params| + |where_preds| + |necessary_params|).
-fn filter_unnecessary_bounds(
-    generic_params: &mut Vec<ParamBoundWithParams>,
-    where_preds: &mut Vec<WherePredWithParams>,
-    necessary_params: FxHashSet<hir::GenericParam>,
+fn filter_unnecessary_bounds<'db>(
+    generic_params: &mut Vec<ParamBoundWithParams<'db>>,
+    where_preds: &mut Vec<WherePredWithParams<'db>>,
+    necessary_params: FxHashSet<hir::GenericParam<'db>>,
 ) {
     // All `self_ty_param` should be unique as they were collected from `ast::GenericParamList`s.
-    let param_map: FxHashMap<hir::GenericParam, usize> =
+    let param_map: FxHashMap<hir::GenericParam<'_>, usize> =
         generic_params.iter().map(|it| it.self_ty_param).zip(0..).collect();
     let param_count = param_map.len();
     let generic_params_upper_bound = param_count + generic_params.len();
@@ -1170,10 +1170,10 @@ fn filter_unnecessary_bounds(
 
 /// Filters out bounds from impl if we're generating the function into the same impl we're
 /// generating from.
-fn filter_bounds_in_scope(
-    generic_params: &mut Vec<ParamBoundWithParams>,
-    where_preds: &mut Vec<WherePredWithParams>,
-    ctx: &AssistContext<'_, '_>,
+fn filter_bounds_in_scope<'db>(
+    generic_params: &mut Vec<ParamBoundWithParams<'db>>,
+    where_preds: &mut Vec<WherePredWithParams<'db>>,
+    ctx: &AssistContext<'_, 'db>,
     target: &GeneratedFunctionTarget,
 ) -> Option<()> {
     let target_impl = target.parent().ancestors().find_map(ast::Impl::cast)?;
@@ -1255,17 +1255,17 @@ fn fn_arg_name(sema: &Semantics<'_, RootDatabase>, arg_expr: &ast::Expr) -> Stri
     }
 }
 
-fn fn_arg_type(
-    ctx: &AssistContext<'_, '_>,
+fn fn_arg_type<'db>(
+    ctx: &AssistContext<'_, 'db>,
     target_module: Module,
     fn_arg: &ast::Expr,
-    generic_params: &mut FxHashSet<hir::GenericParam>,
+    generic_params: &mut FxHashSet<hir::GenericParam<'db>>,
 ) -> String {
-    fn maybe_displayed_type(
-        ctx: &AssistContext<'_, '_>,
+    fn maybe_displayed_type<'db>(
+        ctx: &AssistContext<'_, 'db>,
         target_module: Module,
         fn_arg: &ast::Expr,
-        generic_params: &mut FxHashSet<hir::GenericParam>,
+        generic_params: &mut FxHashSet<hir::GenericParam<'db>>,
     ) -> Option<String> {
         let ty = ctx.sema.type_of_expr(fn_arg)?.adjusted();
         if ty.is_unknown() {

@@ -46,7 +46,7 @@ pub use monomorphization::{
     monomorphized_mir_body_for_closure_query, monomorphized_mir_body_query,
 };
 
-pub type BasicBlockId = Idx<BasicBlock>;
+pub type BasicBlockId<'db> = Idx<BasicBlock<'db>>;
 pub type LocalId = Idx<Local>;
 
 fn return_slot() -> LocalId {
@@ -76,11 +76,11 @@ pub struct Local {
 /// **Needs clarification:** Is loading a place that has its variant index set well-formed? Miri
 /// currently implements it, but it seems like this may be something to check against in the
 /// validator.
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Operand {
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub struct Operand<'db> {
     pub kind: OperandKind,
     // FIXME : This should actually just be of type `MirSpan`.
-    span: Option<MirSpan>,
+    span: Option<MirSpan<'db>>,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
@@ -112,7 +112,7 @@ pub enum OperandKind {
     Static(StaticId),
 }
 
-impl<'db> Operand {
+impl<'db> Operand<'db> {
     fn from_concrete_const(data: Box<[u8]>, memory_map: MemoryMap<'db>, ty: Ty<'db>) -> Self {
         Operand {
             kind: OperandKind::Allocation {
@@ -127,7 +127,7 @@ impl<'db> Operand {
         Operand::from_concrete_const(data, MemoryMap::default(), ty)
     }
 
-    fn const_zst(ty: Ty<'db>) -> Operand {
+    fn const_zst(ty: Ty<'db>) -> Operand<'db> {
         Self::from_bytes(Box::default(), ty)
     }
 
@@ -135,7 +135,7 @@ impl<'db> Operand {
         db: &'db dyn HirDatabase,
         func_id: hir_def::FunctionId,
         generic_args: GenericArgs<'db>,
-    ) -> Operand {
+    ) -> Operand<'db> {
         let interner = DbInterner::new_no_crate(db);
         let ty = Ty::new_fn_def(interner, CallableDefId::FunctionId(func_id).into(), generic_args);
         Operand::from_bytes(Box::default(), ty)
@@ -148,13 +148,13 @@ impl<'db> Operand {
 pub struct FieldIndex(pub u32);
 
 impl FieldIndex {
-    pub fn to_local_field_id(self) -> LocalFieldId {
+    pub fn to_local_field_id<'db>(self) -> LocalFieldId<'db> {
         LocalFieldId::from_raw(RawIdx::from_u32(self.0))
     }
 }
 
-impl From<LocalFieldId> for FieldIndex {
-    fn from(value: LocalFieldId) -> Self {
+impl<'db> From<LocalFieldId<'db>> for FieldIndex {
+    fn from(value: LocalFieldId<'db>) -> Self {
         FieldIndex(value.into_raw().into_u32())
     }
 }
@@ -296,20 +296,20 @@ impl<'db> From<LocalId> for Place<'db> {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum AggregateKind {
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum AggregateKind<'db> {
     /// The type is of the element
     Array(StoredTy),
     /// The type is of the tuple
     Tuple(StoredTy),
     Adt(VariantId, StoredGenericArgs),
-    Union(UnionId, FieldId),
+    Union(UnionId, FieldId<'db>),
     Closure(StoredTy),
     //Coroutine(LocalDefId, SubstsRef, Movability),
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
-pub struct SwitchTargets {
+#[derive(Debug, Clone, Hash, PartialEq, Eq, SalsaValue)]
+pub struct SwitchTargets<'db> {
     /// Possible values. The locations to branch to in each case
     /// are found in the corresponding indices from the `targets` vector.
     values: SmallVec<[u128; 1]>,
@@ -326,17 +326,17 @@ pub struct SwitchTargets {
     //
     // However we’ve decided to keep this as-is until we figure a case
     // where some other approach seems to be strictly better than other.
-    targets: SmallVec<[BasicBlockId; 2]>,
+    targets: SmallVec<[BasicBlockId<'db>; 2]>,
 }
 
-impl SwitchTargets {
+impl<'db> SwitchTargets<'db> {
     /// Creates switch targets from an iterator of values and target blocks.
     ///
     /// The iterator may be empty, in which case the `SwitchInt` instruction is equivalent to
     /// `goto otherwise;`.
     pub fn new(
-        targets: impl Iterator<Item = (u128, BasicBlockId)>,
-        otherwise: BasicBlockId,
+        targets: impl Iterator<Item = (u128, BasicBlockId<'db>)>,
+        otherwise: BasicBlockId<'db>,
     ) -> Self {
         let (values, mut targets): (SmallVec<_>, SmallVec<_>) = targets.unzip();
         targets.push(otherwise);
@@ -345,12 +345,12 @@ impl SwitchTargets {
 
     /// Builds a switch targets definition that jumps to `then` if the tested value equals `value`,
     /// and to `else_` if not.
-    pub fn static_if(value: u128, then: BasicBlockId, else_: BasicBlockId) -> Self {
+    pub fn static_if(value: u128, then: BasicBlockId<'db>, else_: BasicBlockId<'db>) -> Self {
         Self { values: smallvec![value], targets: smallvec![then, else_] }
     }
 
     /// Returns the fallback target that is jumped to when none of the values match the operand.
-    pub fn otherwise(&self) -> BasicBlockId {
+    pub fn otherwise(&self) -> BasicBlockId<'db> {
         *self.targets.last().unwrap()
     }
 
@@ -360,33 +360,33 @@ impl SwitchTargets {
     /// including the `otherwise` fallback target.
     ///
     /// Note that this may yield 0 elements. Only the `otherwise` branch is mandatory.
-    pub fn iter(&self) -> impl Iterator<Item = (u128, BasicBlockId)> + '_ {
+    pub fn iter(&self) -> impl Iterator<Item = (u128, BasicBlockId<'db>)> + '_ {
         iter::zip(&self.values, &self.targets).map(|(x, y)| (*x, *y))
     }
 
     /// Returns a slice with all possible jump targets (including the fallback target).
-    pub fn all_targets(&self) -> &[BasicBlockId] {
+    pub fn all_targets(&self) -> &[BasicBlockId<'db>] {
         &self.targets
     }
 
     /// Finds the `BasicBlock` to which this `SwitchInt` will branch given the
     /// specific value. This cannot fail, as it'll return the `otherwise`
     /// branch if there's not a specific match for the value.
-    pub fn target_for_value(&self, value: u128) -> BasicBlockId {
+    pub fn target_for_value(&self, value: u128) -> BasicBlockId<'db> {
         self.iter().find_map(|(v, t)| (v == value).then_some(t)).unwrap_or_else(|| self.otherwise())
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Terminator {
-    pub span: MirSpan,
-    pub kind: TerminatorKind,
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub struct Terminator<'db> {
+    pub span: MirSpan<'db>,
+    pub kind: TerminatorKind<'db>,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TerminatorKind {
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum TerminatorKind<'db> {
     /// Block has one successor; we continue execution there.
-    Goto { target: BasicBlockId },
+    Goto { target: BasicBlockId<'db> },
 
     /// Switches based on the computed value.
     ///
@@ -398,9 +398,9 @@ pub enum TerminatorKind {
     /// Target values may not appear more than once.
     SwitchInt {
         /// The discriminant value being tested.
-        discr: Operand,
+        discr: Operand<'db>,
 
-        targets: SwitchTargets,
+        targets: SwitchTargets<'db>,
     },
 
     /// Indicates that the landing pad is finished and that the process should continue unwinding.
@@ -451,7 +451,7 @@ pub enum TerminatorKind {
     /// > The drop glue is executed if, among all statements executed within this `Body`, an assignment to
     /// > the place or one of its "parents" occurred more recently than a move out of it. This does not
     /// > consider indirect assignments.
-    Drop { place: StoredPlace, target: BasicBlockId, unwind: Option<BasicBlockId> },
+    Drop { place: StoredPlace, target: BasicBlockId<'db>, unwind: Option<BasicBlockId<'db>> },
 
     /// Drops the place and assigns a new value to it.
     ///
@@ -485,9 +485,9 @@ pub enum TerminatorKind {
     /// Disallowed after drop elaboration.
     DropAndReplace {
         place: StoredPlace,
-        value: Operand,
-        target: BasicBlockId,
-        unwind: Option<BasicBlockId>,
+        value: Operand<'db>,
+        target: BasicBlockId<'db>,
+        unwind: Option<BasicBlockId<'db>>,
     },
 
     /// Roughly speaking, evaluates the `func` operand and the arguments, and starts execution of
@@ -502,18 +502,18 @@ pub enum TerminatorKind {
     /// [#71117]: https://github.com/rust-lang/rust/issues/71117
     Call {
         /// The function that’s being called.
-        func: Operand,
+        func: Operand<'db>,
         /// Arguments the function is called with.
         /// These are owned by the callee, which is free to modify them.
         /// This allows the memory occupied by "by-value" arguments to be
         /// reused across function calls without duplicating the contents.
-        args: Box<[Operand]>,
+        args: Box<[Operand<'db>]>,
         /// Where the returned value will be written
         destination: StoredPlace,
         /// Where to go after this call returns. If none, the call necessarily diverges.
-        target: Option<BasicBlockId>,
+        target: Option<BasicBlockId<'db>>,
         /// Cleanups to be done if the call unwinds.
-        cleanup: Option<BasicBlockId>,
+        cleanup: Option<BasicBlockId<'db>>,
         /// `true` if this is from a call in HIR rather than from an overloaded
         /// operator. True for overloaded function call.
         from_hir_call: bool,
@@ -529,11 +529,11 @@ pub enum TerminatorKind {
     /// necessarily executed even in the case of a panic, for example in `-C panic=abort`. If the
     /// assertion does not fail, execution continues at the specified basic block.
     Assert {
-        cond: Operand,
+        cond: Operand<'db>,
         expected: bool,
         //msg: AssertMessage,
-        target: BasicBlockId,
-        cleanup: Option<BasicBlockId>,
+        target: BasicBlockId<'db>,
+        cleanup: Option<BasicBlockId<'db>>,
     },
 
     /// Marks a suspend point.
@@ -550,13 +550,13 @@ pub enum TerminatorKind {
     /// **Needs clarification**: What about the evaluation order of the `resume_arg` and `value`?
     Yield {
         /// The value to return.
-        value: Operand,
+        value: Operand<'db>,
         /// Where to resume to.
-        resume: BasicBlockId,
+        resume: BasicBlockId<'db>,
         /// The place to store the resume argument in.
         resume_arg: StoredPlace,
         /// Cleanup to be done if the coroutine is dropped at this suspend point.
-        drop: Option<BasicBlockId>,
+        drop: Option<BasicBlockId<'db>>,
     },
 
     /// Indicates the end of dropping a coroutine.
@@ -579,10 +579,10 @@ pub enum TerminatorKind {
     /// Disallowed after drop elaboration.
     FalseEdge {
         /// The target normal control flow will take.
-        real_target: BasicBlockId,
+        real_target: BasicBlockId<'db>,
         /// A block control flow could conceptually jump to, but won't in
         /// practice.
-        imaginary_target: BasicBlockId,
+        imaginary_target: BasicBlockId<'db>,
     },
 
     /// A terminator for blocks that only take one path in reality, but where we reserve the right
@@ -594,14 +594,14 @@ pub enum TerminatorKind {
     /// Disallowed after drop elaboration.
     FalseUnwind {
         /// The target normal control flow will take.
-        real_target: BasicBlockId,
+        real_target: BasicBlockId<'db>,
         /// The imaginary cleanup block link. This particular path will never be taken
         /// in practice, but in order to avoid fragility we want to always
         /// consider it in borrowck. We don't want to accept programs which
         /// pass borrowck only when `panic=abort` or some assertions are disabled
         /// due to release vs. debug mode builds. This needs to be an `Option` because
         /// of the `remove_noop_landing_pads` and `abort_unwinding_calls` passes.
-        unwind: Option<BasicBlockId>,
+        unwind: Option<BasicBlockId<'db>>,
     },
 }
 
@@ -800,8 +800,8 @@ impl From<hir_def::hir::CmpOp> for BinOp {
     }
 }
 
-impl From<Operand> for Rvalue {
-    fn from(x: Operand) -> Self {
+impl<'db> From<Operand<'db>> for Rvalue<'db> {
+    fn from(x: Operand<'db>) -> Self {
         Self::Use(x)
     }
 }
@@ -829,15 +829,15 @@ pub enum CastKind {
     FnPtrToPtr,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum Rvalue {
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum Rvalue<'db> {
     /// Yields the operand unchanged
-    Use(Operand),
+    Use(Operand<'db>),
 
     /// Creates an array where each element is the value of the operand.
     ///
     /// Corresponds to source code like `[x; 32]`.
-    Repeat(Operand, StoredConst),
+    Repeat(Operand<'db>, StoredConst),
 
     /// Creates a reference of the indicated kind to the place.
     ///
@@ -885,7 +885,7 @@ pub enum Rvalue {
     ///
     /// **FIXME**: Document exactly which `CastKind`s allow which types of casts. Figure out why
     /// `ArrayToPointer` and `MutToConstPointer` are special.
-    Cast(CastKind, Operand, StoredTy),
+    Cast(CastKind, Operand<'db>, StoredTy),
 
     // FIXME link to `pointer::offset` when it hits stable.
     /// * `Offset` has the same semantics as `pointer::offset`, except that the second
@@ -917,7 +917,7 @@ pub enum Rvalue {
     /// when the value of right-hand side is negative.
     ///
     /// Other combinations of types and operators are unsupported.
-    CheckedBinaryOp(BinOp, Operand, Operand),
+    CheckedBinaryOp(BinOp, Operand<'db>, Operand<'db>),
 
     /// Computes a value as described by the operation.
     //NullaryOp(NullOp, Ty),
@@ -928,7 +928,7 @@ pub enum Rvalue {
     /// Also does two's-complement arithmetic. Negation requires a signed integer or a float;
     /// bitwise not requires a signed integer, unsigned integer, or bool. Both operation kinds
     /// return a value with the same type as their operand.
-    UnaryOp(UnOp, Operand),
+    UnaryOp(UnOp, Operand<'db>),
 
     /// Computes the discriminant of the place, returning it as an integer of type
     /// `discriminant_ty`. Returns zero for types without discriminant.
@@ -948,7 +948,7 @@ pub enum Rvalue {
     ///
     /// Disallowed after deaggregation for all aggregate kinds except `Array` and `Coroutine`. After
     /// coroutine lowering, `Coroutine` aggregate kinds are disallowed too.
-    Aggregate(AggregateKind, Box<[Operand]>),
+    Aggregate(AggregateKind<'db>, Box<[Operand<'db>]>),
 
     /// A CopyForDeref is equivalent to a read from a place at the
     /// codegen level, but is treated specially by drop elaboration. When such a read happens, it
@@ -961,9 +961,9 @@ pub enum Rvalue {
     CopyForDeref(StoredPlace),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum StatementKind {
-    Assign(StoredPlace, Rvalue),
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum StatementKind<'db> {
+    Assign(StoredPlace, Rvalue<'db>),
     FakeRead(StoredPlace),
     //SetDiscriminant {
     //    place: Box<Place>,
@@ -977,22 +977,22 @@ pub enum StatementKind {
     //Intrinsic(Box<NonDivergingIntrinsic>),
     Nop,
 }
-impl StatementKind {
-    fn with_span(self, span: MirSpan) -> Statement {
+impl<'db> StatementKind<'db> {
+    fn with_span(self, span: MirSpan<'db>) -> Statement<'db> {
         Statement { kind: self, span }
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub struct Statement {
-    pub kind: StatementKind,
-    pub span: MirSpan,
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub struct Statement<'db> {
+    pub kind: StatementKind<'db>,
+    pub span: MirSpan<'db>,
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct BasicBlock {
+#[derive(Debug, Default, Clone, PartialEq, Eq, SalsaValue)]
+pub struct BasicBlock<'db> {
     /// List of statements in this block.
-    pub statements: Vec<Statement>,
+    pub statements: Vec<Statement<'db>>,
 
     /// Terminator for this block.
     ///
@@ -1002,7 +1002,7 @@ pub struct BasicBlock {
     /// exception is that certain passes, such as `simplify_cfg`, swap
     /// out the terminator temporarily with `None` while they continue
     /// to recurse over the set of basic blocks.
-    pub terminator: Option<Terminator>,
+    pub terminator: Option<Terminator<'db>>,
 
     /// If true, this block lies on an unwind path. This is used
     /// during codegen where distinct kinds of basic blocks may be
@@ -1013,12 +1013,12 @@ pub struct BasicBlock {
 
 #[derive(Debug, Clone, PartialEq, Eq, SalsaValue)]
 pub struct MirBody<'db> {
-    pub basic_blocks: Arena<BasicBlock>,
+    pub basic_blocks: Arena<BasicBlock<'db>>,
     pub locals: Arena<Local>,
-    pub start_block: BasicBlockId,
+    pub start_block: BasicBlockId<'db>,
     pub owner: InferBodyId<'db>,
     pub binding_locals: ArenaMap<BindingId, LocalId>,
-    pub upvar_locals: ThinFxHashMap<BindingId, Vec<(LocalId, crate::closure_analysis::Place)>>,
+    pub upvar_locals: ThinFxHashMap<BindingId, Vec<(LocalId, crate::closure_analysis::Place<'db>)>>,
     pub param_locals: Vec<LocalId>,
     /// This field stores the closures directly owned by this body. It is used
     /// in traversing every mir body.
@@ -1031,7 +1031,7 @@ impl MirBody<'_> {
     }
 
     fn walk_places(&mut self, mut f: impl FnMut(&mut StoredPlace)) {
-        fn for_operand(op: &mut Operand, f: &mut impl FnMut(&mut StoredPlace)) {
+        fn for_operand(op: &mut Operand<'_>, f: &mut impl FnMut(&mut StoredPlace)) {
             match &mut op.kind {
                 OperandKind::Copy(p) | OperandKind::Move(p) => {
                     f(p);
@@ -1137,17 +1137,17 @@ impl MirBody<'_> {
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy, SalsaValue)]
-pub enum MirSpan {
-    ExprId(ExprId),
-    PatId(PatId),
+pub enum MirSpan<'db> {
+    ExprId(ExprId<'db>),
+    PatId(PatId<'db>),
     BindingId(BindingId),
     SelfParam,
     Unknown,
 }
-impl_from!(ExprId, PatId for MirSpan);
+impl_from!(impl<'db> ExprId<'db>, PatId<'db> for MirSpan<'db>);
 
-impl From<&ExprId> for MirSpan {
-    fn from(value: &ExprId) -> Self {
+impl<'db> From<&ExprId<'db>> for MirSpan<'db> {
+    fn from(value: &ExprId<'db>) -> Self {
         (*value).into()
     }
 }

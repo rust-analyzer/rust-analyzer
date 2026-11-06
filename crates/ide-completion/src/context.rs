@@ -182,7 +182,7 @@ pub(crate) struct PathExprCtx<'db> {
     pub(crate) after_amp: bool,
     /// The surrounding RecordExpression we are completing a functional update
     pub(crate) is_func_update: Option<ast::RecordExpr>,
-    pub(crate) self_param: Option<Either<hir::SelfParam, hir::Param<'db>>>,
+    pub(crate) self_param: Option<Either<hir::SelfParam<'db>, hir::Param<'db>>>,
     pub(crate) innermost_ret_ty: Option<hir::Type<'db>>,
     pub(crate) innermost_breakable_ty: Option<hir::Type<'db>>,
     pub(crate) impl_: Option<ast::Impl>,
@@ -338,15 +338,15 @@ pub(crate) struct ParamContext {
 
 /// The state of the lifetime we are completing.
 #[derive(Debug)]
-pub(crate) struct LifetimeContext {
-    pub(crate) kind: LifetimeKind,
+pub(crate) struct LifetimeContext<'db> {
+    pub(crate) kind: LifetimeKind<'db>,
 }
 
 /// The kind of lifetime we are completing.
 #[derive(Debug)]
-pub(crate) enum LifetimeKind {
+pub(crate) enum LifetimeKind<'db> {
     LifetimeParam,
-    Lifetime { in_lifetime_param_bound: bool, def: Option<hir::GenericDef> },
+    Lifetime { in_lifetime_param_bound: bool, def: Option<hir::GenericDef<'db>> },
     LabelRef,
     LabelDef,
 }
@@ -413,7 +413,7 @@ pub(crate) enum NameRefKind<'db> {
 pub(crate) enum CompletionAnalysis<'db> {
     Name(NameContext),
     NameRef(NameRefContext<'db>),
-    Lifetime(LifetimeContext),
+    Lifetime(LifetimeContext<'db>),
     /// The string the cursor is currently inside
     String {
         /// original token
@@ -492,7 +492,7 @@ pub(crate) struct CompletionContext<'a, 'db> {
     /// The module of the `scope`.
     pub(crate) module: hir::Module,
     /// The function where we're completing, if inside a function.
-    pub(crate) containing_function: Option<hir::Function>,
+    pub(crate) containing_function: Option<hir::Function<'db>>,
     /// Whether nightly toolchain is used. Cached since this is looked up a lot.
     pub(crate) is_nightly: bool,
     /// The edition of the current crate
@@ -517,7 +517,7 @@ pub(crate) struct CompletionContext<'a, 'db> {
     /// importing those traits.
     ///
     /// Note the trait *themselves* are not excluded, only their methods are.
-    pub(crate) exclude_flyimport: FxHashMap<ModuleDef, AutoImportExclusionType>,
+    pub(crate) exclude_flyimport: FxHashMap<ModuleDef<'db>, AutoImportExclusionType>,
     /// Traits whose methods should always be excluded, even when in scope (compare `exclude_flyimport_traits`).
     /// They will *not* be excluded, however, if they are available as a generic bound.
     ///
@@ -595,7 +595,7 @@ impl<'db> CompletionContext<'_, 'db> {
     /// Checks if an item is visible, not `doc(hidden)` and stable at the completion site.
     pub(crate) fn is_visible<I>(&self, item: &I) -> Visible
     where
-        I: hir::HasVisibility + hir::HasAttrs + hir::HasCrate + Copy,
+        I: hir::HasVisibility + hir::HasAttrs<'db> + hir::HasCrate<'db> + Copy,
     {
         let vis = item.visibility(self.db);
         let attrs = item.attrs(self.db);
@@ -604,14 +604,14 @@ impl<'db> CompletionContext<'_, 'db> {
 
     pub(crate) fn doc_aliases<I>(&self, item: &I) -> Vec<SmolStr>
     where
-        I: hir::HasAttrs + Copy,
+        I: hir::HasAttrs<'db> + Copy,
     {
         let attrs = item.attrs(self.db);
         attrs.doc_aliases(self.db).iter().map(|it| it.as_str().into()).collect()
     }
 
     /// Check if an item is `#[doc(hidden)]`.
-    pub(crate) fn is_item_hidden(&self, item: &hir::ItemInNs) -> bool {
+    pub(crate) fn is_item_hidden(&self, item: &hir::ItemInNs<'db>) -> bool {
         let attrs = item.attrs(self.db);
         let krate = item.krate(self.db);
         match (attrs, krate) {
@@ -621,7 +621,7 @@ impl<'db> CompletionContext<'_, 'db> {
     }
 
     /// Checks whether this item should be listed in regards to stability. Returns `true` if we should.
-    pub(crate) fn check_stability(&self, attrs: Option<&hir::AttrsWithOwner>) -> bool {
+    pub(crate) fn check_stability(&self, attrs: Option<&hir::AttrsWithOwner<'db>>) -> bool {
         let Some(attrs) = attrs else {
             return true;
         };
@@ -641,7 +641,7 @@ impl<'db> CompletionContext<'_, 'db> {
 
     pub(crate) fn check_stability_and_hidden<I>(&self, item: I) -> bool
     where
-        I: hir::HasAttrs + hir::HasCrate,
+        I: hir::HasAttrs<'db> + hir::HasCrate<'db>,
     {
         let defining_crate = item.krate(self.db);
         let attrs = item.attrs(self.db);
@@ -672,8 +672,8 @@ impl<'db> CompletionContext<'_, 'db> {
 
     pub(crate) fn iterate_path_candidates(
         &self,
-        ty: &hir::Type<'_>,
-        mut cb: impl FnMut(hir::AssocItem),
+        ty: &hir::Type<'db>,
+        mut cb: impl FnMut(hir::AssocItem<'db>),
     ) {
         let mut seen = FxHashSet::default();
         ty.iterate_path_candidates(self.db, &self.scope, &self.traits_in_scope(), None, |item| {
@@ -715,7 +715,7 @@ impl<'db> CompletionContext<'_, 'db> {
     fn is_visible_impl(
         &self,
         vis: &hir::Visibility,
-        attrs: &hir::AttrsWithOwner,
+        attrs: &hir::AttrsWithOwner<'db>,
         defining_crate: hir::Crate,
     ) -> Visible {
         if !self.check_stability(Some(attrs)) {
@@ -739,7 +739,7 @@ impl<'db> CompletionContext<'_, 'db> {
 
     pub(crate) fn is_doc_hidden(
         &self,
-        attrs: &hir::AttrsWithOwner,
+        attrs: &hir::AttrsWithOwner<'db>,
         defining_crate: hir::Crate,
     ) -> bool {
         // `doc(hidden)` items are only completed within the defining crate.

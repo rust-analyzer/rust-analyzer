@@ -52,7 +52,7 @@ pub(crate) enum UseSubtyping {
 struct NestedObligationsForSelfTy<'a, 'db> {
     ctx: &'a InferenceTable<'db>,
     self_ty: TyVid,
-    root_cause: &'a ObligationCause,
+    root_cause: &'a ObligationCause<'db>,
     obligations_for_self_ty: &'a mut SmallVec<[Obligation<'db, Predicate<'db>>; 4]>,
     subtyping: UseSubtyping,
 }
@@ -60,7 +60,7 @@ struct NestedObligationsForSelfTy<'a, 'db> {
 impl<'a, 'db> ProofTreeVisitor<'db> for NestedObligationsForSelfTy<'a, 'db> {
     type Result = ();
 
-    fn span(&self) -> Span {
+    fn span(&self) -> Span<'db> {
         self.root_cause.span()
     }
 
@@ -292,11 +292,11 @@ impl<'db> InferenceTable<'db> {
         self.diverging_type_vars.insert(ty);
     }
 
-    pub(crate) fn next_ty_var(&self, span: Span) -> Ty<'db> {
+    pub(crate) fn next_ty_var(&self, span: Span<'db>) -> Ty<'db> {
         self.infer_ctxt.next_ty_var(span)
     }
 
-    pub(crate) fn next_const_var(&self, span: Span) -> Const<'db> {
+    pub(crate) fn next_const_var(&self, span: Span<'db>) -> Const<'db> {
         self.infer_ctxt.next_const_var(span)
     }
 
@@ -308,21 +308,21 @@ impl<'db> InferenceTable<'db> {
         self.infer_ctxt.next_float_var()
     }
 
-    pub(crate) fn new_maybe_never_var(&mut self, span: Span) -> Ty<'db> {
+    pub(crate) fn new_maybe_never_var(&mut self, span: Span<'db>) -> Ty<'db> {
         let var = self.next_ty_var(span);
         self.set_diverging(var);
         var
     }
 
-    pub(crate) fn next_region_var(&self, span: Span) -> Region<'db> {
+    pub(crate) fn next_region_var(&self, span: Span<'db>) -> Region<'db> {
         self.infer_ctxt.next_region_var(span)
     }
 
-    pub(crate) fn var_for_def(&self, id: GenericParamId, span: Span) -> GenericArg<'db> {
+    pub(crate) fn var_for_def(&self, id: GenericParamId<'db>, span: Span<'db>) -> GenericArg<'db> {
         self.infer_ctxt.var_for_def(id, span)
     }
 
-    pub(crate) fn at<'a>(&'a self, cause: &'a ObligationCause) -> At<'a, 'db> {
+    pub(crate) fn at<'a>(&'a self, cause: &'a ObligationCause<'db>) -> At<'a, 'db> {
         self.infer_ctxt.at(cause, self.param_env)
     }
 
@@ -355,7 +355,7 @@ impl<'db> InferenceTable<'db> {
     /// Create a `GenericArgs` full of infer vars for `def`.
     pub(crate) fn fresh_args_for_item(
         &self,
-        span: Span,
+        span: Span<'db>,
         def: SolverDefId<'db>,
     ) -> GenericArgs<'db> {
         self.infer_ctxt.fresh_args_for_item(span, def)
@@ -366,7 +366,11 @@ impl<'db> InferenceTable<'db> {
     /// In case there is still ambiguity, the returned type may be an inference
     /// variable. This is different from `structurally_resolve_type` which errors
     /// in this case.
-    pub(crate) fn try_structurally_resolve_type(&mut self, span: Span, ty: Ty<'db>) -> Ty<'db> {
+    pub(crate) fn try_structurally_resolve_type(
+        &mut self,
+        span: Span<'db>,
+        ty: Ty<'db>,
+    ) -> Ty<'db> {
         if let TyKind::Alias(..) = ty.kind() {
             let result = self
                 .infer_ctxt
@@ -386,7 +390,7 @@ impl<'db> InferenceTable<'db> {
 
     pub(crate) fn try_structurally_resolve_const(
         &mut self,
-        sp: Span,
+        sp: Span<'db>,
         ct: Const<'db>,
     ) -> Const<'db> {
         let ct = self.resolve_vars_with_obligations(ct);
@@ -430,7 +434,12 @@ impl<'db> InferenceTable<'db> {
         result
     }
 
-    pub(crate) fn register_bound(&mut self, ty: Ty<'db>, def_id: TraitId, cause: ObligationCause) {
+    pub(crate) fn register_bound(
+        &mut self,
+        ty: Ty<'db>,
+        def_id: TraitId,
+        cause: ObligationCause<'db>,
+    ) {
         if !ty.references_non_lt_error() {
             let trait_ref = TraitRef::new(self.interner(), def_id.into(), [ty]);
             self.register_predicate(Obligation::new(
@@ -469,7 +478,7 @@ impl<'db> InferenceTable<'db> {
     }
 
     /// checking later, during regionck, that `arg` is well-formed.
-    pub(crate) fn register_wf_obligation(&mut self, term: Term<'db>, cause: ObligationCause) {
+    pub(crate) fn register_wf_obligation(&mut self, term: Term<'db>, cause: ObligationCause<'db>) {
         self.register_predicate(Obligation::new(
             self.interner(),
             cause,
@@ -479,7 +488,7 @@ impl<'db> InferenceTable<'db> {
     }
 
     /// Registers obligations that all `args` are well-formed.
-    pub(crate) fn add_wf_bounds(&mut self, span: Span, args: GenericArgs<'db>) {
+    pub(crate) fn add_wf_bounds(&mut self, span: Span<'db>, args: GenericArgs<'db>) {
         for term in args.iter().filter_map(|it| it.as_term()) {
             self.register_wf_obligation(term, ObligationCause::new(span));
         }
@@ -507,7 +516,7 @@ impl<'db> InferenceTable<'db> {
         self.try_structurally_resolve_type(Span::Dummy, ty)
     }
 
-    fn emit_trait_errors(&mut self, diagnostics: &mut ThinVec<InferenceDiagnostic>) {
+    fn emit_trait_errors(&mut self, diagnostics: &mut ThinVec<InferenceDiagnostic<'db>>) {
         diagnostics.extend(std::mem::take(&mut self.trait_errors).into_iter().filter_map(
             |error| {
                 let error = error.into_fulfillment_error(&self.infer_ctxt);
@@ -549,16 +558,16 @@ pub(super) mod resolve_completely {
 
     pub(crate) struct WriteBackCtxt<'db> {
         table: InferenceTable<'db>,
-        diagnostics: ThinVec<InferenceDiagnostic>,
+        diagnostics: ThinVec<InferenceDiagnostic<'db>>,
         has_errors: bool,
-        spans_emitted_type_must_be_known_for: FxHashSet<Span>,
+        spans_emitted_type_must_be_known_for: FxHashSet<Span<'db>>,
         types: &'db DefaultAny<'db>,
     }
 
     impl<'db> WriteBackCtxt<'db> {
         pub(crate) fn new(
             table: InferenceTable<'db>,
-            diagnostics: ThinVec<InferenceDiagnostic>,
+            diagnostics: ThinVec<InferenceDiagnostic<'db>>,
             vars_emitted_type_must_be_known_for: FxHashSet<Term<'db>>,
         ) -> Self {
             let spans_emitted_type_must_be_known_for = vars_emitted_type_must_be_known_for
@@ -610,7 +619,7 @@ pub(super) mod resolve_completely {
             *value_ref = value.fold_with(&mut Resolver::new(self, true, &mut goals));
         }
 
-        pub(crate) fn resolve_diagnostics(mut self) -> (ThinVec<InferenceDiagnostic>, bool) {
+        pub(crate) fn resolve_diagnostics(mut self) -> (ThinVec<InferenceDiagnostic<'db>>, bool) {
             let has_errors = self.has_errors;
 
             self.table.emit_trait_errors(&mut self.diagnostics);
@@ -649,7 +658,7 @@ pub(super) mod resolve_completely {
     impl<'db> DiagnoseInferVars<'_, 'db> {
         const TYPE_FLAGS: TypeFlags = TypeFlags::HAS_INFER.union(TypeFlags::HAS_NON_REGION_ERROR);
 
-        fn err_on_span(&mut self, span: Span) {
+        fn err_on_span(&mut self, span: Span<'db>) {
             if !self.ctx.spans_emitted_type_must_be_known_for.insert(span) {
                 // Suppress duplicate diagnostics.
                 return;

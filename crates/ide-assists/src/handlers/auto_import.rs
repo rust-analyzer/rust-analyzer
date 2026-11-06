@@ -257,7 +257,7 @@ fn group_label(import_candidate: &ImportCandidate<'_>) -> GroupLabel {
 /// relevant.
 pub(crate) fn relevance_score(
     ctx: &AssistContext<'_, '_>,
-    import: &LocatedImport,
+    import: &LocatedImport<'_>,
     expected: Option<&Type<'_>>,
     current_module: Option<&Module>,
 ) -> i32 {

@@ -48,9 +48,9 @@ macro_rules! impl_from {
         impl<$lifetime:lifetime>
         $source:ident $(<$source_lifetime:lifetime>)?
         { $($source_variant:ident $(=> $target_variant:ident)?),* $(,)? }
-        for $target:ident<$target_lifetime:lifetime>
+        for $target:ident $(<$target_lifetime:lifetime>)?
     ) => {
-        impl<$lifetime> From<$source$(<$source_lifetime>)?> for $target<$target_lifetime> {
+        impl<$lifetime> From<$source$(<$source_lifetime>)?> for $target$(<$target_lifetime>)? {
             fn from(value: $source$(<$source_lifetime>)?) -> Self {
                 match value {
                     $(

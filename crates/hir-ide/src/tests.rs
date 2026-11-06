@@ -78,9 +78,9 @@ fn infer_defs<'db>(
     files: &[EditionedFileId],
 ) -> Vec<(
     InferBodyId<'db>,
-    &'db ExpressionStore,
-    &'db ExpressionStoreSourceMap,
-    ExprId,
+    &'db ExpressionStore<'db>,
+    &'db ExpressionStoreSourceMap<'db>,
+    ExprId<'db>,
     Option<(BindingId, Option<InFile<SelfParamPtr>>)>,
     Crate,
 )> {
@@ -345,9 +345,9 @@ fn check_impl(
     });
 }
 
-fn expr_node(
-    source_map: &ExpressionStoreSourceMap,
-    expr: ExprId,
+fn expr_node<'db>(
+    source_map: &ExpressionStoreSourceMap<'db>,
+    expr: ExprId<'db>,
     db: &TestDB,
 ) -> Option<InFile<SyntaxNode>> {
     Some(match source_map.expr_syntax(expr) {
@@ -359,9 +359,9 @@ fn expr_node(
     })
 }
 
-fn pat_node(
-    source_map: &ExpressionStoreSourceMap,
-    pat: PatId,
+fn pat_node<'db>(
+    source_map: &ExpressionStoreSourceMap<'db>,
+    pat: PatId<'db>,
     db: &TestDB,
 ) -> Option<InFile<SyntaxNode>> {
     Some(match source_map.pat_syntax(pat) {
@@ -373,9 +373,9 @@ fn pat_node(
     })
 }
 
-fn type_node(
-    source_map: &ExpressionStoreSourceMap,
-    type_ref: TypeRefId,
+fn type_node<'db>(
+    source_map: &ExpressionStoreSourceMap<'db>,
+    type_ref: TypeRefId<'db>,
     db: &TestDB,
 ) -> Option<InFile<SyntaxNode>> {
     Some(match source_map.type_syntax(type_ref) {
@@ -398,12 +398,18 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
     crate::attach_db(&db, || {
         let mut buf = String::new();
 
-        let mut infer_def = |inference_result: &InferenceResult<'_>,
-                             store: &ExpressionStore,
-                             source_map: &ExpressionStoreSourceMap,
-                             self_param: Option<(BindingId, Option<InFile<SelfParamPtr>>)>,
-                             krate: Crate| {
-            let display_target = DisplayTarget::from_crate(&db, krate);
+        fn infer_def<'db>(
+            db: &TestDB,
+            file_id: &EditionedFileId,
+            include_mismatches: bool,
+            store: &ExpressionStore<'db>,
+            source_map: &ExpressionStoreSourceMap<'db>,
+            self_param: Option<(BindingId, Option<InFile<SelfParamPtr>>)>,
+            krate: Crate,
+            inference_result: &InferenceResult<'db>,
+            buf: &mut String,
+        ) {
+            let display_target = DisplayTarget::from_crate(db, krate);
             let mut types: Vec<(InFile<SyntaxNode>, Ty<'_>)> = Vec::new();
             let type_mismatch_for_node = inference_result
                 .diagnostics()
@@ -420,7 +426,7 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
             if let Some((binding_id, syntax_ptr)) = self_param {
                 let ty = &inference_result.type_of_binding[binding_id];
                 if let Some(syntax_ptr) = syntax_ptr {
-                    let root = syntax_ptr.file_id.parse_or_expand(&db);
+                    let root = syntax_ptr.file_id.parse_or_expand(db);
                     let node = syntax_ptr.map(|ptr| ptr.to_node(&root).syntax().clone());
                     types.push((node, ty.as_ref()));
                 }
@@ -432,7 +438,7 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
                 }
                 let node = match source_map.pat_syntax(pat) {
                     Ok(sp) => {
-                        let root = sp.file_id.parse_or_expand(&db);
+                        let root = sp.file_id.parse_or_expand(db);
                         sp.map(|ptr| ptr.to_node(&root).syntax().clone())
                     }
                     Err(SyntheticSyntax) => continue,
@@ -446,7 +452,7 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
             for (expr, ty) in inference_result.type_of_expr.iter() {
                 let node = match source_map.expr_syntax(expr) {
                     Ok(sp) => {
-                        let root = sp.file_id.parse_or_expand(&db);
+                        let root = sp.file_id.parse_or_expand(db);
                         sp.map(|ptr| ptr.to_node(&root).syntax().clone())
                     }
                     Err(SyntheticSyntax) => continue,
@@ -469,14 +475,14 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
                     } else {
                         (node.value.text_range(), node.value.text().to_string().replace('\n', " "))
                     };
-                let macro_prefix = if node.file_id != file_id { "!" } else { "" };
+                let macro_prefix = if node.file_id != *file_id { "!" } else { "" };
                 format_to!(
                     buf,
                     "{}{:?} '{}': {}\n",
                     macro_prefix,
                     range,
                     ellipsize(text, 15),
-                    ty.display_test(&db, display_target)
+                    ty.display_test(db, display_target)
                 );
             }
             if include_mismatches {
@@ -486,23 +492,33 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
                 });
                 for (src_ptr, (expected, actual)) in &mismatches {
                     let range = src_ptr.value.text_range();
-                    let macro_prefix = if src_ptr.file_id != file_id { "!" } else { "" };
+                    let macro_prefix = if src_ptr.file_id != *file_id { "!" } else { "" };
                     format_to!(
                         buf,
                         "{}{:?}: expected {}, got {}\n",
                         macro_prefix,
                         range,
-                        expected.display_test(&db, display_target),
-                        actual.display_test(&db, display_target),
+                        expected.display_test(db, display_target),
+                        actual.display_test(db, display_target),
                     );
                 }
             }
-        };
+        }
 
         let defs = infer_defs(&db, &[file_id]);
         for (def, store, source_map, _root_expr, self_param, krate) in defs {
             let infer = InferenceResult::of(&db, def);
-            infer_def(infer, store, source_map, self_param, krate);
+            infer_def(
+                &db,
+                &file_id,
+                include_mismatches,
+                store,
+                source_map,
+                self_param,
+                krate,
+                infer,
+                &mut buf,
+            );
         }
 
         buf.truncate(buf.trim_end().len());
@@ -512,7 +528,7 @@ fn infer_with_mismatches(content: &str, include_mismatches: bool) -> String {
 
 pub(crate) fn visit_module(
     db: &TestDB,
-    crate_def_map: &DefMap,
+    crate_def_map: &DefMap<'_>,
     module_id: ModuleId,
     cb: &mut dyn FnMut(ModuleDefId),
 ) {
@@ -540,8 +556,8 @@ pub(crate) fn visit_module(
 
     fn visit_scope(
         db: &TestDB,
-        crate_def_map: &DefMap,
-        scope: &ItemScope,
+        crate_def_map: &DefMap<'_>,
+        scope: &ItemScope<'_>,
         cb: &mut dyn FnMut(ModuleDefId),
     ) {
         for decl in scope.declarations() {
@@ -582,7 +598,7 @@ pub(crate) fn visit_module(
         }
     }
 
-    fn visit_body(db: &TestDB, body: &Body, cb: &mut dyn FnMut(ModuleDefId)) {
+    fn visit_body<'db>(db: &TestDB, body: &Body<'db>, cb: &mut dyn FnMut(ModuleDefId)) {
         for (_, def_map) in body.blocks(db) {
             for (mod_id, _) in def_map.modules() {
                 visit_module(db, def_map, mod_id, cb);

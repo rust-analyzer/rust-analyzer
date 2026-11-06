@@ -33,19 +33,19 @@ use syntax::{
 #[derive(Debug, PartialEq, Eq, Copy, Clone, Hash)]
 pub enum Definition<'db> {
     Macro(Macro),
-    Field(Field),
+    Field(Field<'db>),
     TupleField(TupleField<'db>),
     Module(Module),
     Crate(Crate),
-    Function(Function),
+    Function(Function<'db>),
     Adt(Adt),
     EnumVariant(EnumVariant),
     Const(Const),
     Static(Static),
     Trait(Trait),
     TypeAlias(TypeAlias),
-    SelfType(Impl),
-    GenericParam(GenericParam),
+    SelfType(Impl<'db>),
+    GenericParam(GenericParam<'db>),
     Local(Local<'db>),
     Label(Label),
     DeriveHelper(DeriveHelper),
@@ -55,7 +55,7 @@ pub enum Definition<'db> {
     ToolModule(ToolModule),
     ExternCrateDecl(ExternCrateDecl),
     InlineAsmRegOrRegClass(()),
-    InlineAsmOperand(InlineAsmOperand),
+    InlineAsmOperand(InlineAsmOperand<'db>),
 }
 
 impl<'db> Definition<'db> {
@@ -105,7 +105,7 @@ impl<'db> Definition<'db> {
     }
 
     pub fn enclosing_definition(&self, db: &RootDatabase) -> Option<Definition<'db>> {
-        fn container_to_definition<'db>(container: ItemContainer) -> Option<Definition<'db>> {
+        fn container_to_definition<'db>(container: ItemContainer<'db>) -> Option<Definition<'db>> {
             match container {
                 ItemContainer::Trait(it) => Some(it.into()),
                 ItemContainer::Impl(it) => Some(it.into()),
@@ -202,12 +202,12 @@ impl<'db> Definition<'db> {
         Some(name)
     }
 
-    pub fn docs<'a>(
+    pub fn docs(
         &self,
-        db: &'a RootDatabase,
+        db: &'db RootDatabase,
         famous_defs: Option<&FamousDefs<'_, '_>>,
         display_target: DisplayTarget,
-    ) -> Option<Documentation<'a>> {
+    ) -> Option<Documentation<'db>> {
         self.docs_with_rangemap(db, famous_defs, display_target).map(|docs| match docs {
             Either::Left(Cow::Borrowed(docs)) => Documentation::new_borrowed(docs.docs()),
             Either::Left(Cow::Owned(docs)) => Documentation::new_owned(docs.into_docs()),
@@ -215,12 +215,12 @@ impl<'db> Definition<'db> {
         })
     }
 
-    pub fn docs_with_rangemap<'a>(
+    pub fn docs_with_rangemap(
         &self,
-        db: &'a RootDatabase,
+        db: &'db RootDatabase,
         famous_defs: Option<&FamousDefs<'_, '_>>,
         display_target: DisplayTarget,
-    ) -> Option<Either<Cow<'a, hir::Docs>, Documentation<'a>>> {
+    ) -> Option<Either<Cow<'db, hir::Docs>, Documentation<'db>>> {
         let docs = match self {
             Definition::Macro(it) => it.docs_with_rangemap(db),
             Definition::Field(it) => it.docs_with_rangemap(db),
@@ -386,7 +386,7 @@ pub fn find_std_module(
 pub enum IdentClass<'db> {
     NameClass(NameClass<'db>),
     NameRefClass(NameRefClass<'db>),
-    Operator(OperatorClass),
+    Operator(OperatorClass<'db>),
 }
 
 impl<'db> IdentClass<'db> {
@@ -525,7 +525,7 @@ pub enum NameClass<'db> {
     /// a definition into a local scope, and refers to an existing definition.
     PatFieldShorthand {
         local_def: Local<'db>,
-        field_ref: Field,
+        field_ref: Field<'db>,
         adt_subst: GenericSubstitution<'db>,
     },
 }
@@ -654,62 +654,62 @@ impl<'db> NameClass<'db> {
 }
 
 #[derive(Debug)]
-pub enum OperatorClass {
+pub enum OperatorClass<'db> {
     Range(Struct),
-    Await(Function),
-    Prefix(Function),
-    Index(Function),
-    Try(Function),
-    Bin(Function),
+    Await(Function<'db>),
+    Prefix(Function<'db>),
+    Index(Function<'db>),
+    Try(Function<'db>),
+    Bin(Function<'db>),
 }
 
-impl OperatorClass {
+impl<'db> OperatorClass<'db> {
     pub fn classify_range_pat(
         sema: &Semantics<'_, RootDatabase>,
         range_pat: &ast::RangePat,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'static>> {
         sema.resolve_range_pat(range_pat).map(OperatorClass::Range)
     }
 
     pub fn classify_range_expr(
         sema: &Semantics<'_, RootDatabase>,
         range_expr: &ast::RangeExpr,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'static>> {
         sema.resolve_range_expr(range_expr).map(OperatorClass::Range)
     }
 
     pub fn classify_await(
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
         await_expr: &ast::AwaitExpr,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'db>> {
         sema.resolve_await_to_poll(await_expr).map(OperatorClass::Await)
     }
 
     pub fn classify_prefix(
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
         prefix_expr: &ast::PrefixExpr,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'db>> {
         sema.resolve_prefix_expr(prefix_expr).map(OperatorClass::Prefix)
     }
 
     pub fn classify_try(
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
         try_expr: &ast::TryExpr,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'db>> {
         sema.resolve_try_expr(try_expr).map(OperatorClass::Try)
     }
 
     pub fn classify_index(
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
         index_expr: &ast::IndexExpr,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'db>> {
         sema.resolve_index_expr(index_expr).map(OperatorClass::Index)
     }
 
     pub fn classify_bin(
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
         bin_expr: &ast::BinExpr,
-    ) -> Option<OperatorClass> {
+    ) -> Option<OperatorClass<'db>> {
         sema.resolve_bin_expr(bin_expr).map(OperatorClass::Bin)
     }
 }
@@ -725,7 +725,7 @@ pub enum NameRefClass<'db> {
     Definition(Definition<'db>, Option<GenericSubstitution<'db>>),
     FieldShorthand {
         local_ref: Local<'db>,
-        field_ref: Field,
+        field_ref: Field<'db>,
         adt_subst: GenericSubstitution<'db>,
     },
     /// The specific situation where we have an extern crate decl without a rename
@@ -755,7 +755,7 @@ impl<'db> NameRefClass<'db> {
                 sema.resolve_record_field_with_substitution(&record_field)
         {
             let res = match local {
-                None => NameRefClass::Definition(Definition::Field(field), Some(adt_subst)),
+                None => NameRefClass::Definition(field.into(), Some(adt_subst)),
                 Some(local) => {
                     NameRefClass::FieldShorthand { field_ref: field, local_ref: local, adt_subst }
                 }
@@ -770,7 +770,7 @@ impl<'db> NameRefClass<'db> {
                 // Only use this to resolve to macro calls for last segments as qualifiers resolve
                 // to modules below.
                 if let Some(macro_def) = sema.resolve_macro_call(&macro_call) {
-                    return Some(NameRefClass::Definition(Definition::Macro(macro_def), None));
+                    return Some(NameRefClass::Definition(macro_def.into(), None));
                 }
             }
             return sema
@@ -794,18 +794,18 @@ impl<'db> NameRefClass<'db> {
                         .map(|(def, subst)| {
                             match def {
                                 Either::Left(Either::Left(def)) => NameRefClass::Definition(def.into(), subst),
-                                Either::Left(Either::Right(def)) => NameRefClass::Definition(Definition::TupleField(def), subst),
+                                Either::Left(Either::Right(def)) => NameRefClass::Definition(def.into(), subst),
                                 Either::Right(def) => NameRefClass::Definition(def.into(), subst),
                             }
                         })
                 },
                 ast::RecordPatField(record_pat_field) => {
                     sema.resolve_record_pat_field_with_subst(&record_pat_field)
-                        .map(|(field, _, subst)| NameRefClass::Definition(Definition::Field(field), Some(subst)))
+                        .map(|(field, _, subst)| NameRefClass::Definition(field.into(), Some(subst)))
                 },
                 ast::RecordExprField(record_expr_field) => {
                     sema.resolve_record_field_with_substitution(&record_expr_field)
-                        .map(|(field, _, _, subst)| NameRefClass::Definition(Definition::Field(field), Some(subst)))
+                        .map(|(field, _, _, subst)| NameRefClass::Definition(field.into(), Some(subst)))
                 },
                 ast::AssocTypeArg(_) => {
                     // `Trait<Assoc = Ty>`
@@ -823,7 +823,7 @@ impl<'db> NameRefClass<'db> {
                             .find(|alias| alias.name(sema.db).as_str() == name_ref.text().trim_start_matches("r#"))
                         {
                             // No substitution, this can only occur in type position.
-                            return Some(NameRefClass::Definition(Definition::TypeAlias(ty), None));
+                            return Some(NameRefClass::Definition(ty.into(), None));
                         }
                     None
                 },
@@ -838,7 +838,7 @@ impl<'db> NameRefClass<'db> {
                     let extern_crate = sema.to_def(&extern_crate_ast)?;
                     let krate = extern_crate.resolved_crate(sema.db)?;
                     Some(if extern_crate_ast.rename().is_some() {
-                        NameRefClass::Definition(Definition::Crate(krate), None)
+                        NameRefClass::Definition(krate.into(), None)
                     } else {
                         NameRefClass::ExternCrateShorthand { krate, decl: extern_crate }
                     })
@@ -893,10 +893,11 @@ impl<'db> NameRefClass<'db> {
 
 impl_from!(
     impl<'db>
-    Field,
+    Field<'db>,
     TupleField<'db>,
     Module,
-    Function,
+    Crate,
+    Function<'db>,
     Adt,
     EnumVariant,
     Const,
@@ -905,28 +906,28 @@ impl_from!(
     TypeAlias,
     BuiltinType,
     Local<'db>,
-    GenericParam,
+    GenericParam<'db>,
     Label,
     Macro,
     ExternCrateDecl,
-    InlineAsmOperand
+    InlineAsmOperand<'db>
     for Definition<'db>
 );
 
-impl<'db> From<Impl> for Definition<'db> {
-    fn from(impl_: Impl) -> Self {
+impl<'db> From<Impl<'db>> for Definition<'db> {
+    fn from(impl_: Impl<'db>) -> Self {
         Definition::SelfType(impl_)
     }
 }
 
-impl<'db> From<Either<PathResolution<'db>, InlineAsmOperand>> for Definition<'db> {
-    fn from(value: Either<PathResolution<'db>, InlineAsmOperand>) -> Self {
+impl<'db> From<Either<PathResolution<'db>, InlineAsmOperand<'db>>> for Definition<'db> {
+    fn from(value: Either<PathResolution<'db>, InlineAsmOperand<'db>>) -> Self {
         value.either(Definition::from, Definition::from)
     }
 }
 
-impl AsAssocItem for Definition<'_> {
-    fn as_assoc_item(self, db: &dyn hir::db::HirDatabase) -> Option<AssocItem> {
+impl<'db> AsAssocItem<'db> for Definition<'db> {
+    fn as_assoc_item(self, db: &'db dyn hir::db::HirDatabase) -> Option<AssocItem<'db>> {
         match self {
             Definition::Function(it) => it.as_assoc_item(db),
             Definition::Const(it) => it.as_assoc_item(db),
@@ -936,8 +937,11 @@ impl AsAssocItem for Definition<'_> {
     }
 }
 
-impl AsExternAssocItem for Definition<'_> {
-    fn as_extern_assoc_item(self, db: &dyn hir::db::HirDatabase) -> Option<ExternAssocItem> {
+impl<'db> AsExternAssocItem<'db> for Definition<'db> {
+    fn as_extern_assoc_item(
+        self,
+        db: &'db dyn hir::db::HirDatabase,
+    ) -> Option<ExternAssocItem<'db>> {
         match self {
             Definition::Function(it) => it.as_extern_assoc_item(db),
             Definition::Static(it) => it.as_extern_assoc_item(db),
@@ -947,8 +951,8 @@ impl AsExternAssocItem for Definition<'_> {
     }
 }
 
-impl<'db> From<AssocItem> for Definition<'db> {
-    fn from(assoc_item: AssocItem) -> Self {
+impl<'db> From<AssocItem<'db>> for Definition<'db> {
+    fn from(assoc_item: AssocItem<'db>) -> Self {
         match assoc_item {
             AssocItem::Function(it) => Definition::Function(it),
             AssocItem::Const(it) => Definition::Const(it),
@@ -972,8 +976,8 @@ impl<'db> From<PathResolution<'db>> for Definition<'db> {
     }
 }
 
-impl<'db> From<ModuleDef> for Definition<'db> {
-    fn from(def: ModuleDef) -> Self {
+impl<'db> From<ModuleDef<'db>> for Definition<'db> {
+    fn from(def: ModuleDef<'db>) -> Self {
         match def {
             ModuleDef::Module(it) => Definition::Module(it),
             ModuleDef::Function(it) => Definition::Function(it),
@@ -989,8 +993,8 @@ impl<'db> From<ModuleDef> for Definition<'db> {
     }
 }
 
-impl<'db> From<DocLinkDef> for Definition<'db> {
-    fn from(def: DocLinkDef) -> Self {
+impl<'db> From<DocLinkDef<'db>> for Definition<'db> {
+    fn from(def: DocLinkDef<'db>) -> Self {
         match def {
             DocLinkDef::ModuleDef(it) => it.into(),
             DocLinkDef::Field(it) => it.into(),
@@ -1005,9 +1009,9 @@ impl<'db> From<Variant> for Definition<'db> {
     }
 }
 
-impl<'db> TryFrom<DefWithBody> for Definition<'db> {
+impl<'db> TryFrom<DefWithBody<'db>> for Definition<'db> {
     type Error = ();
-    fn try_from(def: DefWithBody) -> Result<Self, Self::Error> {
+    fn try_from(def: DefWithBody<'db>) -> Result<Self, Self::Error> {
         match def {
             DefWithBody::Function(it) => Ok(it.into()),
             DefWithBody::Static(it) => Ok(it.into()),
@@ -1017,8 +1021,8 @@ impl<'db> TryFrom<DefWithBody> for Definition<'db> {
     }
 }
 
-impl<'db> From<GenericDef> for Definition<'db> {
-    fn from(def: GenericDef) -> Self {
+impl<'db> From<GenericDef<'db>> for Definition<'db> {
+    fn from(def: GenericDef<'db>) -> Self {
         match def {
             GenericDef::Function(it) => it.into(),
             GenericDef::Adt(it) => it.into(),
@@ -1031,9 +1035,9 @@ impl<'db> From<GenericDef> for Definition<'db> {
     }
 }
 
-impl<'db> TryFrom<ExpressionStoreOwner> for Definition<'db> {
+impl<'db> TryFrom<ExpressionStoreOwner<'db>> for Definition<'db> {
     type Error = ();
-    fn try_from(def: ExpressionStoreOwner) -> Result<Self, Self::Error> {
+    fn try_from(def: ExpressionStoreOwner<'db>) -> Result<Self, Self::Error> {
         match def {
             ExpressionStoreOwner::Body(def_with_body) => def_with_body.try_into(),
             ExpressionStoreOwner::Signature(generic_def) => Ok(generic_def.into()),
@@ -1042,9 +1046,9 @@ impl<'db> TryFrom<ExpressionStoreOwner> for Definition<'db> {
     }
 }
 
-impl TryFrom<Definition<'_>> for GenericDef {
+impl<'db> TryFrom<Definition<'db>> for GenericDef<'db> {
     type Error = ();
-    fn try_from(def: Definition<'_>) -> Result<Self, Self::Error> {
+    fn try_from(def: Definition<'db>) -> Result<Self, Self::Error> {
         match def {
             Definition::Function(it) => Ok(it.into()),
             Definition::Adt(it) => Ok(it.into()),

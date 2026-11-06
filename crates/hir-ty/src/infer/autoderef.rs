@@ -15,14 +15,14 @@ use crate::{
 };
 
 impl<'db> InferenceTable<'db> {
-    pub(crate) fn autoderef(&self, base_ty: Ty<'db>, span: Span) -> Autoderef<'_, 'db, usize> {
+    pub(crate) fn autoderef(&self, base_ty: Ty<'db>, span: Span<'db>) -> Autoderef<'_, 'db, usize> {
         Autoderef::new(&self.infer_ctxt, self.param_env, base_ty, span)
     }
 
     pub(crate) fn autoderef_with_tracking(
         &self,
         base_ty: Ty<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> Autoderef<'_, 'db> {
         Autoderef::new_with_tracking(&self.infer_ctxt, self.param_env, base_ty, span)
     }

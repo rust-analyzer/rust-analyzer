@@ -411,7 +411,7 @@ fn apply_references(
 fn process_references(
     ctx: &AssistContext<'_, '_>,
     visited_modules: &mut FxHashSet<Module>,
-    enum_module_def: &ModuleDef,
+    enum_module_def: &ModuleDef<'_>,
     variant_hir_name: &Name,
     refs: Vec<FileReference>,
 ) -> Vec<(ast::PathSegment, SyntaxNode, Option<(ImportScope, hir::ModPath)>)> {

@@ -274,22 +274,22 @@ pub enum ByRef {
 /// and the final binding mode that we infer after type inference/match ergonomics.
 /// `.0` is the by-reference mode (`ref`, `ref mut`, or by value),
 /// `.1` is the mutability of the binding.
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq, SalsaValue)]
 pub struct BindingMode(pub ByRef, pub Mutability);
 
-#[derive(Debug, PartialEq, Eq, Clone, TypeVisitable, TypeFoldable)]
-pub enum InferenceDiagnostic {
+#[derive(Debug, PartialEq, Eq, Clone, TypeVisitable, TypeFoldable, SalsaValue)]
+pub enum InferenceDiagnostic<'db> {
     NoSuchField {
         #[type_visitable(ignore)]
         field: ExprOrPatIdPacked,
         #[type_visitable(ignore)]
-        private: Option<LocalFieldId>,
+        private: Option<LocalFieldId<'db>>,
         #[type_visitable(ignore)]
         variant: VariantId,
     },
     MismatchedArrayPatLen {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
         #[type_visitable(ignore)]
         expected: u64,
         #[type_visitable(ignore)]
@@ -299,16 +299,16 @@ pub enum InferenceDiagnostic {
     },
     ArrayPatternWithoutFixedLength {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
     ExpectedArrayOrSlicePat {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
         found: StoredTy,
     },
     InvalidRangePatType {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
     DuplicateField {
         #[type_visitable(ignore)]
@@ -318,9 +318,9 @@ pub enum InferenceDiagnostic {
     },
     PrivateField {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
-        field: FieldId,
+        field: FieldId<'db>,
     },
     PrivateAssocItem {
         #[type_visitable(ignore)]
@@ -330,7 +330,7 @@ pub enum InferenceDiagnostic {
     },
     UnresolvedField {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         receiver: StoredTy,
         #[type_visitable(ignore)]
         name: Name,
@@ -339,7 +339,7 @@ pub enum InferenceDiagnostic {
     },
     UnresolvedMethodCall {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         receiver: StoredTy,
         #[type_visitable(ignore)]
         name: Name,
@@ -359,7 +359,7 @@ pub enum InferenceDiagnostic {
     // FIXME: This should be emitted in body lowering
     BreakOutsideOfLoop {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
         is_break: bool,
         #[type_visitable(ignore)]
@@ -367,29 +367,29 @@ pub enum InferenceDiagnostic {
     },
     NonExhaustiveRecordExpr {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
     },
     NonExhaustiveRecordPat {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
         #[type_visitable(ignore)]
         variant: VariantId,
     },
     UnionPatMustHaveExactlyOneField {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
     UnionPatHasRest {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
     FunctionalRecordUpdateOnNonStruct {
         #[type_visitable(ignore)]
-        base_expr: ExprId,
+        base_expr: ExprId<'db>,
     },
     MismatchedArgCount {
         #[type_visitable(ignore)]
-        call_expr: ExprId,
+        call_expr: ExprId<'db>,
         #[type_visitable(ignore)]
         expected: usize,
         #[type_visitable(ignore)]
@@ -402,7 +402,7 @@ pub enum InferenceDiagnostic {
     },
     MismatchedTupleStructPatArgCount {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
         #[type_visitable(ignore)]
         expected: usize,
         #[type_visitable(ignore)]
@@ -410,48 +410,48 @@ pub enum InferenceDiagnostic {
     },
     ExpectedFunction {
         #[type_visitable(ignore)]
-        call_expr: ExprId,
+        call_expr: ExprId<'db>,
         found: StoredTy,
     },
     CannotBeDereferenced {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         found: StoredTy,
     },
     UnaryOperatorCannotBeApplied {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
         op: UnaryOp,
         found: StoredTy,
     },
     MutRefInImmRefPat {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
     CannotImplicitlyDerefTraitObject {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
         found: StoredTy,
     },
     CannotIndexInto {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         found: StoredTy,
     },
     TypedHole {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         expected: StoredTy,
     },
     CastToUnsized {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         cast_ty: StoredTy,
     },
     InvalidCast {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
         error: CastError,
         expr_ty: StoredTy,
@@ -459,17 +459,17 @@ pub enum InferenceDiagnostic {
     },
     TyDiagnostic {
         #[type_visitable(ignore)]
-        diag: TyLoweringDiagnostic,
+        diag: TyLoweringDiagnostic<'db>,
     },
     PathDiagnostic {
         #[type_visitable(ignore)]
         node: ExprOrPatIdPacked,
         #[type_visitable(ignore)]
-        diag: PathLoweringDiagnostic,
+        diag: PathLoweringDiagnostic<'db>,
     },
     MethodCallIncorrectGenericsLen {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
         provided_count: u32,
         #[type_visitable(ignore)]
@@ -481,13 +481,13 @@ pub enum InferenceDiagnostic {
     },
     MethodCallIllegalSizedBound {
         #[type_visitable(ignore)]
-        call_expr: ExprId,
+        call_expr: ExprId<'db>,
     },
     MethodCallIncorrectGenericsOrder {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
-        param_id: GenericParamId,
+        param_id: GenericParamId<'db>,
         #[type_visitable(ignore)]
         arg_idx: u32,
         /// Whether the `GenericArgs` contains a `Self` arg.
@@ -496,16 +496,16 @@ pub enum InferenceDiagnostic {
     },
     InvalidLhsOfAssignment {
         #[type_visitable(ignore)]
-        lhs: ExprId,
+        lhs: ExprId<'db>,
     },
     TypeMustBeKnown {
         #[type_visitable(ignore)]
-        at_point: Span,
+        at_point: Span<'db>,
         top_term: Option<StoredGenericArg>,
     },
     UnionExprMustHaveExactlyOneField {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
     },
     TypeMismatch {
         #[type_visitable(ignore)]
@@ -513,42 +513,42 @@ pub enum InferenceDiagnostic {
         expected: StoredTy,
         found: StoredTy,
     },
-    SolverDiagnostic(SolverDiagnostic),
+    SolverDiagnostic(SolverDiagnostic<'db>),
     ExplicitDropMethodUse {
         #[type_visitable(ignore)]
-        kind: ExplicitDropMethodUseKind,
+        kind: ExplicitDropMethodUseKind<'db>,
     },
     MutableRefBinding {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
     YieldOutsideCoroutine {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
     },
     ReturnOutsideFunction {
         #[type_visitable(ignore)]
-        expr: ExprId,
+        expr: ExprId<'db>,
         #[type_visitable(ignore)]
         kind: ReturnKind,
     },
     RecordMissingFields {
         #[type_visitable(ignore)]
-        record: ExprOrPatId,
+        record: ExprOrPatId<'db>,
         #[type_visitable(ignore)]
         variant: VariantId,
         #[type_visitable(ignore)]
-        missed_fields: Vec<LocalFieldId>,
+        missed_fields: Vec<LocalFieldId<'db>>,
     },
     InvalidPatPathRes {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
         #[type_visitable(ignore)]
-        res: ValueNs,
+        res: ValueNs<'db>,
     },
     MatchInheritedImmRefWithMutRefPat {
         #[type_visitable(ignore)]
-        pat: PatId,
+        pat: PatId<'db>,
     },
 }
 
@@ -558,9 +558,9 @@ pub enum ReturnKind {
     BecomeExpr,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum ExplicitDropMethodUseKind {
-    MethodCall(ExprId),
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum ExplicitDropMethodUseKind<'db> {
+    MethodCall(ExprId<'db>),
     Path(ExprOrPatIdPacked),
 }
 
@@ -604,7 +604,7 @@ pub enum ExplicitDropMethodUseKind {
 ///    At some point, of course, `Box` should move out of the compiler, in which
 ///    case this is analogous to transforming a struct. E.g., Box<[i32; 4]> ->
 ///    Box<[i32]> is an `Adjust::Unsize` with the target `Box<[i32]>`.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, SalsaValue)]
 pub struct Adjustment {
     pub kind: Adjust,
     pub target: StoredTy,
@@ -732,7 +732,7 @@ pub enum PointerCast {
 
 /// Represents an implicit coercion applied to the scrutinee of a match before testing a pattern
 /// against it. Currently, this is used only for implicit dereferences.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, SalsaValue)]
 pub struct PatAdjustment {
     pub kind: PatAdjust,
     /// The type of the scrutinee before the adjustment is applied, or the "adjusted type" of the
@@ -759,9 +759,9 @@ pub enum PatAdjust {
 #[derive(Clone, PartialEq, Eq, Debug, SalsaValue)]
 pub struct InferenceResult<'db> {
     /// For each method call expr, records the function it resolves to.
-    method_resolutions: ThinFxHashMap<ExprId, (FunctionId, StoredGenericArgs)>,
+    method_resolutions: ThinFxHashMap<ExprId<'db>, (FunctionId, StoredGenericArgs)>,
     /// For each field access expr, records the field it resolves to.
-    field_resolutions: ThinFxHashMap<ExprId, Either<FieldId, TupleFieldId>>,
+    field_resolutions: ThinFxHashMap<ExprId<'db>, Either<FieldId<'db>, TupleFieldId>>,
     /// For each struct literal or pattern, records the variant it resolves to.
     variant_resolutions: ThinFxHashMap<ExprOrPatIdPacked, VariantId>,
     /// For each associated item record what it resolves to
@@ -771,14 +771,14 @@ pub struct InferenceResult<'db> {
     /// that which allows us to resolve a [`TupleFieldId`]s type.
     tuple_field_access_types: ThinVec<StoredTys>,
 
-    pub type_of_expr: ArenaMap<ExprId, StoredTy>,
+    pub type_of_expr: ArenaMap<ExprId<'db>, StoredTy>,
     /// For each pattern record the type it resolves to.
     ///
     /// **Note**: When a pattern type is resolved it may still contain
     /// unresolved or missing subpatterns or subpatterns of mismatched types.
-    pub type_of_pat: ArenaMap<PatId, StoredTy>,
+    pub type_of_pat: ArenaMap<PatId<'db>, StoredTy>,
     pub type_of_binding: ArenaMap<BindingId, StoredTy>,
-    pub type_of_type_placeholder: ThinFxHashMap<TypeRefId, StoredTy>,
+    pub type_of_type_placeholder: ThinFxHashMap<TypeRefId<'db>, StoredTy>,
     pub type_of_opaque: ThinFxHashMap<InternedOpaqueTyId<'db>, StoredTy>,
 
     /// Whether there are any type-mismatching errors in the result.
@@ -787,13 +787,13 @@ pub struct InferenceResult<'db> {
     // Which will then mark this field.
     pub has_errors: bool,
     /// During inference this field is empty and [`InferenceContext::diagnostics`] is filled instead.
-    diagnostics: ThinVec<InferenceDiagnostic>,
+    diagnostics: ThinVec<InferenceDiagnostic<'db>>,
     // FIXME: Remove this, change it to be in `InferenceContext`:
     nodes_with_type_mismatches: ThinFxHashSet<ExprOrPatIdPacked>,
 
-    pub expr_adjustments: FxHashMap<ExprId, Box<[Adjustment]>>,
+    pub expr_adjustments: FxHashMap<ExprId<'db>, Box<[Adjustment]>>,
     /// Stores the types which were implicitly dereferenced in pattern binding modes.
-    pub pat_adjustments: ThinFxHashMap<PatId, Vec<PatAdjustment>>,
+    pub pat_adjustments: ThinFxHashMap<PatId<'db>, Vec<PatAdjustment>>,
     /// Stores the binding mode (`ref` in `let ref x = 2`) of bindings.
     ///
     /// This one is tied to the `PatId` instead of `BindingId`, because in some rare cases, a binding in an
@@ -807,24 +807,24 @@ pub struct InferenceResult<'db> {
     /// }
     /// ```
     /// the first `rest` has implicit `ref` binding mode, but the second `rest` binding mode is `move`.
-    pub binding_modes: ArenaMap<PatId, BindingMode>,
+    pub binding_modes: ArenaMap<PatId<'db>, BindingMode>,
 
     /// Set of reference patterns that match against a match-ergonomics inserted reference
     /// (as opposed to against a reference in the scrutinee type).
-    skipped_ref_pats: ThinFxHashSet<PatId>,
+    skipped_ref_pats: ThinFxHashSet<PatId<'db>>,
 
-    pub coercion_casts: ThinFxHashSet<ExprId>,
+    pub coercion_casts: ThinFxHashSet<ExprId<'db>>,
 
-    pub closures_data: ThinFxHashMap<ExprId, ClosureData>,
+    pub closures_data: ThinFxHashMap<ExprId<'db>, ClosureData<'db>>,
 
     defined_anon_consts: ThinVec<AnonConstId<'db>>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub struct ClosureData {
+#[derive(Clone, PartialEq, Eq, Debug, SalsaValue)]
+pub struct ClosureData<'db> {
     /// Tracks the minimum captures required for a closure;
     /// see `MinCaptureInformationMap` for more details.
-    pub min_captures: RootVariableMinCaptureList,
+    pub min_captures: RootVariableMinCaptureList<'db>,
 
     /// Tracks the fake reads required for a closure and the reason for the fake read.
     /// When performing pattern matching for closures, there are times we don't end up
@@ -848,7 +848,7 @@ pub struct ClosureData {
     /// we never capture `t`. This becomes an issue when we build MIR as we require
     /// information on `t` in order to create place `t.0` and `t.1`. We can solve this
     /// issue by fake reading `t`.
-    pub fake_reads: Box<[(Place, FakeReadCause, SmallVec<[CaptureSourceStack; 2]>)]>,
+    pub fake_reads: Box<[(Place<'db>, FakeReadCause<'db>, SmallVec<[CaptureSourceStack; 2]>)]>,
 
     /// For each fn, records the "liberated" types of its arguments
     /// and return type. Liberated means that all bound regions
@@ -893,16 +893,16 @@ pub struct ClosureData {
 ///
 /// This provides a convenient and quick way of checking if a variable being used within
 /// a closure is a capture of a local variable.
-pub(crate) type RootVariableMinCaptureList = FxIndexMap<BindingId, MinCaptureList>;
+pub(crate) type RootVariableMinCaptureList<'db> = FxIndexMap<BindingId, MinCaptureList<'db>>;
 
 /// Part of `MinCaptureInformationMap`; List of `CapturePlace`s.
-pub(crate) type MinCaptureList = Vec<CapturedPlace>;
+pub(crate) type MinCaptureList<'db> = Vec<CapturedPlace<'db>>;
 
 /// A composite describing a `Place` that is captured by a closure.
-#[derive(Eq, PartialEq, Clone, Debug, Hash)]
-pub struct CapturedPlace {
+#[derive(Eq, PartialEq, Clone, Debug, Hash, SalsaValue)]
+pub struct CapturedPlace<'db> {
     /// The `Place` that is captured.
-    pub place: Place,
+    pub place: Place<'db>,
 
     /// `CaptureKind` and expression(s) that resulted in such capture of `place`.
     pub info: CaptureInfo,
@@ -911,7 +911,7 @@ pub struct CapturedPlace {
     pub mutability: Mutability,
 }
 
-impl CapturedPlace {
+impl<'db> CapturedPlace<'db> {
     pub fn is_by_ref(&self) -> bool {
         match self.info.capture_kind {
             UpvarCapture::ByValue | UpvarCapture::ByUse => false,
@@ -930,7 +930,7 @@ impl CapturedPlace {
 
     /// The type of the capture stored in the closure, which is different from the type of the captured place
     /// if we capture by reference.
-    pub fn captured_ty<'db>(&self, db: &'db dyn HirDatabase) -> Ty<'db> {
+    pub fn captured_ty(&self, db: &'db dyn HirDatabase) -> Ty<'db> {
         let place_ty = self.place.ty();
         let make_ref = |mutbl| {
             let interner = DbInterner::new_no_crate(db);
@@ -944,7 +944,7 @@ impl CapturedPlace {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, SalsaValue)]
 pub struct CaptureSourceStack(CaptureSourceStackRepr);
 
 #[derive(Clone)]
@@ -1147,19 +1147,22 @@ impl<'db> InferenceResult<'db> {
         }
     }
 
-    pub fn method_resolution(&self, expr: ExprId) -> Option<(FunctionId, GenericArgs<'db>)> {
+    pub fn method_resolution(&self, expr: ExprId<'db>) -> Option<(FunctionId, GenericArgs<'db>)> {
         self.method_resolutions.get(&expr).map(|(func, args)| (*func, args.as_ref()))
     }
-    pub fn field_resolution(&self, expr: ExprId) -> Option<Either<FieldId, TupleFieldId>> {
+    pub fn field_resolution(
+        &self,
+        expr: ExprId<'db>,
+    ) -> Option<Either<FieldId<'db>, TupleFieldId>> {
         self.field_resolutions.get(&expr).copied()
     }
-    pub fn variant_resolution_for_expr(&self, id: ExprId) -> Option<VariantId> {
+    pub fn variant_resolution_for_expr(&self, id: ExprId<'db>) -> Option<VariantId> {
         self.variant_resolutions.get(&id.into()).copied()
     }
-    pub fn variant_resolution_for_pat(&self, id: PatId) -> Option<VariantId> {
+    pub fn variant_resolution_for_pat(&self, id: PatId<'db>) -> Option<VariantId> {
         self.variant_resolutions.get(&id.into()).copied()
     }
-    pub fn variant_resolution_for_expr_or_pat(&self, id: ExprOrPatId) -> Option<VariantId> {
+    pub fn variant_resolution_for_expr_or_pat(&self, id: ExprOrPatId<'db>) -> Option<VariantId> {
         match id {
             ExprOrPatId::ExprId(id) => self.variant_resolution_for_expr(id),
             ExprOrPatId::PatId(id) => self.variant_resolution_for_pat(id),
@@ -1167,19 +1170,19 @@ impl<'db> InferenceResult<'db> {
     }
     pub fn assoc_resolutions_for_expr<'a>(
         &self,
-        id: ExprId,
+        id: ExprId<'db>,
     ) -> Option<(CandidateId, GenericArgs<'a>)> {
         self.assoc_resolutions.get(&id.into()).map(|(assoc, args)| (*assoc, args.as_ref()))
     }
     pub fn assoc_resolutions_for_pat<'a>(
         &self,
-        id: PatId,
+        id: PatId<'db>,
     ) -> Option<(CandidateId, GenericArgs<'a>)> {
         self.assoc_resolutions.get(&id.into()).map(|(assoc, args)| (*assoc, args.as_ref()))
     }
     pub fn assoc_resolutions_for_expr_or_pat<'a>(
         &self,
-        id: ExprOrPatId,
+        id: ExprOrPatId<'db>,
     ) -> Option<(CandidateId, GenericArgs<'a>)> {
         match id {
             ExprOrPatId::ExprId(id) => self.assoc_resolutions_for_expr(id),
@@ -1189,10 +1192,10 @@ impl<'db> InferenceResult<'db> {
     pub fn expr_or_pat_has_type_mismatch(&self, node: ExprOrPatIdPacked) -> bool {
         self.nodes_with_type_mismatches.contains(&node)
     }
-    pub fn expr_has_type_mismatch(&self, expr: ExprId) -> bool {
+    pub fn expr_has_type_mismatch(&self, expr: ExprId<'db>) -> bool {
         self.expr_or_pat_has_type_mismatch(expr.into())
     }
-    pub fn pat_has_type_mismatch(&self, pat: PatId) -> bool {
+    pub fn pat_has_type_mismatch(&self, pat: PatId<'db>) -> bool {
         self.expr_or_pat_has_type_mismatch(pat.into())
     }
     pub fn exprs_have_type_mismatches(&self) -> bool {
@@ -1201,19 +1204,19 @@ impl<'db> InferenceResult<'db> {
     pub fn has_type_mismatches(&self) -> bool {
         !self.nodes_with_type_mismatches.is_empty()
     }
-    pub fn placeholder_types<'a>(&self) -> impl Iterator<Item = (TypeRefId, Ty<'a>)> {
+    pub fn placeholder_types<'a>(&self) -> impl Iterator<Item = (TypeRefId<'db>, Ty<'a>)> {
         self.type_of_type_placeholder.iter().map(|(&type_ref, ty)| (type_ref, ty.as_ref()))
     }
-    pub fn type_of_type_placeholder<'a>(&self, type_ref: TypeRefId) -> Option<Ty<'a>> {
+    pub fn type_of_type_placeholder<'a>(&self, type_ref: TypeRefId<'db>) -> Option<Ty<'a>> {
         self.type_of_type_placeholder.get(&type_ref).map(|ty| ty.as_ref())
     }
-    pub fn type_of_expr_or_pat<'a>(&self, id: ExprOrPatId) -> Option<Ty<'a>> {
+    pub fn type_of_expr_or_pat<'a>(&self, id: ExprOrPatId<'db>) -> Option<Ty<'a>> {
         match id {
             ExprOrPatId::ExprId(id) => self.type_of_expr.get(id).map(|it| it.as_ref()),
             ExprOrPatId::PatId(id) => self.type_of_pat.get(id).map(|it| it.as_ref()),
         }
     }
-    pub fn type_of_expr_with_adjust<'a>(&self, id: ExprId) -> Option<Ty<'a>> {
+    pub fn type_of_expr_with_adjust<'a>(&self, id: ExprId<'db>) -> Option<Ty<'a>> {
         match self.expr_adjustments.get(&id).and_then(|adjustments| {
             adjustments.iter().rfind(|adj| {
                 // https://github.com/rust-lang/rust/blob/67819923ac8ea353aaa775303f4c3aacbf41d010/compiler/rustc_mir_build/src/thir/cx/expr.rs#L140
@@ -1230,7 +1233,7 @@ impl<'db> InferenceResult<'db> {
             None => self.type_of_expr.get(id).map(|it| it.as_ref()),
         }
     }
-    pub fn type_of_pat_with_adjust<'a>(&self, id: PatId) -> Ty<'a> {
+    pub fn type_of_pat_with_adjust<'a>(&self, id: PatId<'db>) -> Ty<'a> {
         match self.pat_adjustments.get(&id).and_then(|adjustments| adjustments.last()) {
             Some(adjusted) => adjusted.source.as_ref(),
             None => self.pat_ty(id),
@@ -1240,7 +1243,7 @@ impl<'db> InferenceResult<'db> {
         self.has_errors && self.type_of_expr.iter().count() == 0
     }
 
-    pub fn diagnostics(&self) -> &[InferenceDiagnostic] {
+    pub fn diagnostics(&self) -> &[InferenceDiagnostic<'db>] {
         &self.diagnostics
     }
 
@@ -1248,25 +1251,25 @@ impl<'db> InferenceResult<'db> {
         self.tuple_field_access_types[id.0 as usize].as_ref()
     }
 
-    pub fn pat_adjustment(&self, id: PatId) -> Option<&[PatAdjustment]> {
+    pub fn pat_adjustment(&self, id: PatId<'db>) -> Option<&[PatAdjustment]> {
         self.pat_adjustments.get(&id).map(|it| &**it)
     }
 
-    pub fn expr_adjustment(&self, id: ExprId) -> Option<&[Adjustment]> {
+    pub fn expr_adjustment(&self, id: ExprId<'db>) -> Option<&[Adjustment]> {
         self.expr_adjustments.get(&id).map(|it| &**it)
     }
 
-    pub fn binding_mode(&self, id: PatId) -> Option<BindingMode> {
+    pub fn binding_mode(&self, id: PatId<'db>) -> Option<BindingMode> {
         self.binding_modes.get(id).copied()
     }
 
     // This method is consumed by external tools to run rust-analyzer as a library. Don't remove, please.
-    pub fn expression_types<'a>(&self) -> impl Iterator<Item = (ExprId, Ty<'a>)> {
+    pub fn expression_types<'a>(&self) -> impl Iterator<Item = (ExprId<'db>, Ty<'a>)> {
         self.type_of_expr.iter().map(|(k, v)| (k, v.as_ref()))
     }
 
     // This method is consumed by external tools to run rust-analyzer as a library. Don't remove, please.
-    pub fn pattern_types<'a>(&self) -> impl Iterator<Item = (PatId, Ty<'a>)> {
+    pub fn pattern_types<'a>(&self) -> impl Iterator<Item = (PatId<'db>, Ty<'a>)> {
         self.type_of_pat.iter().map(|(k, v)| (k, v.as_ref()))
     }
 
@@ -1288,15 +1291,15 @@ impl<'db> InferenceResult<'db> {
         })
     }
 
-    pub fn expr_ty<'a>(&self, id: ExprId) -> Ty<'a> {
+    pub fn expr_ty<'a>(&self, id: ExprId<'db>) -> Ty<'a> {
         self.type_of_expr.get(id).map_or(default_types().types.error, |it| it.as_ref())
     }
 
-    pub fn pat_ty<'a>(&self, id: PatId) -> Ty<'a> {
+    pub fn pat_ty<'a>(&self, id: PatId<'db>) -> Ty<'a> {
         self.type_of_pat.get(id).map_or(default_types().types.error, |it| it.as_ref())
     }
 
-    pub fn expr_or_pat_ty<'a>(&self, id: ExprOrPatId) -> Ty<'a> {
+    pub fn expr_or_pat_ty<'a>(&self, id: ExprOrPatId<'db>) -> Ty<'a> {
         self.type_of_expr_or_pat(id).unwrap_or(default_types().types.error)
     }
 
@@ -1305,7 +1308,7 @@ impl<'db> InferenceResult<'db> {
     }
 
     /// This does not deduplicate, which means you'll get the types once per capture.
-    pub fn closure_captures_tys<'a>(&self, closure: ExprId) -> impl Iterator<Item = Ty<'a>> {
+    pub fn closure_captures_tys(&self, closure: ExprId<'db>) -> impl Iterator<Item = Ty<'db>> {
         self.closures_data[&closure]
             .min_captures
             .values()
@@ -1313,18 +1316,18 @@ impl<'db> InferenceResult<'db> {
     }
 
     /// Like [`Self::closure_captures_tys()`], but using [`CapturedPlace::captured_ty()`].
-    pub fn closure_captures_captured_tys<'a>(
+    pub fn closure_captures_captured_tys(
         &self,
-        db: &'a dyn HirDatabase,
-        closure: ExprId,
-    ) -> impl Iterator<Item = Ty<'a>> {
+        db: &'db dyn HirDatabase,
+        closure: ExprId<'db>,
+    ) -> impl Iterator<Item = Ty<'db>> {
         self.closures_data[&closure]
             .min_captures
             .values()
             .flat_map(|captures| captures.iter().map(|capture| capture.captured_ty(db)))
     }
 
-    pub fn is_skipped_ref_pat(&self, pat: PatId) -> bool {
+    pub fn is_skipped_ref_pat(&self, pat: PatId<'db>) -> bool {
         self.skipped_ref_pats.contains(&pat)
     }
 }
@@ -1342,7 +1345,7 @@ pub(crate) struct InferenceContext<'db> {
     pub(crate) owner: InferBodyId<'db>,
     pub(crate) store_owner: ExpressionStoreOwnerId,
     pub(crate) generic_def: GenericDefId,
-    pub(crate) store: &'db ExpressionStore,
+    pub(crate) store: &'db ExpressionStore<'db>,
     pub(crate) lowering_mode: LoweringMode,
     /// Generally you should not resolve things via this resolver. Instead create a TyLoweringContext
     /// and resolve the path via its methods. This will ensure proper error reporting.
@@ -1380,9 +1383,9 @@ pub(crate) struct InferenceContext<'db> {
     deferred_cast_checks: Vec<CastCheck<'db>>,
 
     /// The key is an expression defining a closure or a coroutine closure.
-    deferred_call_resolutions: FxHashMap<ExprId, Vec<DeferredCallResolution<'db>>>,
+    deferred_call_resolutions: FxHashMap<ExprId<'db>, Vec<DeferredCallResolution<'db>>>,
 
-    diagnostics: Diagnostics,
+    diagnostics: Diagnostics<'db>,
     vars_emitted_type_must_be_known_for: FxHashSet<Term<'db>>,
 
     defined_anon_consts: RefCell<ThinVec<AnonConstId<'db>>>,
@@ -1432,7 +1435,7 @@ impl<'db> InferenceContext<'db> {
         owner: InferBodyId<'db>,
         store_owner: ExpressionStoreOwnerId,
         generic_def: GenericDefId,
-        store: &'db ExpressionStore,
+        store: &'db ExpressionStore<'db>,
         resolver: Resolver<'db>,
         allow_using_generic_params: bool,
         lowering_mode: LoweringMode,
@@ -1608,7 +1611,7 @@ impl<'db> InferenceContext<'db> {
     /// pattern's scrutinee by calling `DerefMut::deref_mut`, and otherwise we call `Deref::deref`.
     /// However, for boxes we can use a built-in deref instead, which doesn't borrow the scrutinee;
     /// in this case, we return `DerefPatBorrowMode::Box`.
-    fn deref_pat_borrow_mode(&self, pointer_ty: Ty<'_>, inner: PatId) -> DerefPatBorrowMode {
+    fn deref_pat_borrow_mode(&self, pointer_ty: Ty<'_>, inner: PatId<'db>) -> DerefPatBorrowMode {
         if pointer_ty.is_box() {
             DerefPatBorrowMode::Box
         } else {
@@ -1784,7 +1787,7 @@ impl<'db> InferenceContext<'db> {
         &mut self,
         func: FunctionId,
         self_param: Option<BindingId>,
-        params: &[Param<PatId>],
+        params: &[Param<PatId<'db>>],
     ) {
         let sig = self.interner().liberate_late_bound_regions(
             func.into(),
@@ -1860,7 +1863,7 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn infer_body(&mut self, body_expr: ExprId) {
+    fn infer_body(&mut self, body_expr: ExprId<'db>) {
         match self.return_coercion {
             Some(_) => self.infer_return(body_expr),
             None => {
@@ -1873,11 +1876,11 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn write_expr_ty(&mut self, expr: ExprId, ty: Ty<'db>) {
+    fn write_expr_ty(&mut self, expr: ExprId<'db>, ty: Ty<'db>) {
         self.result.type_of_expr.insert(expr, ty.store());
     }
 
-    pub(crate) fn write_expr_adj(&mut self, expr: ExprId, adjustments: Box<[Adjustment]>) {
+    pub(crate) fn write_expr_adj(&mut self, expr: ExprId<'db>, adjustments: Box<[Adjustment]>) {
         if adjustments.is_empty() {
             return;
         }
@@ -1905,7 +1908,7 @@ impl<'db> InferenceContext<'db> {
 
     pub(crate) fn write_method_resolution(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         func: FunctionId,
         subst: GenericArgs<'db>,
     ) {
@@ -1925,7 +1928,7 @@ impl<'db> InferenceContext<'db> {
         self.result.assoc_resolutions.insert(id, (item, subs.store()));
     }
 
-    fn write_pat_ty(&mut self, pat: PatId, ty: Ty<'db>) {
+    fn write_pat_ty(&mut self, pat: PatId<'db>, ty: Ty<'db>) {
         self.result.type_of_pat.insert(pat, ty.store());
     }
 
@@ -1933,13 +1936,13 @@ impl<'db> InferenceContext<'db> {
         self.result.type_of_binding.insert(id, ty.store());
     }
 
-    pub(crate) fn push_diagnostic(&self, diagnostic: InferenceDiagnostic) {
+    pub(crate) fn push_diagnostic(&self, diagnostic: InferenceDiagnostic<'db>) {
         self.diagnostics.push(diagnostic);
     }
 
     fn record_deferred_call_resolution(
         &mut self,
-        closure_def_id: ExprId,
+        closure_def_id: ExprId<'db>,
         r: DeferredCallResolution<'db>,
     ) {
         self.deferred_call_resolutions.entry(closure_def_id).or_default().push(r);
@@ -1947,7 +1950,7 @@ impl<'db> InferenceContext<'db> {
 
     fn remove_deferred_call_resolutions(
         &mut self,
-        closure_def_id: ExprId,
+        closure_def_id: ExprId<'db>,
     ) -> Vec<DeferredCallResolution<'db>> {
         self.deferred_call_resolutions.remove(&closure_def_id).unwrap_or_default()
     }
@@ -1974,7 +1977,7 @@ impl<'db> InferenceContext<'db> {
         f(&mut ctx)
     }
 
-    pub(crate) fn make_ty(&mut self, type_ref: TypeRefId) -> Ty<'db> {
+    pub(crate) fn make_ty(&mut self, type_ref: TypeRefId<'db>) -> Ty<'db> {
         let ty = self.with_ty_lowering(|ctx| ctx.lower_ty(type_ref));
         self.process_user_written_ty(ty)
     }
@@ -1989,7 +1992,11 @@ impl<'db> InferenceContext<'db> {
         })
     }
 
-    pub(crate) fn create_anon_const(&mut self, expr: ExprId, expected_ty: Ty<'db>) -> Const<'db> {
+    pub(crate) fn create_anon_const(
+        &mut self,
+        expr: ExprId<'db>,
+        expected_ty: Ty<'db>,
+    ) -> Const<'db> {
         never!(expected_ty.has_infer(), "cannot have infer vars in an anon const's ty");
         let konst = create_anon_const(
             self.interner(),
@@ -2021,7 +2028,7 @@ impl<'db> InferenceContext<'db> {
         konst.unwrap_or_else(|_| self.table.next_const_var(Span::Dummy))
     }
 
-    pub(crate) fn make_path_as_const(&mut self, path: &Path) -> Const<'db> {
+    pub(crate) fn make_path_as_const(&mut self, path: &Path<'db>) -> Const<'db> {
         let forbid_params_after = if self.allow_using_generic_params { None } else { Some(0) };
         // FIXME: Report errors.
         path_to_const(self.db, &self.resolver, &|| self.generics(), forbid_params_after, path)
@@ -2133,7 +2140,7 @@ impl<'db> InferenceContext<'db> {
         if result.is_ty_var() { self.type_must_be_known_at_this_point(node, ty) } else { result }
     }
 
-    pub(crate) fn innermost_tail_expr(&self, mut expr: ExprId) -> ExprId {
+    pub(crate) fn innermost_tail_expr(&self, mut expr: ExprId<'db>) -> ExprId<'db> {
         while let Expr::Block { tail: Some(tail), label: None, .. } = self.store[expr] {
             expr = tail;
         }
@@ -2204,7 +2211,7 @@ impl<'db> InferenceContext<'db> {
 
     fn demand_coerce(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         checked_ty: Ty<'db>,
         expected: Ty<'db>,
         allow_two_phase: AllowTwoPhase,
@@ -2231,7 +2238,7 @@ impl<'db> InferenceContext<'db> {
         self.types.types.error
     }
 
-    pub(crate) fn require_type_is_sized(&mut self, ty: Ty<'db>, span: Span) {
+    pub(crate) fn require_type_is_sized(&mut self, ty: Ty<'db>, span: Span<'db>) {
         if !ty.references_non_lt_error()
             && let Some(sized_trait) = self.lang_items.Sized
         {
@@ -2239,11 +2246,11 @@ impl<'db> InferenceContext<'db> {
         }
     }
 
-    fn expr_ty(&self, expr: ExprId) -> Ty<'db> {
+    fn expr_ty(&self, expr: ExprId<'db>) -> Ty<'db> {
         self.result.expr_ty(expr)
     }
 
-    fn expr_ty_after_adjustments(&self, e: ExprId) -> Ty<'db> {
+    fn expr_ty_after_adjustments(&self, e: ExprId<'db>) -> Ty<'db> {
         let mut ty = None;
         if let Some(it) = self.result.expr_adjustments.get(&e)
             && let Some(it) = it.last()
@@ -2256,7 +2263,7 @@ impl<'db> InferenceContext<'db> {
     fn resolve_variant(
         &mut self,
         node: ExprOrPatIdPacked,
-        path: &Path,
+        path: &Path<'db>,
         value_ns: bool,
     ) -> (Ty<'db>, Option<VariantId>) {
         let interner = self.interner();
@@ -2707,7 +2714,11 @@ impl<'db> Expectation<'db> {
         }
     }
 
-    fn coercion_target_type(&self, table: &mut unify::InferenceTable<'db>, span: Span) -> Ty<'db> {
+    fn coercion_target_type(
+        &self,
+        table: &mut unify::InferenceTable<'db>,
+        span: Span<'db>,
+    ) -> Ty<'db> {
         self.only_has_type(table).unwrap_or_else(|| table.next_ty_var(span))
     }
 
@@ -2731,7 +2742,7 @@ impl<'db> Expectation<'db> {
     fn adjust_for_branches(
         &self,
         table: &mut unify::InferenceTable<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> Expectation<'db> {
         match *self {
             Expectation::HasType(ety) => {

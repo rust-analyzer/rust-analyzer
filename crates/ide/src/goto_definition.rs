@@ -177,10 +177,10 @@ pub(crate) fn goto_definition(
 }
 
 /// When the `?` operator is used on `Result`, go to the `From` impl if it exists as this provides more value.
-fn goto_question_mark_conversions(
-    sema: &Semantics<'_, RootDatabase>,
+fn goto_question_mark_conversions<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     node: &SyntaxNode,
-) -> Option<hir::Function> {
+) -> Option<hir::Function<'db>> {
     let node = ast::TryExpr::cast(node.clone())?;
     let try_expr_ty = sema.type_of_expr(&node.expr()?)?.adjusted();
 
@@ -655,7 +655,10 @@ fn nav_for_break_points(
     Some(navs)
 }
 
-fn def_to_nav(sema: &Semantics<'_, RootDatabase>, def: Definition<'_>) -> Vec<NavigationTarget> {
+fn def_to_nav<'db>(
+    sema: &Semantics<'db, RootDatabase>,
+    def: Definition<'db>,
+) -> Vec<NavigationTarget> {
     def.try_to_nav(sema).map(|it| it.collect()).unwrap_or_default()
 }
 

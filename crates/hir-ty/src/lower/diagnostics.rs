@@ -4,10 +4,12 @@ use hir_def::{GenericDefId, GenericParamId, type_ref::TypeRefId};
 
 use crate::Span;
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum TyLoweringDiagnostic {
-    PathDiagnostic { source: TypeRefId, diag: PathLoweringDiagnostic },
-    InferVarsNotAllowed { source: Span },
+use salsa::SalsaValue;
+
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum TyLoweringDiagnostic<'db> {
+    PathDiagnostic { source: TypeRefId<'db>, diag: PathLoweringDiagnostic<'db> },
+    InferVarsNotAllowed { source: Span<'db> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,8 +37,8 @@ pub enum PathGenericsSource {
     AssocType { segment: u32, assoc_type: u32 },
 }
 
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum PathLoweringDiagnostic {
+#[derive(Debug, PartialEq, Eq, Clone, SalsaValue)]
+pub enum PathLoweringDiagnostic<'db> {
     GenericArgsProhibited {
         segment: u32,
         reason: GenericArgsProhibitedReason,
@@ -54,7 +56,7 @@ pub enum PathLoweringDiagnostic {
     },
     IncorrectGenericsOrder {
         generics_source: PathGenericsSource,
-        param_id: GenericParamId,
+        param_id: GenericParamId<'db>,
         arg_idx: u32,
         /// Whether the `GenericArgs` contains a `Self` arg.
         has_self_arg: bool,

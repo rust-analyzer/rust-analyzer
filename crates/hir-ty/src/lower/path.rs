@@ -44,25 +44,27 @@ use super::{
     associated_type_by_name_including_super_traits_allow_ambiguity, ty_query,
 };
 
-type CallbackData<'a> =
-    Either<PathDiagnosticCallbackData, crate::infer::diagnostics::PathDiagnosticCallbackData<'a>>;
+type CallbackData<'a, 'db> = Either<
+    PathDiagnosticCallbackData<'db>,
+    crate::infer::diagnostics::PathDiagnosticCallbackData<'a, 'db>,
+>;
 
 // We cannot use `&mut dyn FnMut()` because of lifetime issues, and we don't want to use `Box<dyn FnMut()>`
 // because of the allocation, so we create a lifetime-less callback, tailored for our needs.
 pub(crate) struct PathDiagnosticCallback<'a, 'db> {
-    pub(crate) data: CallbackData<'a>,
+    pub(crate) data: CallbackData<'a, 'db>,
     pub(crate) callback:
-        fn(&CallbackData<'_>, &mut TyLoweringContext<'db, '_>, PathLoweringDiagnostic),
+        fn(&CallbackData<'_, 'db>, &mut TyLoweringContext<'db, '_>, PathLoweringDiagnostic<'db>),
 }
 
 pub(crate) struct PathLoweringContext<'a, 'b, 'db> {
     ctx: &'a mut TyLoweringContext<'db, 'b>,
     on_diagnostic: PathDiagnosticCallback<'a, 'db>,
-    path: &'a Path,
-    segments: PathSegments<'a>,
+    path: &'a Path<'db>,
+    segments: PathSegments<'a, 'db>,
     current_segment_idx: usize,
     /// Contains the previous segment if `current_segment_idx == segments.len()`
-    current_or_prev_segment: PathSegment<'a>,
+    current_or_prev_segment: PathSegment<'a, 'db>,
 }
 
 impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
@@ -70,7 +72,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     pub(crate) fn new(
         ctx: &'a mut TyLoweringContext<'db, 'b>,
         on_diagnostic: PathDiagnosticCallback<'a, 'db>,
-        path: &'a Path,
+        path: &'a Path<'db>,
     ) -> Self {
         let segments = path.segments();
         let first_segment = segments.first().unwrap_or(PathSegment::MISSING);
@@ -91,7 +93,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 
     #[inline]
     #[cold]
-    fn on_diagnostic(&mut self, diag: PathLoweringDiagnostic) {
+    fn on_diagnostic(&mut self, diag: PathLoweringDiagnostic<'db>) {
         (self.on_diagnostic.callback)(&self.on_diagnostic.data, self.ctx, diag);
     }
 
@@ -152,10 +154,10 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         &mut self,
         ty: Ty<'db>,
         // We need the original resolution to lower `Self::AssocTy` correctly
-        res: Option<TypeNs>,
+        res: Option<TypeNs<'db>>,
         infer_args: bool,
-        span: Span,
-    ) -> (Ty<'db>, Option<TypeNs>) {
+        span: Span<'db>,
+    ) -> (Ty<'db>, Option<TypeNs<'db>>) {
         let remaining_segments = self.segments.len() - self.current_segment_idx;
         match remaining_segments {
             0 => (ty, res),
@@ -173,10 +175,10 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     // When calling this, the current segment is the resolved segment (we don't advance it yet).
     pub(crate) fn lower_partly_resolved_path(
         &mut self,
-        resolution: TypeNs,
+        resolution: TypeNs<'db>,
         infer_args: bool,
-        span: Span,
-    ) -> (Ty<'db>, Option<TypeNs>) {
+        span: Span<'db>,
+    ) -> (Ty<'db>, Option<TypeNs<'db>>) {
         let remaining_segments = self.segments.skip(self.current_segment_idx + 1);
         tracing::debug!(?remaining_segments);
         let rem_seg_len = remaining_segments.len();
@@ -275,7 +277,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 
     /// This returns whether to keep the resolution (`true`) of throw it (`false`).
     #[must_use]
-    fn handle_type_ns_resolution(&mut self, resolution: &TypeNs) -> bool {
+    fn handle_type_ns_resolution(&mut self, resolution: &TypeNs<'db>) -> bool {
         let mut prohibit_generics_on_resolved = |reason| {
             if self.current_or_prev_segment.args_and_bindings.is_some() {
                 let segment = self.current_segment_u32();
@@ -323,7 +325,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         true
     }
 
-    pub(crate) fn resolve_path_in_type_ns_fully(&mut self) -> Option<TypeNs> {
+    pub(crate) fn resolve_path_in_type_ns_fully(&mut self) -> Option<TypeNs<'db>> {
         let (res, unresolved) = self.resolve_path_in_type_ns()?;
         if unresolved.is_some() {
             return None;
@@ -332,7 +334,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     }
 
     #[tracing::instrument(skip(self), ret)]
-    pub(crate) fn resolve_path_in_type_ns(&mut self) -> Option<(TypeNs, Option<usize>)> {
+    pub(crate) fn resolve_path_in_type_ns(&mut self) -> Option<(TypeNs<'db>, Option<usize>)> {
         let (resolution, remaining_index, _, prefix_info, _) =
             self.ctx.resolver.resolve_path_in_type_ns_with_prefix_info(self.ctx.db, self.path)?;
 
@@ -383,7 +385,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     pub(crate) fn resolve_path_in_value_ns(
         &mut self,
         hygiene_id: HygieneId,
-    ) -> Option<ResolveValueResult> {
+    ) -> Option<ResolveValueResult<'db>> {
         let (res, prefix_info, _) = self.ctx.resolver.resolve_path_in_value_ns_with_prefix_info(
             self.ctx.db,
             self.path,
@@ -480,9 +482,9 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     #[tracing::instrument(skip(self), ret)]
     fn select_associated_type(
         &mut self,
-        res: Option<TypeNs>,
+        res: Option<TypeNs<'db>>,
         infer_args: bool,
-        span: Span,
+        span: Span<'db>,
     ) -> Ty<'db> {
         let interner = self.ctx.interner;
         let db = self.ctx.db;
@@ -549,7 +551,12 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         Ty::new_projection_from_args(interner, assoc_type.into(), substs)
     }
 
-    fn lower_path_inner(&mut self, typeable: TyDefId, infer_args: bool, span: Span) -> Ty<'db> {
+    fn lower_path_inner(
+        &mut self,
+        typeable: TyDefId,
+        infer_args: bool,
+        span: Span<'db>,
+    ) -> Ty<'db> {
         let generic_def = match typeable {
             TyDefId::BuiltinType(builtinty) => {
                 return Ty::from_builtin_type(self.ctx.interner, builtinty);
@@ -572,7 +579,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         resolved: ValueTyDefId,
         infer_args: bool,
         lowering_assoc_type_generics: bool,
-        span: Span,
+        span: Span<'db>,
     ) -> GenericArgs<'db> {
         let prev_current_segment_idx = self.current_segment_idx;
         let prev_current_segment = self.current_or_prev_segment;
@@ -628,7 +635,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         infer_args: bool,
         explicit_self_ty: Option<Ty<'db>>,
         lowering_assoc_type_generics: bool,
-        span: Span,
+        span: Span<'db>,
     ) -> GenericArgs<'db> {
         let old_lifetime_elision = self.ctx.lifetime_elision;
 
@@ -677,19 +684,19 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 
     pub(super) fn substs_from_args_and_bindings(
         &mut self,
-        args_and_bindings: Option<&HirGenericArgs>,
+        args_and_bindings: Option<&HirGenericArgs<'db>>,
         def: GenericDefId,
         infer_args: bool,
         explicit_self_ty: Option<Ty<'db>>,
         generics_source: PathGenericsSource,
         lowering_assoc_type_generics: bool,
         lifetime_elision: LifetimeElisionKind<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> GenericArgs<'db> {
         struct LowererCtx<'a, 'b, 'c, 'db> {
             ctx: &'a mut PathLoweringContext<'b, 'c, 'db>,
             generics_source: PathGenericsSource,
-            span: Span,
+            span: Span<'db>,
         }
 
         impl<'db> GenericArgsLowerer<'db> for LowererCtx<'_, '_, '_, 'db> {
@@ -711,7 +718,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 
             fn report_arg_mismatch(
                 &mut self,
-                param_id: GenericParamId,
+                param_id: GenericParamId<'db>,
                 arg_idx: u32,
                 has_self_arg: bool,
             ) {
@@ -725,9 +732,9 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 
             fn provided_kind(
                 &mut self,
-                param_id: GenericParamId,
+                param_id: GenericParamId<'db>,
                 param: GenericParamDataRef<'_>,
-                arg: &HirGenericArg,
+                arg: &HirGenericArg<'db>,
             ) -> GenericArg<'db> {
                 match (param, *arg) {
                     (
@@ -752,9 +759,9 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 
             fn provided_type_like_const(
                 &mut self,
-                type_ref: TypeRefId,
+                type_ref: TypeRefId<'db>,
                 const_ty: Ty<'db>,
-                arg: TypeLikeConst<'_>,
+                arg: TypeLikeConst<'_, 'db>,
             ) -> Const<'db> {
                 match arg {
                     TypeLikeConst::Path(path) => self.ctx.ctx.lower_path_as_const(path, const_ty),
@@ -765,7 +772,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
             fn inferred_kind(
                 &mut self,
                 def: GenericDefId,
-                param_id: GenericParamId,
+                param_id: GenericParamId<'db>,
                 param: GenericParamDataRef<'_>,
                 infer_args: bool,
                 preceding_args: &[GenericArg<'db>],
@@ -806,7 +813,11 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
                 }
             }
 
-            fn parent_arg(&mut self, _param_idx: u32, param_id: GenericParamId) -> GenericArg<'db> {
+            fn parent_arg(
+                &mut self,
+                _param_idx: u32,
+                param_id: GenericParamId<'db>,
+            ) -> GenericArg<'db> {
                 match param_id {
                     GenericParamId::TypeParamId(_) => {
                         Ty::new_error(self.ctx.ctx.interner, ErrorGuaranteed).into()
@@ -865,7 +876,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         resolved: TraitId,
         explicit_self_ty: Ty<'db>,
         infer_args: bool,
-        span: Span,
+        span: Span<'db>,
     ) -> TraitRef<'db> {
         let args = self.trait_ref_substs_from_path(resolved, explicit_self_ty, infer_args, span);
         TraitRef::new_from_args(self.ctx.interner, resolved.into(), args)
@@ -876,7 +887,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
         resolved: TraitId,
         explicit_self_ty: Ty<'db>,
         infer_args: bool,
-        span: Span,
+        span: Span<'db>,
     ) -> GenericArgs<'db> {
         self.substs_from_path_segment(
             resolved.into(),
@@ -890,7 +901,7 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     pub(super) fn assoc_type_bindings_from_type_bound(
         mut self,
         trait_ref: TraitRef<'db>,
-        span: Span,
+        span: Span<'db>,
     ) -> Option<impl Iterator<Item = (Clause<'db>, GenericPredicateSource)> + use<'a, 'b, 'db>>
     {
         let interner = self.ctx.interner;
@@ -1001,9 +1012,9 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
 }
 
 /// A const that were parsed like a type.
-pub(crate) enum TypeLikeConst<'a> {
+pub(crate) enum TypeLikeConst<'a, 'db> {
     Infer,
-    Path(&'a Path),
+    Path(&'a Path<'db>),
 }
 
 pub(crate) trait GenericArgsLowerer<'db> {
@@ -1026,38 +1037,43 @@ pub(crate) trait GenericArgsLowerer<'db> {
         kind: IncorrectGenericsLenKind,
     );
 
-    fn report_arg_mismatch(&mut self, param_id: GenericParamId, arg_idx: u32, has_self_arg: bool);
+    fn report_arg_mismatch(
+        &mut self,
+        param_id: GenericParamId<'db>,
+        arg_idx: u32,
+        has_self_arg: bool,
+    );
 
     fn provided_kind(
         &mut self,
-        param_id: GenericParamId,
+        param_id: GenericParamId<'db>,
         param: GenericParamDataRef<'_>,
-        arg: &HirGenericArg,
+        arg: &HirGenericArg<'db>,
     ) -> GenericArg<'db>;
 
     fn provided_type_like_const(
         &mut self,
-        type_ref: TypeRefId,
+        type_ref: TypeRefId<'db>,
         const_ty: Ty<'db>,
-        arg: TypeLikeConst<'_>,
+        arg: TypeLikeConst<'_, 'db>,
     ) -> Const<'db>;
 
     fn inferred_kind(
         &mut self,
         def: GenericDefId,
-        param_id: GenericParamId,
+        param_id: GenericParamId<'db>,
         param: GenericParamDataRef<'_>,
         infer_args: bool,
         preceding_args: &[GenericArg<'db>],
         had_count_error: bool,
     ) -> GenericArg<'db>;
 
-    fn parent_arg(&mut self, param_idx: u32, param_id: GenericParamId) -> GenericArg<'db>;
+    fn parent_arg(&mut self, param_idx: u32, param_id: GenericParamId<'db>) -> GenericArg<'db>;
 }
 
 /// Returns true if there was an error.
 fn check_generic_args_len<'db>(
-    args_and_bindings: Option<&HirGenericArgs>,
+    args_and_bindings: Option<&HirGenericArgs<'db>>,
     def: GenericDefId,
     def_generics: &Generics<'db>,
     infer_args: bool,
@@ -1151,8 +1167,8 @@ fn check_generic_args_len<'db>(
 
 pub(crate) fn substs_from_args_and_bindings<'db>(
     db: &'db dyn HirDatabase,
-    store: &ExpressionStore,
-    args_and_bindings: Option<&HirGenericArgs>,
+    store: &ExpressionStore<'db>,
+    args_and_bindings: Option<&HirGenericArgs<'db>>,
     def: GenericDefId,
     mut infer_args: bool,
     lifetime_elision: LifetimeElisionKind<'db>,
@@ -1390,10 +1406,10 @@ pub(crate) fn substs_from_args_and_bindings<'db>(
     GenericArgs::new_from_slice(&substs)
 }
 
-fn type_looks_like_const(
-    store: &ExpressionStore,
-    type_ref: TypeRefId,
-) -> Option<TypeLikeConst<'_>> {
+fn type_looks_like_const<'a, 'db>(
+    store: &'a ExpressionStore<'db>,
+    type_ref: TypeRefId<'db>,
+) -> Option<TypeLikeConst<'a, 'db>> {
     // A path/`_` const will be parsed as a type, instead of a const, because when parsing/lowering
     // in hir-def we don't yet know the expected argument kind. rustc does this a bit differently,
     // when lowering to HIR it resolves the path, and if it doesn't resolve to the type namespace

@@ -267,7 +267,7 @@ impl<'db> rustc_type_ir::InferCtxtLike for InferCtxt<'db> {
         sub: Region<'db>,
         sup: Region<'db>,
         _vis: VisibleForLeakCheck,
-        _span: Span,
+        _span: Span<'db>,
     ) {
         self.inner.borrow_mut().unwrap_region_constraints().make_subregion(sub, sup);
     }
@@ -277,12 +277,12 @@ impl<'db> rustc_type_ir::InferCtxtLike for InferCtxt<'db> {
         a: Region<'db>,
         b: Region<'db>,
         _vis: VisibleForLeakCheck,
-        _span: Span,
+        _span: Span<'db>,
     ) {
         self.inner.borrow_mut().unwrap_region_constraints().make_eqregion(a, b);
     }
 
-    fn register_ty_outlives(&self, _ty: Ty<'db>, _r: Region<'db>, _span: Span) {
+    fn register_ty_outlives(&self, _ty: Ty<'db>, _r: Region<'db>, _span: Span<'db>) {
         // self.register_type_outlives_constraint(ty, r, &ObligationCause::dummy());
     }
 
@@ -318,7 +318,7 @@ impl<'db> rustc_type_ir::InferCtxtLike for InferCtxt<'db> {
         &self,
         opaque_type_key: OpaqueTypeKey<'db>,
         hidden_ty: Ty<'db>,
-        _span: Span,
+        _span: Span<'db>,
     ) -> Option<Ty<'db>> {
         self.register_hidden_type_in_storage(opaque_type_key, OpaqueHiddenType { ty: hidden_ty })
     }
@@ -326,7 +326,7 @@ impl<'db> rustc_type_ir::InferCtxtLike for InferCtxt<'db> {
         &self,
         opaque_type_key: OpaqueTypeKey<'db>,
         hidden_ty: Ty<'db>,
-        _span: Span,
+        _span: Span<'db>,
     ) {
         self.inner
             .borrow_mut()

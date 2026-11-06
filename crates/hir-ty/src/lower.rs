@@ -79,7 +79,7 @@ use crate::{
     },
 };
 
-pub(crate) struct PathDiagnosticCallbackData(pub(crate) TypeRefId);
+pub(crate) struct PathDiagnosticCallbackData<'db>(pub(crate) TypeRefId<'db>);
 
 #[derive(PartialEq, Eq, Debug, Hash, SalsaValue)]
 pub struct WithDefinedOpaques<T> {
@@ -183,7 +183,7 @@ impl<'db> LifetimeElisionKind<'db> {
     }
 
     #[inline]
-    pub(crate) fn for_fn_params(data: &FunctionSignature) -> LifetimeElisionKind<'db> {
+    pub(crate) fn for_fn_params(data: &FunctionSignature<'db>) -> LifetimeElisionKind<'db> {
         LifetimeElisionKind::AnonymousCreateParameter { report_in_path: data.is_async() }
     }
 
@@ -213,9 +213,9 @@ pub(crate) enum ForbidParamsAfterReason {
 }
 
 pub trait TyLoweringInferVarsCtx<'db> {
-    fn next_ty_var(&mut self, span: Span) -> Ty<'db>;
-    fn next_const_var(&mut self, span: Span) -> Const<'db>;
-    fn next_region_var(&mut self, span: Span) -> Region<'db>;
+    fn next_ty_var(&mut self, span: Span<'db>) -> Ty<'db>;
+    fn next_const_var(&mut self, span: Span<'db>) -> Const<'db>;
+    fn next_region_var(&mut self, span: Span<'db>) -> Region<'db>;
 
     #[expect(private_interfaces)]
     fn as_table(&mut self) -> Option<&mut InferenceTable<'db>> {
@@ -229,7 +229,7 @@ pub struct TyLoweringContext<'db, 'a> {
     types: &'db crate::next_solver::DefaultAny<'db>,
     lang_items: &'db LangItems,
     resolver: &'a Resolver<'db>,
-    store: &'db ExpressionStore,
+    store: &'a ExpressionStore<'db>,
     def: ExpressionStoreOwnerId,
     generic_def: GenericDefId,
     generics: &'a OnceCell<Generics<'db>>,
@@ -238,7 +238,7 @@ pub struct TyLoweringContext<'db, 'a> {
     interning_mode: LoweringMode,
     /// Tracks types with explicit `?Sized` bounds.
     pub(crate) unsized_types: FxHashSet<Ty<'db>>,
-    pub(crate) diagnostics: ThinVec<TyLoweringDiagnostic>,
+    pub(crate) diagnostics: ThinVec<TyLoweringDiagnostic<'db>>,
     lifetime_elision: LifetimeElisionKind<'db>,
     forbid_params_after: Option<u32>,
     forbid_params_after_reason: ForbidParamsAfterReason,
@@ -253,7 +253,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     pub fn new(
         db: &'db dyn HirDatabase,
         resolver: &'a Resolver<'db>,
-        store: &'db ExpressionStore,
+        store: &'a ExpressionStore<'db>,
         def: ExpressionStoreOwnerId,
         generic_def: GenericDefId,
         generics: &'a OnceCell<Generics<'db>>,
@@ -345,11 +345,11 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         self
     }
 
-    pub(crate) fn push_diagnostic(&mut self, diagnostic: TyLoweringDiagnostic) {
+    pub(crate) fn push_diagnostic(&mut self, diagnostic: TyLoweringDiagnostic<'db>) {
         self.diagnostics.push(diagnostic);
     }
 
-    fn push_infer_vars_not_allowed(&mut self, span: Span) {
+    fn push_infer_vars_not_allowed(&mut self, span: Span<'db>) {
         if !span.is_dummy() {
             self.push_diagnostic(TyLoweringDiagnostic::InferVarsNotAllowed { source: span });
         }
@@ -360,7 +360,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         self.infer_vars.as_mut().unwrap().as_table().unwrap()
     }
 
-    fn next_ty_var(&mut self, span: Span) -> Ty<'db> {
+    fn next_ty_var(&mut self, span: Span<'db>) -> Ty<'db> {
         match &mut self.infer_vars {
             Some(infer_vars) => infer_vars.next_ty_var(span),
             None => {
@@ -370,7 +370,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         }
     }
 
-    fn next_const_var(&mut self, span: Span) -> Const<'db> {
+    fn next_const_var(&mut self, span: Span<'db>) -> Const<'db> {
         match &mut self.infer_vars {
             Some(infer_vars) => infer_vars.next_const_var(span),
             None => {
@@ -380,7 +380,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         }
     }
 
-    fn next_region_var(&mut self, span: Span) -> Region<'db> {
+    fn next_region_var(&mut self, span: Span<'db>) -> Region<'db> {
         match &mut self.infer_vars {
             Some(infer_vars) => infer_vars.next_region_var(span),
             None => {
@@ -456,13 +456,13 @@ pub enum LifetimeLoweringMode {
 }
 
 impl<'db, 'a> TyLoweringContext<'db, 'a> {
-    pub fn lower_ty(&mut self, type_ref: TypeRefId) -> Ty<'db> {
+    pub fn lower_ty(&mut self, type_ref: TypeRefId<'db>) -> Ty<'db> {
         self.lower_ty_ext(type_ref).0
     }
 
     pub(crate) fn lower_const(
         &mut self,
-        const_ref: ConstRef,
+        const_ref: ConstRef<'db>,
         const_type: Ty<'db>,
         allow_anon_const_using_generic_params: bool,
     ) -> Const<'db> {
@@ -471,14 +471,15 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
 
     pub(crate) fn lower_expr_as_const(
         &mut self,
-        expr_id: ExprId,
+        expr_id: ExprId<'db>,
         const_type: Ty<'db>,
         allow_anon_const_using_generic_params: bool,
     ) -> Const<'db> {
         #[expect(clippy::manual_map, reason = "a `map()` here generates a borrowck error")]
         let create_var = match &mut self.infer_vars {
             Some(infer_vars) => Some(
-                (&mut |span| infer_vars.next_const_var(span)) as &mut dyn FnMut(Span) -> Const<'db>,
+                (&mut |span| infer_vars.next_const_var(span))
+                    as &mut dyn FnMut(Span<'db>) -> Const<'db>,
             ),
             None => None,
         };
@@ -509,7 +510,11 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         })
     }
 
-    pub(crate) fn lower_path_as_const(&mut self, path: &Path, _const_type: Ty<'db>) -> Const<'db> {
+    pub(crate) fn lower_path_as_const(
+        &mut self,
+        path: &Path<'db>,
+        _const_type: Ty<'db>,
+    ) -> Const<'db> {
         path_to_const(self.db, self.resolver, &|| self.generics(), self.forbid_params_after, path)
             .unwrap_or({
                 // FIXME: Report an error.
@@ -525,7 +530,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         self.forbid_params_after.is_some_and(|disallow_params_after| index >= disallow_params_after)
     }
 
-    fn type_param(&mut self, id: TypeParamId, index: u32) -> Ty<'db> {
+    fn type_param(&mut self, id: TypeParamId<'db>, index: u32) -> Ty<'db> {
         if self.param_index_is_disallowed(index) {
             // FIXME: Report an error.
             self.types.types.error
@@ -590,7 +595,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     }
 
     #[tracing::instrument(skip(self), ret)]
-    pub fn lower_ty_ext(&mut self, type_ref_id: TypeRefId) -> (Ty<'db>, Option<TypeNs>) {
+    pub fn lower_ty_ext(&mut self, type_ref_id: TypeRefId<'db>) -> (Ty<'db>, Option<TypeNs<'db>>) {
         let interner = self.interner;
         let mut res = None;
         let type_ref = &self.store[type_ref_id];
@@ -747,7 +752,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         (ty, res)
     }
 
-    fn lower_pattern_type(&mut self, pat: PatId, ty: Ty<'db>) -> Option<Pattern<'db>> {
+    fn lower_pattern_type(&mut self, pat: PatId<'db>, ty: Ty<'db>) -> Option<Pattern<'db>> {
         let pat_kind = match self.store[pat] {
             hir_def::hir::Pat::Range { start: Some(start), end: Some(end), range_type: _ } => {
                 // rustc allows using generic params in pattern types.
@@ -774,7 +779,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         Some(Pattern::new(self.interner, pat_kind))
     }
 
-    fn lower_fn_ptr(&mut self, fn_: &FnType) -> Ty<'db> {
+    fn lower_fn_ptr(&mut self, fn_: &FnType<'db>) -> Ty<'db> {
         let interner = self.interner;
         let (params, ret_ty) = fn_.split_params_and_ret();
         let old_lifetime_elision = self.lifetime_elision;
@@ -809,7 +814,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     /// This is only for [`resolve_type_param_assoc_type_shorthand`], where we can't just
     /// lower the self types of the predicates since that could lead to cycles.
     /// So we just check here if the `type_ref` resolves to a generic param, and which.
-    fn lower_ty_only_param(&self, type_ref: TypeRefId) -> Option<TypeOrConstParamId> {
+    fn lower_ty_only_param(&self, type_ref: TypeRefId<'db>) -> Option<TypeOrConstParamId<'db>> {
         let type_ref = &self.store[type_ref];
         let path = match type_ref {
             TypeRef::Path(path) => path,
@@ -833,7 +838,9 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     }
 
     #[inline]
-    fn on_path_diagnostic_callback<'b>(type_ref: TypeRefId) -> PathDiagnosticCallback<'b, 'db> {
+    fn on_path_diagnostic_callback<'b>(
+        type_ref: TypeRefId<'db>,
+    ) -> PathDiagnosticCallback<'b, 'db> {
         PathDiagnosticCallback {
             data: Either::Left(PathDiagnosticCallbackData(type_ref)),
             callback: |data, this, diag| {
@@ -847,7 +854,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     }
 
     #[inline]
-    fn at_path(&mut self, path_id: PathId) -> PathLoweringContext<'_, 'a, 'db> {
+    fn at_path(&mut self, path_id: PathId<'db>) -> PathLoweringContext<'_, 'a, 'db> {
         PathLoweringContext::new(
             self,
             Self::on_path_diagnostic_callback(path_id.type_ref()),
@@ -855,7 +862,11 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
         )
     }
 
-    pub(crate) fn lower_path(&mut self, path: &Path, path_id: PathId) -> (Ty<'db>, Option<TypeNs>) {
+    pub(crate) fn lower_path(
+        &mut self,
+        path: &Path<'db>,
+        path_id: PathId<'db>,
+    ) -> (Ty<'db>, Option<TypeNs<'db>>) {
         // Resolve the path (in type namespace)
         if let Some(type_ref) = path.type_anchor() {
             let (ty, res) = self.lower_ty_ext(type_ref);
@@ -881,7 +892,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
 
     fn lower_trait_ref_from_path(
         &mut self,
-        path_id: PathId,
+        path_id: PathId<'db>,
         explicit_self_ty: Ty<'db>,
     ) -> Option<(TraitRef<'db>, PathLoweringContext<'_, 'a, 'db>)> {
         let mut ctx = self.at_path(path_id);
@@ -903,7 +914,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
 
     fn lower_trait_ref(
         &mut self,
-        trait_ref: HirTraitRef,
+        trait_ref: HirTraitRef<'db>,
         explicit_self_ty: Ty<'db>,
     ) -> Option<TraitRef<'db>> {
         self.lower_trait_ref_from_path(trait_ref.path, explicit_self_ty).map(|it| it.0)
@@ -911,11 +922,11 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
 
     pub(crate) fn lower_where_predicate<'b>(
         &'b mut self,
-        where_predicate: &'b WherePredicate,
+        where_predicate: &'b WherePredicate<'db>,
         ignore_bindings: bool,
     ) -> impl Iterator<Item = (Clause<'db>, GenericPredicateSource)> + use<'a, 'b, 'db> {
         let lower_type_outlives = |ctx: &mut TyLoweringContext<'db, '_>,
-                                   target: &TypeRefId,
+                                   target: &TypeRefId<'db>,
                                    bound| {
             let self_ty = ctx.lower_ty(*target);
             let clause = ctx.lower_type_bound(bound, self_ty, ignore_bindings).collect::<Vec<_>>();
@@ -947,7 +958,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
 
     pub(crate) fn lower_type_bound<'b>(
         &'b mut self,
-        bound: &'b TypeBound,
+        bound: &'b TypeBound<'db>,
         self_ty: Ty<'db>,
         ignore_bindings: bool,
     ) -> impl Iterator<Item = (Clause<'db>, GenericPredicateSource)> + use<'db> {
@@ -1031,7 +1042,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
             .chain(assoc_bounds.into_iter().flatten())
     }
 
-    fn lower_dyn_trait(&mut self, bounds: &[TypeBound]) -> Ty<'db> {
+    fn lower_dyn_trait(&mut self, bounds: &[TypeBound<'db>]) -> Ty<'db> {
         let interner = self.interner;
         let dummy_self_ty = self.types.types.dyn_trait_dummy_self;
         let mut region = None;
@@ -1306,7 +1317,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
     fn lower_impl_trait(
         &mut self,
         def_id: InternedOpaqueTyId<'db>,
-        bounds: &[TypeBound],
+        bounds: &[TypeBound<'db>],
     ) -> SelfAndAssocBounds {
         let interner = self.interner;
         cov_mark::hit!(lower_rpit);
@@ -1405,7 +1416,7 @@ pub struct TyLoweringResult<'db, T> {
 
 #[derive(Clone, PartialEq, Eq, SalsaValue)]
 struct TyLoweringResultInfo<'db> {
-    diagnostics: ThinVec<TyLoweringDiagnostic>,
+    diagnostics: ThinVec<TyLoweringDiagnostic<'db>>,
     anon_consts: ThinVec<AnonConstId<'db>>,
 }
 
@@ -1428,7 +1439,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for TyLoweringResult<'_, T> {
 impl<'db, T> TyLoweringResult<'db, T> {
     fn new(
         value: T,
-        mut diagnostics: ThinVec<TyLoweringDiagnostic>,
+        mut diagnostics: ThinVec<TyLoweringDiagnostic<'db>>,
         mut defined_anon_consts: ThinVec<AnonConstId<'db>>,
     ) -> Self {
         let info = if diagnostics.is_empty() && defined_anon_consts.is_empty() {
@@ -1450,7 +1461,7 @@ impl<'db, T> TyLoweringResult<'db, T> {
     }
 
     #[inline]
-    pub fn diagnostics(&self) -> &[TyLoweringDiagnostic] {
+    pub fn diagnostics(&self) -> &[TyLoweringDiagnostic<'db>] {
         match &self.info {
             Some(info) => &info.diagnostics,
             None => &[],
@@ -1862,21 +1873,20 @@ pub(crate) fn impl_self_ty_with_diagnostics_cycle_result<'db>(
     ))
 }
 
-pub(crate) fn const_param_ty<'db>(db: &'db dyn HirDatabase, def: ConstParamId) -> Ty<'db> {
+pub(crate) fn const_param_ty<'db>(db: &'db dyn HirDatabase, def: ConstParamId<'db>) -> Ty<'db> {
     const_param_types(db, def.parent()).get(def.local_id())
 }
 
-/// Wrapper struct around `ArenaMap` which implements [`SalsaValue`].
-///
-/// Required to make the `SalsaValue` derive for [`TyLoweringResult`] work.
+/// This used to be required to make the `SalsaValue` derive for [`TyLoweringResult`] work;
+/// it no longer is, but we still kept it, as it's a nice semantic wrapper.
 #[derive(Debug, Default, PartialEq, Eq, SalsaValue)]
-pub struct ConstParamTypes {
-    map: ArenaMap<LocalTypeOrConstParamId, StoredTy>,
+pub struct ConstParamTypes<'db> {
+    map: ArenaMap<LocalTypeOrConstParamId<'db>, StoredTy>,
 }
 
-impl ConstParamTypes {
+impl<'db> ConstParamTypes<'db> {
     #[inline]
-    pub fn get(&self, local_id: LocalTypeOrConstParamId) -> Ty<'_> {
+    pub fn get(&self, local_id: LocalTypeOrConstParamId<'db>) -> Ty<'_> {
         match self.map.get(local_id) {
             Some(ty) => ty.as_ref(),
             None => default_types().types.error,
@@ -1884,7 +1894,10 @@ impl ConstParamTypes {
     }
 }
 
-pub(crate) fn const_param_types(db: &dyn HirDatabase, def: GenericDefId) -> &ConstParamTypes {
+pub(crate) fn const_param_types<'db>(
+    db: &'db dyn HirDatabase,
+    def: GenericDefId,
+) -> &'db ConstParamTypes<'db> {
     &const_param_types_with_diagnostics(db, def).value
 }
 
@@ -1892,7 +1905,7 @@ pub(crate) fn const_param_types(db: &dyn HirDatabase, def: GenericDefId) -> &Con
 pub(crate) fn const_param_types_with_diagnostics<'db>(
     db: &'db dyn HirDatabase,
     def: GenericDefId,
-) -> TyLoweringResult<'db, ConstParamTypes> {
+) -> TyLoweringResult<'db, ConstParamTypes<'db>> {
     let mut result = ArenaMap::new();
     let (data, store) = GenericParams::with_store(db, def);
     let resolver = def.resolver(db);
@@ -1921,31 +1934,33 @@ fn const_param_types_with_diagnostics_cycle_result<'db>(
     _db: &'db dyn HirDatabase,
     _: salsa::Id,
     _def: GenericDefId,
-) -> TyLoweringResult<'db, ConstParamTypes> {
+) -> TyLoweringResult<'db, ConstParamTypes<'db>> {
     TyLoweringResult::empty(ConstParamTypes::default())
 }
 
-/// Wrapper struct around `ArenaMap` which implements [`SalsaValue`].
-///
-/// Required to make the `SalsaValue` derive for [`TyLoweringResult`] work.
+/// This used to be required to make the `SalsaValue` derive for [`TyLoweringResult`] work;
+/// it no longer is, but we still kept it, as it's a nice semantic wrapper.
 #[derive(Default, PartialEq, Eq, SalsaValue)]
-pub struct FieldTypes {
-    map: ArenaMap<LocalFieldId, FieldType>,
+pub struct FieldTypes<'db> {
+    map: ArenaMap<LocalFieldId<'db>, FieldType>,
 }
 
-impl Deref for FieldTypes {
-    type Target = ArenaMap<LocalFieldId, FieldType>;
+impl<'db> Deref for FieldTypes<'db> {
+    type Target = ArenaMap<LocalFieldId<'db>, FieldType>;
 
     fn deref(&self) -> &Self::Target {
         &self.map
     }
 }
 
-pub(crate) fn field_types_query(db: &dyn HirDatabase, variant_id: VariantId) -> &FieldTypes {
+pub(crate) fn field_types_query<'db>(
+    db: &'db dyn HirDatabase,
+    variant_id: VariantId,
+) -> &'db FieldTypes<'db> {
     &field_types_with_diagnostics(db, variant_id).value
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, SalsaValue)]
 pub struct FieldType {
     ty: StoredEarlyBinder<StoredTy>,
     default: Option<StoredEarlyBinder<StoredConst>>,
@@ -1968,7 +1983,7 @@ impl FieldType {
 pub(crate) fn field_types_with_diagnostics<'db>(
     db: &'db dyn HirDatabase,
     variant_id: VariantId,
-) -> TyLoweringResult<'db, FieldTypes> {
+) -> TyLoweringResult<'db, FieldTypes<'db>> {
     let var_data = variant_id.fields(db);
     let fields = var_data.fields();
     if fields.is_empty() {
@@ -2111,10 +2126,10 @@ enum AssocTypeShorthandResolution {
 /// these are fine: `T: Foo<U::Item>, U: Foo<()>`.
 #[tracing::instrument(skip(db), ret)]
 #[salsa::tracked(returns(ref), cycle_result = resolve_type_param_assoc_type_shorthand_cycle_result)]
-fn resolve_type_param_assoc_type_shorthand(
-    db: &dyn HirDatabase,
+fn resolve_type_param_assoc_type_shorthand<'db>(
+    db: &'db dyn HirDatabase,
     def: GenericDefId,
-    param: TypeParamId,
+    param: TypeParamId<'db>,
     assoc_name: Name,
 ) -> AssocTypeShorthandResolution {
     let generics = generics(db, def);
@@ -2254,7 +2269,7 @@ fn resolve_type_param_assoc_type_shorthand_cycle_result(
     _db: &dyn HirDatabase,
     _: salsa::Id,
     _def: GenericDefId,
-    _param: TypeParamId,
+    _param: TypeParamId<'_>,
     _assoc_name: Name,
 ) -> AssocTypeShorthandResolution {
     AssocTypeShorthandResolution::Cycle
@@ -3008,7 +3023,7 @@ pub(crate) fn generic_defaults_with_diagnostics<'db>(
     fn handle_generic_param<'db>(
         ctx: &mut TyLoweringContext<'db, '_>,
         idx: u32,
-        p: GenericParamDataRef<'_>,
+        p: GenericParamDataRef<'db>,
     ) -> Option<StoredEarlyBinder<StoredGenericArg>> {
         ctx.forbid_params_after(idx, ForbidParamsAfterReason::LoweringParamDefault);
         match p {

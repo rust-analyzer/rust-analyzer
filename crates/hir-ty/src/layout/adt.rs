@@ -36,7 +36,7 @@ pub fn layout_of_adt_query(
     }
     let dl = target;
     let cx = LayoutCx::new(dl);
-    let handle_variant = |def: VariantId, var: &VariantFields| {
+    let handle_variant = |def: VariantId, var: &VariantFields<'_>| {
         var.fields()
             .iter()
             .map(|(fd, _)| {

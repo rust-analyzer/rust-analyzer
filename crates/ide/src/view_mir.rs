@@ -18,7 +18,7 @@ fn body_mir(db: &RootDatabase, position: FilePosition) -> Option<String> {
     let item = ancestors_at_offset(source_file.syntax(), position.offset)
         .filter(|it| !ast::MacroCall::can_cast(it.kind()))
         .find_map(ast::Item::cast)?;
-    let def: DefWithBody = match item {
+    let def: DefWithBody<'_> = match item {
         ast::Item::Fn(it) => sema.to_def(&it)?.into(),
         ast::Item::Const(it) => sema.to_def(&it)?.into(),
         ast::Item::Static(it) => sema.to_def(&it)?.into(),

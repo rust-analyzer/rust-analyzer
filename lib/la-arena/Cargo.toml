@@ -9,5 +9,12 @@ categories = ["data-structures", "memory-management", "rust-patterns"]
 edition = "2024"
 rust-version = "1.85"
 
+[dependencies]
+salsa = { workspace = true, optional = true }
+
 [lints]
 workspace = true
+
+[features]
+default = []
+salsa = [ "dep:salsa" ]

@@ -5,6 +5,7 @@ use crate::thin_map::{Map, ThinMap};
 #[expect(clippy::disallowed_types)]
 pub type ThinHashSet<T, S> = ThinSet<T, std::collections::HashMap<T, (), S>>;
 
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub struct ThinSet<T, M: Map<T, ()>> {
     map: ThinMap<T, (), M>,
 }

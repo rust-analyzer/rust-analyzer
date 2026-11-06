@@ -1,3 +1,5 @@
+#![expect(unused)]
+use base_db::EditionedFileId;
 use expect_test::{Expect, expect};
 use span::Edition;
 use syntax::ast::{self, make};
@@ -17,25 +19,29 @@ use crate::{
     test_db::TestDB,
 };
 
-fn lower_path(path: ast::Path) -> (TestDB, ExpressionStore, Option<Path>) {
-    let (db, file_id) = TestDB::with_single_file("");
+fn lower_path<'db>(
+    db: &'db TestDB,
+    file_id: EditionedFileId,
+    path: ast::Path,
+) -> (ExpressionStore<'db>, Option<Path<'db>>) {
     let krate = db.fetch_test_crate();
     let mut ctx = ExprCollector::new(
-        &db,
-        crate_def_map(&db, krate).root_module_id(),
+        db,
+        crate_def_map(db, krate).root_module_id(),
         file_id.into(),
         crate::LoweringMode::Analysis,
     );
     let lowered_path = ctx.lower_path(path, &mut ExprCollector::impl_trait_allocator);
     let (store, _) = ctx.store.finish();
-    (db, store, lowered_path)
+    (store, lowered_path)
 }
 
 #[track_caller]
 fn check_hir_to_ast(path: &str, ignore_segments: &[&str]) {
     let path = make::path_from_text(path);
     SEGMENT_LOWERING_MAP.with_borrow_mut(|map| map.clear());
-    let _ = lower_path(path.clone()).2.expect("failed to lower path");
+    let (db, file_id) = TestDB::with_single_file("");
+    let _ = lower_path(&db, file_id, path.clone()).1.expect("failed to lower path");
     SEGMENT_LOWERING_MAP.with_borrow(|map| {
         for (segment, segment_idx) in map {
             if ignore_segments.contains(&&*segment.to_string()) {
@@ -98,7 +104,8 @@ fn hir_to_ast_path_super_in_middle() {
 
 #[track_caller]
 fn check_fail_lowering(path: &str) {
-    let (_, _, lowered_path) = lower_path(make::path_from_text(path));
+    let (db, file_id) = TestDB::with_single_file("");
+    let (_, lowered_path) = lower_path(&db, file_id, make::path_from_text(path));
     assert!(lowered_path.is_none(), "path `{path}` should fail lowering");
 }
 
@@ -119,7 +126,8 @@ fn keywords_in_middle_fail_lowering3() {
 
 #[track_caller]
 fn check_path_lowering(path: &str, expected: Expect) {
-    let (db, store, lowered_path) = lower_path(make::path_from_text(path));
+    let (db, file_id) = TestDB::with_single_file("");
+    let (store, lowered_path) = lower_path(&db, file_id, make::path_from_text(path));
     let lowered_path = lowered_path.expect("failed to lower path");
     let buf = pretty::print_path(&db, &store, &lowered_path, Edition::CURRENT);
     expected.assert_eq(&buf);

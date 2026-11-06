@@ -24,10 +24,10 @@ impl<'db> InferenceContext<'db> {
     /// Checks a `a <op>= b`
     pub(crate) fn infer_assign_op_expr(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         op: ArithOp,
-        lhs: ExprId,
-        rhs: ExprId,
+        lhs: ExprId<'db>,
+        rhs: ExprId<'db>,
     ) -> Ty<'db> {
         let (lhs_ty, rhs_ty, return_ty) =
             self.infer_overloaded_binop(expr, lhs, rhs, BinaryOp::Assignment { op: Some(op) });
@@ -51,10 +51,10 @@ impl<'db> InferenceContext<'db> {
     /// Checks a potentially overloaded binary operator.
     pub(crate) fn infer_binop_expr(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         op: BinaryOp,
-        lhs_expr: ExprId,
-        rhs_expr: ExprId,
+        lhs_expr: ExprId<'db>,
+        rhs_expr: ExprId<'db>,
     ) -> Ty<'db> {
         debug!(
             "check_binop(expr.hir_id={:?}, expr={:?}, op={:?}, lhs_expr={:?}, rhs_expr={:?})",
@@ -118,7 +118,7 @@ impl<'db> InferenceContext<'db> {
 
     fn enforce_builtin_binop_types(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         lhs_ty: Ty<'db>,
         rhs_ty: Ty<'db>,
         category: BinOpCategory,
@@ -157,9 +157,9 @@ impl<'db> InferenceContext<'db> {
 
     fn infer_overloaded_binop(
         &mut self,
-        expr: ExprId,
-        lhs_expr: ExprId,
-        rhs_expr: ExprId,
+        expr: ExprId<'db>,
+        lhs_expr: ExprId<'db>,
+        rhs_expr: ExprId<'db>,
         op: BinaryOp,
     ) -> (Ty<'db>, Ty<'db>, Ty<'db>) {
         debug!("infer_overloaded_binop(expr.hir_id={:?}, op={:?})", expr, op);
@@ -261,7 +261,7 @@ impl<'db> InferenceContext<'db> {
 
     pub(crate) fn infer_user_unop(
         &mut self,
-        ex: ExprId,
+        ex: ExprId<'db>,
         operand_ty: Ty<'db>,
         op: UnaryOp,
     ) -> Ty<'db> {
@@ -283,9 +283,9 @@ impl<'db> InferenceContext<'db> {
 
     fn lookup_op_method(
         &mut self,
-        expr: ExprId,
+        expr: ExprId<'db>,
         lhs_ty: Ty<'db>,
-        opt_rhs: Option<(ExprId, Ty<'db>)>,
+        opt_rhs: Option<(ExprId<'db>, Ty<'db>)>,
         (op_method, trait_did): (Option<FunctionId>, Option<TraitId>),
     ) -> Result<MethodCallee<'db>, Vec<NextSolverError<'db>>> {
         let (Some(trait_did), Some(op_method)) = (trait_did, op_method) else {

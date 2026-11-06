@@ -47,9 +47,9 @@ macro_rules! wln {
     };
 }
 
-#[extension(pub trait MirBodyPretty)]
-impl MirBody<'_> {
-    fn pretty_print(&self, db: &dyn HirDatabase, display_target: DisplayTarget) -> String {
+#[extension(pub trait MirBodyPretty<'db>)]
+impl<'db> MirBody<'db> {
+    fn pretty_print(&self, db: &'db dyn HirDatabase, display_target: DisplayTarget) -> String {
         let hir_body = ExpressionStore::of(db, self.owner.expression_store_owner(db));
         let mut ctx = MirPrettyCtx::new(self, hir_body, db, display_target);
         ctx.for_body(|this| match ctx.body.owner {
@@ -93,7 +93,7 @@ impl MirBody<'_> {
 
     // String with lines is rendered poorly in `dbg` macros, which I use very much, so this
     // function exists to solve that.
-    fn dbg(&self, db: &dyn HirDatabase, display_target: DisplayTarget) -> impl Debug {
+    fn dbg(&self, db: &'db dyn HirDatabase, display_target: DisplayTarget) -> impl Debug {
         struct StringDbg(String);
         impl Debug for StringDbg {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -106,7 +106,7 @@ impl MirBody<'_> {
 
 struct MirPrettyCtx<'a, 'db> {
     body: &'a MirBody<'db>,
-    hir_body: &'a ExpressionStore,
+    hir_body: &'a ExpressionStore<'db>,
     db: &'db dyn HirDatabase,
     result: String,
     indent: String,
@@ -193,7 +193,7 @@ impl<'a, 'db> MirPrettyCtx<'a, 'db> {
 
     fn new(
         body: &'a MirBody<'db>,
-        hir_body: &'a ExpressionStore,
+        hir_body: &'a ExpressionStore<'db>,
         db: &'db dyn HirDatabase,
         display_target: DisplayTarget,
     ) -> Self {
@@ -236,7 +236,7 @@ impl<'a, 'db> MirPrettyCtx<'a, 'db> {
         }
     }
 
-    fn basic_block_id(&self, basic_block_id: BasicBlockId) -> String {
+    fn basic_block_id(&self, basic_block_id: BasicBlockId<'db>) -> String {
         format!("'bb{}", u32::from(basic_block_id.into_raw()))
     }
 
@@ -406,7 +406,7 @@ impl<'a, 'db> MirPrettyCtx<'a, 'db> {
         f(self, p.local, p.projection.as_slice());
     }
 
-    fn operand(&mut self, r: &Operand) {
+    fn operand(&mut self, r: &Operand<'db>) {
         match &r.kind {
             OperandKind::Copy(p) | OperandKind::Move(p) => {
                 // MIR at the time of writing doesn't have difference between move and copy, so we show them
@@ -423,7 +423,7 @@ impl<'a, 'db> MirPrettyCtx<'a, 'db> {
         }
     }
 
-    fn rvalue(&mut self, r: &Rvalue) {
+    fn rvalue(&mut self, r: &Rvalue<'db>) {
         match r {
             Rvalue::Use(op) => self.operand(op),
             Rvalue::Ref(r, p) => {
@@ -507,7 +507,7 @@ impl<'a, 'db> MirPrettyCtx<'a, 'db> {
         }
     }
 
-    fn operand_list(&mut self, it: &[Operand]) {
+    fn operand_list(&mut self, it: &[Operand<'db>]) {
         let mut it = it.iter();
         if let Some(first) = it.next() {
             self.operand(first);
