@@ -9,6 +9,7 @@ import { WorkspaceEdit } from "vscode";
 import { type Config, prepareVSCodeConfig } from "./config";
 import { sep as pathSeparator } from "path";
 import { RaLanguageClient } from "./lang_client";
+import { handleOutdatedToolchainMessage } from "./outdated_toolchain";
 
 export async function createClient(
     traceOutputChannel: vscode.OutputChannel,
@@ -283,6 +284,22 @@ export async function createClient(
         middleware: raMiddleware,
         markdown: {
             supportHtml: true,
+        },
+        connectionOptions: {
+            messageStrategy: {
+                handleMessage(message, next) {
+                    if (
+                        lc.Message.isNotification(message) &&
+                        message.method === lc.ShowMessageNotification.method &&
+                        handleOutdatedToolchainMessage(
+                            (message.params as lc.ShowMessageParams).message,
+                        )
+                    ) {
+                        return;
+                    }
+                    next(message);
+                },
+            },
         },
     };
 

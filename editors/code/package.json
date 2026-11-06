@@ -471,6 +471,11 @@
                         "default": true,
                         "type": "boolean"
                     },
+                    "rust-analyzer.showOutdatedToolchainNotification": {
+                        "description": "Show a notification when a workspace uses a toolchain older than the minimum version supported by rust-analyzer.",
+                        "default": true,
+                        "type": "boolean"
+                    },
                     "rust-analyzer.showRequestFailedErrorNotification": {
                         "description": "Show error notifications when requests fail.",
                         "default": true,
