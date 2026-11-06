@@ -124,7 +124,7 @@ struct FindPathCtx<'db> {
     from: ModuleIdLt<'db>,
     from_crate: Crate,
     crate_root: ModuleIdLt<'db>,
-    from_def_map: &'db DefMap,
+    from_def_map: &'db DefMap<'db>,
     fuel: Cell<usize>,
 }
 
@@ -175,7 +175,7 @@ fn find_path_inner(ctx: &FindPathCtx<'_>, item: ItemInNs, max_len: usize) -> Opt
 
 #[tracing::instrument(skip_all)]
 fn find_path_for_module<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     module_id: ModuleIdLt<'db>,
     maybe_extern: bool,
@@ -271,7 +271,7 @@ fn find_path_for_module<'db>(
 
 fn find_in_scope<'db>(
     db: &'db dyn SourceDatabase,
-    def_map: &DefMap,
+    def_map: &DefMap<'db>,
     from: ModuleIdLt<'db>,
     item: ItemInNs,
     ignore_local_imports: bool,
@@ -286,11 +286,11 @@ fn find_in_scope<'db>(
 
 /// Returns single-segment path (i.e. without any prefix) if `item` is found in prelude and its
 /// name doesn't clash in current scope.
-fn find_in_prelude(
-    db: &dyn SourceDatabase,
-    local_def_map: &DefMap,
+fn find_in_prelude<'db>(
+    db: &'db dyn SourceDatabase,
+    local_def_map: &DefMap<'db>,
     item: ItemInNs,
-    from: ModuleIdLt<'_>,
+    from: ModuleIdLt<'db>,
 ) -> Option<Choice> {
     let (prelude_module, _) = local_def_map.prelude()?;
     let prelude_def_map = prelude_module.def_map(db);
@@ -321,7 +321,7 @@ fn find_in_prelude(
 
 fn is_kw_kind_relative_to_from(
     db: &dyn SourceDatabase,
-    def_map: &DefMap,
+    def_map: &DefMap<'_>,
     item: ModuleIdLt<'_>,
     from: ModuleIdLt<'_>,
 ) -> Option<PathKind> {
@@ -345,7 +345,7 @@ fn is_kw_kind_relative_to_from(
 
 #[tracing::instrument(skip_all)]
 fn calculate_best_path<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -385,7 +385,7 @@ fn calculate_best_path<'db>(
 }
 
 fn find_in_sysroot<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -439,7 +439,7 @@ fn find_in_sysroot<'db>(
 }
 
 fn find_in_dep<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -476,7 +476,7 @@ fn find_in_dep<'db>(
 }
 
 fn calculate_best_path_local<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     item: ItemInNs,
     max_len: usize,
@@ -547,9 +547,7 @@ impl Choice {
             Ordering::Less => return,
             Ordering::Equal => {
                 other.path_text_len += name.as_str().len();
-                if let Ordering::Less | Ordering::Equal =
-                    current.path_text_len.cmp(&other.path_text_len)
-                {
+                if other.path_text_len >= current.path_text_len {
                     return;
                 }
             }
@@ -575,7 +573,7 @@ fn path_kind_len(kind: PathKind) -> usize {
 
 /// Finds locations in `from.krate` from which `item` can be imported by `from`.
 fn find_local_import_locations<'db>(
-    ctx: &'db FindPathCtx<'db>,
+    ctx: &FindPathCtx<'db>,
     item: ItemInNs,
     visited_modules: &mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>,
     mut cb: impl FnMut(&mut FxHashSet<(ItemInNs, ModuleIdLt<'db>)>, &Name, ModuleIdLt<'db>),

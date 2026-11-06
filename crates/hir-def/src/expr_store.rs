@@ -596,7 +596,7 @@ impl ExpressionStore {
     pub fn blocks<'a>(
         &'a self,
         db: &'a dyn SourceDatabase,
-    ) -> impl Iterator<Item = (BlockId, &'a DefMap)> + 'a {
+    ) -> impl Iterator<Item = (BlockId, &'a DefMap<'a>)> {
         self.expr_only
             .as_ref()
             .map(|it| &*it.block_scopes)

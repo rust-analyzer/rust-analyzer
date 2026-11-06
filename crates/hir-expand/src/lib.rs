@@ -1318,7 +1318,7 @@ impl<'db> ExpansionInfo<'db> {
     pub fn map_range_down_exact(
         &self,
         span: Span,
-    ) -> Option<InMacroFile<impl Iterator<Item = (SyntaxToken, SyntaxContext)> + '_>> {
+    ) -> Option<InMacroFile<impl Iterator<Item = (SyntaxToken, SyntaxContext)>>> {
         if span.anchor.ast_id == NO_DOWNMAP_ERASED_FILE_AST_ID_MARKER {
             return None;
         }
@@ -1337,7 +1337,7 @@ impl<'db> ExpansionInfo<'db> {
     pub fn map_range_down(
         &self,
         span: Span,
-    ) -> Option<InMacroFile<impl Iterator<Item = (SyntaxToken, SyntaxContext)> + '_>> {
+    ) -> Option<InMacroFile<impl Iterator<Item = (SyntaxToken, SyntaxContext)>>> {
         if span.anchor.ast_id == NO_DOWNMAP_ERASED_FILE_AST_ID_MARKER {
             return None;
         }
@@ -1572,7 +1572,7 @@ impl From<MacroCallId> for span::MacroCallId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, salsa::Supertype, salsa::SalsaValue)]
 pub enum HirFileId {
     FileId(EditionedFileId),
     MacroFile(MacroCallId),

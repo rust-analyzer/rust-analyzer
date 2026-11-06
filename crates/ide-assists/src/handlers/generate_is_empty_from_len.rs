@@ -88,13 +88,13 @@ pub(crate) fn generate_is_empty_from_len(
     )
 }
 
-fn get_impl_method(
-    ctx: &AssistContext<'_, '_>,
+fn get_impl_method<'db>(
+    ctx: &AssistContext<'_, 'db>,
     impl_: &ast::Impl,
     fn_name: &Name,
-) -> Option<hir::Function> {
+) -> Option<hir::Function<'db>> {
     let db = ctx.sema.db;
-    let impl_def: hir::Impl = ctx.sema.to_def(impl_)?;
+    let impl_def: hir::Impl<'_> = ctx.sema.to_def(impl_)?;
 
     let scope = ctx.sema.scope(impl_.syntax())?;
     let ty = impl_def.self_ty(db);

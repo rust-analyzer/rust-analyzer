@@ -444,7 +444,7 @@ pub struct FindUsages<'a, 'db> {
     sema: &'a Semantics<'db, RootDatabase>,
     scope: Option<&'a SearchScope>,
     /// The container of our definition should it be an assoc item
-    assoc_item_container: Option<hir::AssocItemContainer>,
+    assoc_item_container: Option<hir::AssocItemContainer<'db>>,
     /// whether to search for the `Self` type of the definition
     include_self_kw_refs: Option<hir::Type<'a>>,
     /// whether to search for the `self` module

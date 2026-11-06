@@ -33,7 +33,7 @@ impl<'db> Expander<'db> {
     pub(super) fn new(
         db: &'db dyn SourceDatabase,
         current_file_id: HirFileId,
-        def_map: &'db DefMap,
+        def_map: &DefMap<'_>,
     ) -> Expander<'db> {
         let recursion_limit = def_map.recursion_limit();
         let recursion_limit = if cfg!(test) {

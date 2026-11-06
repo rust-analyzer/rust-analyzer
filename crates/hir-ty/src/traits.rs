@@ -175,7 +175,7 @@ pub enum WherePredicateEvaluation {
 pub fn where_predicate_must_hold<'db>(
     db: &'db dyn HirDatabase,
     resolver: &Resolver<'db>,
-    store: &'db ExpressionStore,
+    store: &ExpressionStore,
     def: ExpressionStoreOwnerId,
     generic_def: GenericDefId,
     env: ParamEnvAndCrate<'db>,
@@ -247,7 +247,11 @@ pub fn where_predicate_must_hold<'db>(
     }
 }
 
-pub fn is_inherent_impl_coherent(db: &dyn HirDatabase, def_map: &DefMap, impl_id: ImplId) -> bool {
+pub fn is_inherent_impl_coherent(
+    db: &dyn HirDatabase,
+    def_map: &DefMap<'_>,
+    impl_id: ImplId,
+) -> bool {
     let self_ty = db.impl_self_ty(impl_id).instantiate_identity().skip_norm_wip();
     let self_ty = self_ty.kind();
     let impl_allowed = match self_ty {

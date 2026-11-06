@@ -64,7 +64,7 @@ impl From<Completions> for Vec<CompletionItem> {
     }
 }
 
-impl Builder {
+impl<'db> Builder<'db> {
     /// Convenience method, which allows to add a freshly created completion into accumulator
     /// without binding it to the variable.
     pub(crate) fn add_to(self, acc: &mut Completions, db: &RootDatabase) {
@@ -314,11 +314,11 @@ impl Completions {
         .add_to(self, ctx.db);
     }
 
-    pub(crate) fn add_function(
+    pub(crate) fn add_function<'db>(
         &mut self,
-        ctx: &CompletionContext<'_, '_>,
+        ctx: &CompletionContext<'_, 'db>,
         path_ctx: &PathCompletionCtx<'_>,
-        func: hir::Function,
+        func: hir::Function<'db>,
         local_name: Option<hir::Name>,
     ) {
         let is_private_editable = match ctx.is_visible(&func) {
@@ -336,11 +336,11 @@ impl Completions {
         .add_to(self, ctx.db);
     }
 
-    pub(crate) fn add_method(
+    pub(crate) fn add_method<'db>(
         &mut self,
-        ctx: &CompletionContext<'_, '_>,
+        ctx: &CompletionContext<'_, 'db>,
         dot_access: &DotAccess<'_>,
-        func: hir::Function,
+        func: hir::Function<'db>,
         receiver: Option<SmolStr>,
         local_name: Option<hir::Name>,
     ) {
@@ -360,12 +360,12 @@ impl Completions {
         .add_to(self, ctx.db);
     }
 
-    pub(crate) fn add_method_with_import(
+    pub(crate) fn add_method_with_import<'db>(
         &mut self,
-        ctx: &CompletionContext<'_, '_>,
+        ctx: &CompletionContext<'_, 'db>,
         dot_access: &DotAccess<'_>,
-        func: hir::Function,
-        import: LocatedImport,
+        func: hir::Function<'db>,
+        import: LocatedImport<'db>,
     ) {
         let is_private_editable = match ctx.is_visible(&func) {
             Visible::Yes => false,

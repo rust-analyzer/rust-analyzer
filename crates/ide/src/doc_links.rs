@@ -208,7 +208,7 @@ pub(crate) fn extract_definitions_from_docs(
 }
 
 pub(crate) fn resolve_doc_path_for_def<'db>(
-    db: &dyn HirDatabase,
+    db: &'db dyn HirDatabase,
     def: Definition<'db>,
     link: &str,
     ns: Option<hir::Namespace>,
@@ -752,7 +752,7 @@ fn filename_and_frag_for_def<'db>(
 /// https://doc.rust-lang.org/std/iter/trait.Iterator.html#tymethod.next
 ///                                                       ^^^^^^^^^^^^^^
 /// ```
-fn get_assoc_item_fragment(db: &dyn HirDatabase, assoc_item: hir::AssocItem) -> Option<String> {
+fn get_assoc_item_fragment(db: &dyn HirDatabase, assoc_item: hir::AssocItem<'_>) -> Option<String> {
     Some(match assoc_item {
         AssocItem::Function(function) => {
             let is_trait_method =

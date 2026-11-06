@@ -33,7 +33,7 @@ enum AssocItemKind {
 pub fn trait_items_with_required(
     db: &RootDatabase,
     trait_: hir::Trait,
-) -> Vec<(hir::AssocItem, IsRequiredAssocItem)> {
+) -> Vec<(hir::AssocItem<'static>, IsRequiredAssocItem)> {
     diff_assoc_items(db, trait_, Vec::new(), trait_.krate(db))
 }
 
@@ -42,7 +42,7 @@ pub fn trait_items_with_required(
 pub fn get_missing_assoc_items(
     sema: &Semantics<'_, RootDatabase>,
     impl_def: &ast::Impl,
-) -> Vec<(hir::AssocItem, IsRequiredAssocItem)> {
+) -> Vec<(hir::AssocItem<'static>, IsRequiredAssocItem)> {
     let imp = match sema.to_def(impl_def) {
         Some(it) => it,
         None => return vec![],
@@ -56,9 +56,9 @@ pub fn get_missing_assoc_items(
 fn diff_assoc_items(
     db: &RootDatabase,
     target_trait: hir::Trait,
-    impl_items: Vec<hir::AssocItem>,
+    impl_items: Vec<hir::AssocItem<'_>>,
     impl_crate: hir::Crate,
-) -> Vec<(hir::AssocItem, IsRequiredAssocItem)> {
+) -> Vec<(hir::AssocItem<'static>, IsRequiredAssocItem)> {
     // `Drop` has two methods, `drop()` and `pin_drop()`, and you can only implement one of them, so
     // we consider `pin_drop()` to not exist, unless you already implement it.
     let drop_trait = hir::Trait::lang(db, impl_crate, hir::LangItem::Drop);
@@ -186,7 +186,7 @@ pub(crate) fn as_trait_assoc_def<'db>(
 
 fn assoc_item_of_trait<'db>(
     db: &dyn HirDatabase,
-    assoc: hir::AssocItem,
+    assoc: hir::AssocItem<'_>,
     trait_: hir::Trait,
 ) -> Option<Definition<'db>> {
     use hir::AssocItem::*;

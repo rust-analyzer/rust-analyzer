@@ -117,7 +117,7 @@ pub(crate) enum QualifyCandidate<'db> {
     UnqualifiedName(Option<ast::GenericArgList>),
     TraitAssocItem(ast::Path, ast::PathSegment),
     TraitMethod(&'db RootDatabase, ast::MethodCallExpr),
-    ImplMethod(&'db RootDatabase, ast::MethodCallExpr, hir::Function),
+    ImplMethod(&'db RootDatabase, ast::MethodCallExpr, hir::Function<'db>),
 }
 
 impl QualifyCandidate<'_> {
@@ -126,7 +126,7 @@ impl QualifyCandidate<'_> {
         mut replacer: impl FnMut(String),
         editor: &SyntaxEditor,
         import: &hir::ModPath,
-        item: hir::ItemInNs,
+        item: hir::ItemInNs<'_>,
         edition: Edition,
     ) {
         let import = mod_path_to_ast_with_factory(editor.make(), import, edition);
@@ -158,7 +158,7 @@ impl QualifyCandidate<'_> {
         mcall_expr: &ast::MethodCallExpr,
         editor: &SyntaxEditor,
         import: ast::Path,
-        hir_fn: &hir::Function,
+        hir_fn: &hir::Function<'_>,
     ) -> Option<()> {
         let make = editor.make();
         let receiver = mcall_expr.receiver()?;
@@ -189,7 +189,7 @@ impl QualifyCandidate<'_> {
         mcall_expr: &ast::MethodCallExpr,
         editor: &SyntaxEditor,
         import: ast::Path,
-        item: hir::ItemInNs,
+        item: hir::ItemInNs<'_>,
     ) -> Option<()> {
         let trait_method_name = mcall_expr.name_ref()?;
         let trait_ = item_as_trait(db, item)?;
@@ -198,13 +198,13 @@ impl QualifyCandidate<'_> {
     }
 }
 
-fn find_trait_method(
+fn find_trait_method<'db>(
     db: &RootDatabase,
     trait_: hir::Trait,
     trait_method_name: &ast::NameRef,
-) -> Option<hir::Function> {
+) -> Option<hir::Function<'db>> {
     if let Some(hir::AssocItem::Function(method)) =
-        trait_.items(db).into_iter().find(|item: &hir::AssocItem| {
+        trait_.items(db).into_iter().find(|item: &hir::AssocItem<'_>| {
             item.name(db)
                 .map(|name| name.as_str() == trait_method_name.text().trim_start_matches("r#"))
                 .unwrap_or(false)
@@ -216,7 +216,7 @@ fn find_trait_method(
     }
 }
 
-fn item_as_trait(db: &RootDatabase, item: hir::ItemInNs) -> Option<hir::Trait> {
+fn item_as_trait(db: &RootDatabase, item: hir::ItemInNs<'_>) -> Option<hir::Trait> {
     match item.into_module_def() {
         hir::ModuleDef::Trait(trait_) => Some(trait_),
         item_module_def => item_module_def.as_assoc_item(db)?.container_trait(db),
@@ -237,7 +237,7 @@ fn group_label(candidate: &ImportCandidate<'_>) -> GroupLabel {
 fn label(
     db: &RootDatabase,
     candidate: &ImportCandidate<'_>,
-    import: &LocatedImport,
+    import: &LocatedImport<'_>,
     edition: Edition,
 ) -> String {
     let import_path = &import.import_path;

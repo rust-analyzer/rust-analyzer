@@ -25,12 +25,12 @@ pub enum ResolvedAttr {
     Other,
 }
 
-impl DefMap {
+impl<'db> DefMap<'db> {
     /// This cannot be used to resolve items that allow derives.
     pub(crate) fn resolve_attr_macro(
         &self,
         local_def_map: &LocalDefMap,
-        db: &dyn SourceDatabase,
+        db: &'db dyn SourceDatabase,
         original_module: ModuleId,
         ast_id: AstIdWithPath<ast::Item>,
         attr: &Attr,

@@ -883,7 +883,7 @@ impl<'db> Interner for DbInterner<'db> {
     type CoroutineClosureId = CoroutineClosureIdWrapper<'db>;
     type CoroutineId = CoroutineIdWrapper<'db>;
     type AdtId = AdtIdWrapper;
-    type ImplId = AnyImplId;
+    type ImplId = AnyImplId<'db>;
     type UnevaluatedConstId = GeneralConstIdWrapper<'db>;
     type TraitAssocTyId = TraitAssocTyId;
     type TraitAssocConstId = TraitAssocConstId;
@@ -1445,7 +1445,7 @@ impl<'db> Interner for DbInterner<'db> {
     ) -> R {
         let krate = self.krate.expect("trait solving requires setting `DbInterner::krate`");
         let trait_block = trait_def_id.0.loc(self.db).container.block(self.db);
-        let mut consider_impls_for_simplified_type = |simp: SimplifiedType<'_>| {
+        let mut consider_impls_for_simplified_type = |simp: SimplifiedType<'db>| {
             let type_block = simp.def().and_then(|def_id| {
                 let module = match def_id {
                     SolverDefId::AdtId(AdtId::StructId(id)) => id.module(self.db),
@@ -2195,7 +2195,7 @@ TrivialTypeTraversalImpls! {
     InherentAssocConstId,
     InherentAssocTermId,
     OpaqueTyIdWrapper<'_>,
-    AnyImplId,
+    AnyImplId<'_>,
     GeneralConstIdWrapper<'_>,
     Safety,
     Span,

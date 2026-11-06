@@ -39,7 +39,7 @@ use crate::{
 
 fn write_builtin_derive_impl_method<'db>(
     f: &mut HirFormatter<'_, 'db>,
-    impl_: BuiltinDeriveImplId,
+    impl_: BuiltinDeriveImplId<'db>,
     method: BuiltinDeriveImplMethod,
 ) -> Result {
     let db = f.db;
@@ -86,7 +86,7 @@ fn write_builtin_derive_impl_method<'db>(
     Ok(())
 }
 
-impl<'db> HirDisplay<'db> for Function {
+impl<'db> HirDisplay<'db> for Function<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         let id = match self.id {
             AnyFunctionId::FunctionId(id) => id,
@@ -305,7 +305,7 @@ fn write_impl_header<'db>(impl_: ImplId, f: &mut HirFormatter<'_, 'db>) -> Resul
     Ok(())
 }
 
-impl<'db> HirDisplay<'db> for SelfParam {
+impl<'db> HirDisplay<'db> for SelfParam<'_> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         let func = match self.func.id {
             AnyFunctionId::FunctionId(id) => id,

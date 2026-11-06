@@ -285,6 +285,7 @@ impl ErasedFileAstId {
 pub trait AstIdNode: AstNode {}
 
 /// `AstId` points to an AST node in a specific file.
+#[cfg_attr(feature = "salsa", derive(salsa::SalsaValue))]
 pub struct FileAstId<N> {
     raw: ErasedFileAstId,
     _marker: PhantomData<fn() -> N>,

@@ -114,17 +114,17 @@ pub(crate) trait ToNav {
     fn to_nav(&self, db: &RootDatabase) -> UpmappingResult<NavigationTarget>;
 }
 
-pub trait TryToNav {
+pub trait TryToNav<'db> {
     fn try_to_nav(
         &self,
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
     ) -> Option<UpmappingResult<NavigationTarget>>;
 }
 
-impl<T: TryToNav, U: TryToNav> TryToNav for Either<T, U> {
+impl<'db, T: TryToNav<'db>, U: TryToNav<'db>> TryToNav<'db> for Either<T, U> {
     fn try_to_nav(
         &self,
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
     ) -> Option<UpmappingResult<NavigationTarget>> {
         match self {
             Either::Left(it) => it.try_to_nav(sema),
@@ -235,7 +235,7 @@ impl NavigationTarget {
     }
 }
 
-impl<'db> TryToNav for FileSymbol<'db> {
+impl<'db> TryToNav<'_> for FileSymbol<'db> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -296,10 +296,10 @@ impl<'db> TryToNav for FileSymbol<'db> {
     }
 }
 
-impl TryToNav for Definition<'_> {
+impl<'db> TryToNav<'db> for Definition<'db> {
     fn try_to_nav(
         &self,
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
     ) -> Option<UpmappingResult<NavigationTarget>> {
         match self {
             Definition::Local(it) => Some(it.to_nav(sema.db)),
@@ -331,10 +331,10 @@ impl TryToNav for Definition<'_> {
     }
 }
 
-impl TryToNav for hir::ModuleDef {
+impl<'db> TryToNav<'db> for hir::ModuleDef<'db> {
     fn try_to_nav(
         &self,
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
     ) -> Option<UpmappingResult<NavigationTarget>> {
         match self {
             hir::ModuleDef::Module(it) => Some(it.to_nav(sema.db)),
@@ -359,7 +359,7 @@ pub(crate) trait ToNavFromAst: Sized {
     }
 }
 
-fn container_name(db: &RootDatabase, t: impl HasContainer) -> Option<Symbol> {
+fn container_name<'db>(db: &RootDatabase, t: impl HasContainer<'db>) -> Option<Symbol> {
     match t.container(db) {
         hir::ItemContainer::Trait(it) => Some(it.name(db).symbol().clone()),
         // FIXME: Handle owners of blocks correctly here
@@ -368,7 +368,7 @@ fn container_name(db: &RootDatabase, t: impl HasContainer) -> Option<Symbol> {
     }
 }
 
-impl ToNavFromAst for hir::Function {
+impl ToNavFromAst for hir::Function<'_> {
     const KIND: SymbolKind = SymbolKind::Function;
     fn container_name(self, db: &RootDatabase) -> Option<Symbol> {
         container_name(db, self)
@@ -421,20 +421,14 @@ impl ToNavFromAst for hir::Trait {
     }
 }
 
-impl<D> TryToNav for D
+impl<'db, D> TryToNav<'db> for D
 where
-    D: HasSource
-        + ToNavFromAst
-        + Copy
-        + HasDocs
-        + for<'db> HirDisplay<'db>
-        + HasCrate
-        + hir::HasName,
+    D: HasSource + ToNavFromAst + Copy + HasDocs + HirDisplay<'db> + HasCrate + hir::HasName,
     D::Ast: ast::HasName,
 {
     fn try_to_nav(
         &self,
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
     ) -> Option<UpmappingResult<NavigationTarget>> {
         let db = sema.db;
         let src = self.source_with_range(db)?;
@@ -488,7 +482,7 @@ impl ToNav for hir::Crate {
     }
 }
 
-impl TryToNav for hir::Impl {
+impl TryToNav<'_> for hir::Impl<'_> {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -516,7 +510,7 @@ impl TryToNav for hir::Impl {
     }
 }
 
-impl TryToNav for hir::ExternCrateDecl {
+impl TryToNav<'_> for hir::ExternCrateDecl {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -547,7 +541,7 @@ impl TryToNav for hir::ExternCrateDecl {
     }
 }
 
-impl TryToNav for hir::Field {
+impl TryToNav<'_> for hir::Field {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -582,7 +576,7 @@ impl TryToNav for hir::Field {
     }
 }
 
-impl TryToNav for hir::Macro {
+impl TryToNav<'_> for hir::Macro {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -601,7 +595,7 @@ impl TryToNav for hir::Macro {
     }
 }
 
-impl TryToNav for hir::Adt {
+impl TryToNav<'_> for hir::Adt {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -614,10 +608,10 @@ impl TryToNav for hir::Adt {
     }
 }
 
-impl TryToNav for hir::AssocItem {
+impl<'db> TryToNav<'db> for hir::AssocItem<'db> {
     fn try_to_nav(
         &self,
-        sema: &Semantics<'_, RootDatabase>,
+        sema: &Semantics<'db, RootDatabase>,
     ) -> Option<UpmappingResult<NavigationTarget>> {
         match self {
             AssocItem::Function(it) => it.try_to_nav(sema),
@@ -627,7 +621,7 @@ impl TryToNav for hir::AssocItem {
     }
 }
 
-impl TryToNav for hir::GenericParam {
+impl TryToNav<'_> for hir::GenericParam {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -681,7 +675,7 @@ impl ToNav for hir::Local<'_> {
     }
 }
 
-impl TryToNav for hir::Label {
+impl TryToNav<'_> for hir::Label {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -705,7 +699,7 @@ impl TryToNav for hir::Label {
     }
 }
 
-impl TryToNav for hir::TypeParam {
+impl TryToNav<'_> for hir::TypeParam {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -744,7 +738,7 @@ impl TryToNav for hir::TypeParam {
     }
 }
 
-impl TryToNav for hir::TypeOrConstParam {
+impl TryToNav<'_> for hir::TypeOrConstParam {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -753,7 +747,7 @@ impl TryToNav for hir::TypeOrConstParam {
     }
 }
 
-impl TryToNav for hir::LifetimeParam {
+impl TryToNav<'_> for hir::LifetimeParam {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -777,7 +771,7 @@ impl TryToNav for hir::LifetimeParam {
     }
 }
 
-impl TryToNav for hir::ConstParam {
+impl TryToNav<'_> for hir::ConstParam {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -809,7 +803,7 @@ impl TryToNav for hir::ConstParam {
     }
 }
 
-impl TryToNav for hir::InlineAsmOperand {
+impl TryToNav<'_> for hir::InlineAsmOperand {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,
@@ -833,7 +827,7 @@ impl TryToNav for hir::InlineAsmOperand {
     }
 }
 
-impl TryToNav for hir::BuiltinType {
+impl TryToNav<'_> for hir::BuiltinType {
     fn try_to_nav(
         &self,
         sema: &Semantics<'_, RootDatabase>,

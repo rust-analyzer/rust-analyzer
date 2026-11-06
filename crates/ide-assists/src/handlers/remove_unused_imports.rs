@@ -136,11 +136,11 @@ pub(crate) fn remove_unused_imports(acc: &mut Assists, ctx: &AssistContext<'_, '
     }
 }
 
-fn is_path_per_ns_unused_in_scope(
-    ctx: &AssistContext<'_, '_>,
+fn is_path_per_ns_unused_in_scope<'db>(
+    ctx: &AssistContext<'_, 'db>,
     u: &ast::UseTree,
     scope: &[SearchScope],
-    path: &PathResolutionPerNs<'_>,
+    path: &PathResolutionPerNs<'db>,
 ) -> bool {
     if let Some(PathResolution::Def(ModuleDef::Trait(ref t))) = path.type_ns {
         if is_trait_unused_in_scope(ctx, u, scope, t) {
@@ -155,11 +155,11 @@ fn is_path_per_ns_unused_in_scope(
     }
 }
 
-fn is_path_unused_in_scope(
-    ctx: &AssistContext<'_, '_>,
+fn is_path_unused_in_scope<'db>(
+    ctx: &AssistContext<'_, 'db>,
     u: &ast::UseTree,
     scope: &[SearchScope],
-    path: &[Option<PathResolution<'_>>],
+    path: &[Option<PathResolution<'db>>],
 ) -> bool {
     !path
         .iter()

@@ -135,7 +135,7 @@ impl ImplItems {
 struct AssocItemCollector<'db> {
     db: &'db dyn SourceDatabase,
     module_id: ModuleId,
-    def_map: &'db DefMap,
+    def_map: &'db DefMap<'db>,
     local_def_map: &'db LocalDefMap,
     ast_id_map: &'db AstIdMap,
     span_map: SpanMap<'db>,

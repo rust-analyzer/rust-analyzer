@@ -170,7 +170,7 @@ impl LangItems {
 
 fn resolve_core_trait(
     db: &dyn SourceDatabase,
-    core_def_map: &DefMap,
+    core_def_map: &DefMap<'_>,
     modules: &[Symbol],
     name: Symbol,
 ) -> Option<TraitId> {
@@ -195,7 +195,7 @@ fn resolve_core_trait(
 
 fn resolve_core_macro(
     db: &dyn SourceDatabase,
-    core_def_map: &DefMap,
+    core_def_map: &DefMap<'_>,
     modules: &[Symbol],
     name: Symbol,
 ) -> Option<MacroId> {
@@ -684,7 +684,7 @@ macro_rules! language_item_table {
                 }
             }
 
-            fn fill_non_lang_core_items(&mut self, db: &dyn SourceDatabase, core_def_map: &DefMap) {
+            fn fill_non_lang_core_items(&mut self, db: &dyn SourceDatabase, core_def_map: &DefMap<'_>) {
                 $( self.$non_lang_trait = resolve_core_trait(db, core_def_map, &[ $(sym::$non_lang_trait_module),* ], sym::$non_lang_trait); )*
                 $( self.$non_lang_macro_field = resolve_core_macro(db, core_def_map, &[ $(sym::$non_lang_macro_module),* ], sym::$non_lang_macro); )*
             }

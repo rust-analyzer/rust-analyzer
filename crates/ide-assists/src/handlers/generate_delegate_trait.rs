@@ -96,7 +96,7 @@ pub(crate) fn generate_delegate_trait(
 
     let strukt = Struct::new(ctx.find_node_at_offset::<ast::Struct>()?)?;
 
-    let field: Field = match ctx.find_node_at_offset::<ast::RecordField>() {
+    let field: Field<'_> = match ctx.find_node_at_offset::<ast::RecordField>() {
         Some(field) => Field::new(ctx, Either::Left(field))?,
         None => {
             let field = ctx.find_node_at_offset::<ast::TupleField>()?;
@@ -111,19 +111,19 @@ pub(crate) fn generate_delegate_trait(
 
 /// A utility object that represents a struct's field.
 #[derive(Debug)]
-struct Field {
+struct Field<'db> {
     name: String,
     ty: ast::Type,
     range: syntax::TextRange,
-    impls: Vec<Delegee>,
+    impls: Vec<Delegee<'db>>,
     edition: Edition,
 }
 
-impl Field {
+impl<'db> Field<'db> {
     pub(crate) fn new(
-        ctx: &AssistContext<'_, '_>,
+        ctx: &AssistContext<'_, 'db>,
         f: Either<ast::RecordField, (ast::TupleField, ast::TupleFieldList)>,
-    ) -> Option<Field> {
+    ) -> Option<Field<'db>> {
         let db = ctx.sema.db;
 
         let module = ctx.sema.file_to_module_def(ctx.vfs_file_id())?;
@@ -166,12 +166,12 @@ impl Field {
 /// has a bound type parameter. We handle these cases in different ways
 /// hence the enum.
 #[derive(Debug)]
-enum Delegee {
+enum Delegee<'db> {
     Bound(hir::Trait),
-    Impls(hir::Trait, hir::Impl),
+    Impls(hir::Trait, hir::Impl<'db>),
 }
 
-impl Delegee {
+impl<'db> Delegee<'db> {
     fn trait_(&self) -> &hir::Trait {
         match self {
             Delegee::Bound(it) | Delegee::Impls(it, _) => it,
@@ -205,7 +205,12 @@ impl Struct {
         Some(Struct { name, strukt: s })
     }
 
-    pub(crate) fn delegate(&self, field: Field, acc: &mut Assists, ctx: &AssistContext<'_, '_>) {
+    pub(crate) fn delegate(
+        &self,
+        field: Field<'_>,
+        acc: &mut Assists,
+        ctx: &AssistContext<'_, '_>,
+    ) {
         let db = ctx.db();
 
         for (index, delegee) in field.impls.iter().enumerate() {
@@ -256,7 +261,7 @@ fn generate_impl(
     strukt: &Struct,
     field_ty: &ast::Type,
     field_name: &str,
-    delegee: &Delegee,
+    delegee: &Delegee<'_>,
     edition: Edition,
 ) -> Option<ast::Impl> {
     let make = SyntaxFactory::without_mappings();

@@ -149,7 +149,10 @@ impl Snippet {
     }
 
     /// Returns [`None`] if the required items do not resolve.
-    pub(crate) fn imports(&self, ctx: &CompletionContext<'_, '_>) -> Option<Vec<LocatedImport>> {
+    pub(crate) fn imports(
+        &self,
+        ctx: &CompletionContext<'_, '_>,
+    ) -> Option<Vec<LocatedImport<'static>>> {
         import_edits(ctx, &self.requires)
     }
 
@@ -165,7 +168,7 @@ impl Snippet {
 fn import_edits(
     ctx: &CompletionContext<'_, '_>,
     requires: &[ModPath],
-) -> Option<Vec<LocatedImport>> {
+) -> Option<Vec<LocatedImport<'static>>> {
     let import_cfg = ctx.config.find_path_config(ctx.is_nightly);
 
     let resolve = |import| {

@@ -69,14 +69,14 @@ const CONTINUE_NO_BREAKS: ControlFlow<Infallible, ()> = ControlFlow::Continue(()
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PathResolution<'db> {
     /// An item
-    Def(ModuleDef),
+    Def(ModuleDef<'db>),
     /// A local binding (only value namespace)
     Local(Local<'db>),
     /// A type parameter
     TypeParam(TypeParam),
     /// A const parameter
     ConstParam(ConstParam),
-    SelfType(Impl),
+    SelfType(Impl<'db>),
     BuiltinAttr(BuiltinAttr),
     ToolModule(ToolModule),
     DeriveHelper(DeriveHelper),
@@ -221,7 +221,7 @@ impl<DB: HirDatabase> Semantics<'_, DB> {
 
 // Note: We take `DB` as `?Sized` here in order to support type-erased
 // use of `Semantics` via `Semantics<'_, dyn HirDatabase>`:
-impl<DB: HirDatabase + ?Sized> Semantics<'_, DB> {
+impl<'db, DB: HirDatabase + ?Sized> Semantics<'db, DB> {
     pub fn hir_file_for(&self, syntax_node: &SyntaxNode) -> HirFileId {
         self.imp.find_file(syntax_node).file_id
     }
@@ -355,23 +355,23 @@ impl<DB: HirDatabase + ?Sized> Semantics<'_, DB> {
         self.imp.resolve_range_expr(range_expr).map(Struct::from)
     }
 
-    pub fn resolve_await_to_poll(&self, await_expr: &ast::AwaitExpr) -> Option<Function> {
+    pub fn resolve_await_to_poll(&self, await_expr: &ast::AwaitExpr) -> Option<Function<'db>> {
         self.imp.resolve_await_to_poll(await_expr)
     }
 
-    pub fn resolve_prefix_expr(&self, prefix_expr: &ast::PrefixExpr) -> Option<Function> {
+    pub fn resolve_prefix_expr(&self, prefix_expr: &ast::PrefixExpr) -> Option<Function<'db>> {
         self.imp.resolve_prefix_expr(prefix_expr)
     }
 
-    pub fn resolve_index_expr(&self, index_expr: &ast::IndexExpr) -> Option<Function> {
+    pub fn resolve_index_expr(&self, index_expr: &ast::IndexExpr) -> Option<Function<'db>> {
         self.imp.resolve_index_expr(index_expr)
     }
 
-    pub fn resolve_bin_expr(&self, bin_expr: &ast::BinExpr) -> Option<Function> {
+    pub fn resolve_bin_expr(&self, bin_expr: &ast::BinExpr) -> Option<Function<'db>> {
         self.imp.resolve_bin_expr(bin_expr)
     }
 
-    pub fn resolve_try_expr(&self, try_expr: &ast::TryExpr) -> Option<Function> {
+    pub fn resolve_try_expr(&self, try_expr: &ast::TryExpr) -> Option<Function<'db>> {
         self.imp.resolve_try_expr(try_expr)
     }
 
@@ -421,11 +421,11 @@ impl<DB: HirDatabase + ?Sized> Semantics<'_, DB> {
         self.imp.to_def(v)
     }
 
-    pub fn to_fn_def(&self, f: &ast::Fn) -> Option<Function> {
+    pub fn to_fn_def(&self, f: &ast::Fn) -> Option<Function<'db>> {
         self.imp.to_def(f)
     }
 
-    pub fn to_impl_def(&self, i: &ast::Impl) -> Option<Impl> {
+    pub fn to_impl_def(&self, i: &ast::Impl) -> Option<Impl<'db>> {
         self.imp.to_def(i)
     }
 
@@ -672,7 +672,7 @@ impl<'db> SemanticsImpl<'db> {
     fn derive_macro_calls(
         &self,
         attr: &ast::Meta,
-    ) -> Option<Vec<Option<Either<MacroCallId, BuiltinDeriveImplId>>>> {
+    ) -> Option<Vec<Option<Either<MacroCallId, BuiltinDeriveImplId<'db>>>>> {
         let adt = attr.parent_attr()?.syntax().parent().and_then(ast::Adt::cast)?;
         let file_id = self.find_file(adt.syntax()).file_id;
         let adt = InFile::new(file_id, &adt);
@@ -1653,7 +1653,7 @@ impl<'db> SemanticsImpl<'db> {
 
     /// Returns the `return` expressions in this function's body,
     /// excluding those inside closures or async blocks.
-    pub fn fn_return_points(&self, func: Function) -> Vec<InFile<ast::ReturnExpr>> {
+    pub fn fn_return_points(&self, func: Function<'_>) -> Vec<InFile<ast::ReturnExpr>> {
         let func_id = match func.id {
             AnyFunctionId::FunctionId(id) => id,
             _ => return vec![],
@@ -1806,7 +1806,7 @@ impl<'db> SemanticsImpl<'db> {
         self.analyze(call.syntax())?.resolve_expr_as_callable(self.db, call)
     }
 
-    pub fn resolve_method_call(&self, call: &ast::MethodCallExpr) -> Option<Function> {
+    pub fn resolve_method_call(&self, call: &ast::MethodCallExpr) -> Option<Function<'db>> {
         self.analyze(call.syntax())?.resolve_method_call(self.db, call)
     }
 
@@ -1814,7 +1814,7 @@ impl<'db> SemanticsImpl<'db> {
     pub fn resolve_method_call_fallback(
         &self,
         call: &ast::MethodCallExpr,
-    ) -> Option<(Either<Function, Field>, Option<GenericSubstitution<'db>>)> {
+    ) -> Option<(Either<Function<'db>, Field>, Option<GenericSubstitution<'db>>)> {
         self.analyze(call.syntax())?.resolve_method_call_fallback(self.db, call)
     }
 
@@ -1824,9 +1824,9 @@ impl<'db> SemanticsImpl<'db> {
         &self,
         env: Type<'db>,
         trait_: Trait,
-        func: Function,
+        func: Function<'db>,
         subst: impl IntoIterator<Item = Type<'db>>,
-    ) -> Option<Function> {
+    ) -> Option<Function<'db>> {
         let AnyFunctionId::FunctionId(func) = func.id else { return Some(func) };
         let interner = DbInterner::new_no_crate(self.db);
         let mut subst = subst.into_iter();
@@ -1855,23 +1855,23 @@ impl<'db> SemanticsImpl<'db> {
         self.analyze(range_expr.syntax())?.resolve_range_expr(self.db, range_expr)
     }
 
-    fn resolve_await_to_poll(&self, await_expr: &ast::AwaitExpr) -> Option<Function> {
+    fn resolve_await_to_poll(&self, await_expr: &ast::AwaitExpr) -> Option<Function<'db>> {
         self.analyze(await_expr.syntax())?.resolve_await_to_poll(self.db, await_expr)
     }
 
-    fn resolve_prefix_expr(&self, prefix_expr: &ast::PrefixExpr) -> Option<Function> {
+    fn resolve_prefix_expr(&self, prefix_expr: &ast::PrefixExpr) -> Option<Function<'db>> {
         self.analyze(prefix_expr.syntax())?.resolve_prefix_expr(self.db, prefix_expr)
     }
 
-    fn resolve_index_expr(&self, index_expr: &ast::IndexExpr) -> Option<Function> {
+    fn resolve_index_expr(&self, index_expr: &ast::IndexExpr) -> Option<Function<'db>> {
         self.analyze(index_expr.syntax())?.resolve_index_expr(self.db, index_expr)
     }
 
-    fn resolve_bin_expr(&self, bin_expr: &ast::BinExpr) -> Option<Function> {
+    fn resolve_bin_expr(&self, bin_expr: &ast::BinExpr) -> Option<Function<'db>> {
         self.analyze(bin_expr.syntax())?.resolve_bin_expr(self.db, bin_expr)
     }
 
-    fn resolve_try_expr(&self, try_expr: &ast::TryExpr) -> Option<Function> {
+    fn resolve_try_expr(&self, try_expr: &ast::TryExpr) -> Option<Function<'db>> {
         self.analyze(try_expr.syntax())?.resolve_try_expr(self.db, try_expr)
     }
 
@@ -1913,8 +1913,10 @@ impl<'db> SemanticsImpl<'db> {
     pub fn resolve_field_fallback(
         &self,
         field: &ast::FieldExpr,
-    ) -> Option<(Either<Either<Field, TupleField<'db>>, Function>, Option<GenericSubstitution<'db>>)>
-    {
+    ) -> Option<(
+        Either<Either<Field, TupleField<'db>>, Function<'db>>,
+        Option<GenericSubstitution<'db>>,
+    )> {
         self.analyze(field.syntax())?.resolve_field_fallback(self.db, field)
     }
 
@@ -1977,7 +1979,7 @@ impl<'db> SemanticsImpl<'db> {
         self.to_def(macro_call)?.expansion_span_map(self.db).matched_arm
     }
 
-    pub fn get_unsafe_ops(&self, def: ExpressionStoreOwner) -> FxHashSet<ExprOrPatSource> {
+    pub fn get_unsafe_ops(&self, def: ExpressionStoreOwner<'_>) -> FxHashSet<ExprOrPatSource> {
         let Ok(def) = ExpressionStoreOwnerId::try_from(def) else { return Default::default() };
         let (body, source_map) = ExpressionStore::with_source_map(self.db, def);
         let mut res = FxHashSet::default();
@@ -2063,7 +2065,7 @@ impl<'db> SemanticsImpl<'db> {
         &self,
         scope: &SyntaxNode,
         path: &ModPath,
-    ) -> Option<impl Iterator<Item = ItemInNs>> {
+    ) -> Option<impl Iterator<Item = ItemInNs<'static>>> {
         let analyze = self.analyze(scope)?;
         let items = analyze.resolver.resolve_module_path_in_items(self.db, path);
         Some(items.iter_items().map(|(item, _)| item.into()))
@@ -2073,7 +2075,7 @@ impl<'db> SemanticsImpl<'db> {
         self.analyze(record_lit.syntax())?.resolve_variant(record_lit)
     }
 
-    pub fn resolve_bind_pat_to_const(&self, pat: &ast::IdentPat) -> Option<ModuleDef> {
+    pub fn resolve_bind_pat_to_const(&self, pat: &ast::IdentPat) -> Option<ModuleDef<'db>> {
         self.analyze(pat.syntax())?.resolve_bind_pat_to_const(self.db, pat)
     }
 
@@ -2179,7 +2181,10 @@ impl<'db> SemanticsImpl<'db> {
         Some(res)
     }
 
-    pub fn store_owner_for(&self, node: InFile<&SyntaxNode>) -> Option<ExpressionStoreOwner> {
+    pub fn store_owner_for(
+        &self,
+        node: InFile<&SyntaxNode>,
+    ) -> Option<ExpressionStoreOwner<'static>> {
         let container = self.with_ctx(|ctx| ctx.find_container(node))?;
         container.as_expression_store_owner().map(|id| id.into())
     }
@@ -2436,7 +2441,7 @@ impl<'db> SemanticsImpl<'db> {
         }
     }
 
-    pub fn impl_generated_from_derive(&self, impl_: Impl) -> Option<Adt> {
+    pub fn impl_generated_from_derive(&self, impl_: Impl<'_>) -> Option<Adt> {
         let id = match impl_.id {
             AnyImplId::ImplId(id) => id,
             AnyImplId::BuiltinDeriveImplId(id) => return Some(id.loc(self.db).adt.into()),
@@ -2663,11 +2668,11 @@ to_def_impls![
     (crate::Enum, ast::Enum, enum_to_def),
     (crate::Union, ast::Union, union_to_def),
     (crate::Trait, ast::Trait, trait_to_def),
-    (crate::Impl, ast::Impl, impl_to_def),
+    (crate::Impl<'db>, ast::Impl, impl_to_def),
     (crate::TypeAlias, ast::TypeAlias, type_alias_to_def),
     (crate::Const, ast::Const, const_to_def),
     (crate::Static, ast::Static, static_to_def),
-    (crate::Function, ast::Fn, fn_to_def),
+    (crate::Function<'db>, ast::Fn, fn_to_def),
     (crate::Field, ast::RecordField, record_field_to_def),
     (crate::Field, ast::TupleField, tuple_field_to_def),
     (crate::EnumVariant, ast::Variant, enum_variant_to_def),
@@ -2734,14 +2739,14 @@ impl<'db> SemanticsScope<'db> {
     }
 
     // FIXME: This is a weird function, we shouldn't have this?
-    pub fn containing_function(&self) -> Option<Function> {
+    pub fn containing_function(&self) -> Option<Function<'static>> {
         self.resolver.expression_store_owner().and_then(|owner| match owner {
             ExpressionStoreOwnerId::Body(DefWithBodyId::FunctionId(id)) => Some(id.into()),
             _ => None,
         })
     }
 
-    pub fn expression_store_owner(&self) -> Option<ExpressionStoreOwner> {
+    pub fn expression_store_owner(&self) -> Option<ExpressionStoreOwner<'static>> {
         self.resolver.expression_store_owner().map(Into::into)
     }
 
@@ -2832,7 +2837,10 @@ impl<'db> SemanticsScope<'db> {
         )
     }
 
-    pub fn resolve_mod_path(&self, path: &ModPath) -> impl Iterator<Item = ItemInNs> + use<> {
+    pub fn resolve_mod_path(
+        &self,
+        path: &ModPath,
+    ) -> impl Iterator<Item = ItemInNs<'static>> + use<> {
         let items = self.resolver.resolve_module_path_in_items(self.db, path);
         items.iter_items().map(|(item, _)| item.into())
     }
@@ -2854,7 +2862,7 @@ impl<'db> SemanticsScope<'db> {
         });
     }
 
-    pub fn generic_def(&self) -> Option<crate::GenericDef> {
+    pub fn generic_def(&self) -> Option<crate::GenericDef<'static>> {
         self.resolver.generic_def().map(|id| id.into())
     }
 

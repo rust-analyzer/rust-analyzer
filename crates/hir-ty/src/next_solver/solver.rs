@@ -177,7 +177,7 @@ impl<'db> SolverDelegate for SolverContext<'db> {
         &self,
         _goal_trait_ref: rustc_type_ir::TraitRef<Self::Interner>,
         trait_assoc_def_id: TraitAssocTermId,
-        impl_id: AnyImplId,
+        impl_id: AnyImplId<'_>,
     ) -> FetchEligibleAssocItemResponse<Self::Interner> {
         let AnyImplId::ImplId(impl_id) = impl_id else {
             // Builtin derive traits don't have type/consts assoc items.

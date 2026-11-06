@@ -250,7 +250,7 @@ impl<'db, N> ImplSource<'db, N> {
 pub(crate) struct ImplSourceUserDefinedData<'db, N> {
     #[type_visitable(ignore)]
     #[type_foldable(identity)]
-    pub(crate) impl_def_id: AnyImplId,
+    pub(crate) impl_def_id: AnyImplId<'db>,
     pub(crate) args: GenericArgs<'db>,
     pub(crate) nested: Vec<N>,
 }

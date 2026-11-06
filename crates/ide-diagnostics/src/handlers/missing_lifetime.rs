@@ -5,7 +5,7 @@ use crate::{Diagnostic, DiagnosticCode, DiagnosticsContext};
 // This diagnostic is triggered when a lifetime argument is missing.
 pub(crate) fn missing_lifetime(
     ctx: &DiagnosticsContext<'_, '_>,
-    d: &hir::MissingLifetime,
+    d: &hir::MissingLifetime<'_>,
 ) -> Diagnostic {
     Diagnostic::new_with_syntax_node_ptr(
         ctx,

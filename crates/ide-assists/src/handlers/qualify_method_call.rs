@@ -67,7 +67,7 @@ pub(crate) fn qualify_method_call(acc: &mut Assists, ctx: &AssistContext<'_, '_>
     Some(())
 }
 
-fn item_for_path_search(db: &dyn HirDatabase, item: ItemInNs) -> Option<ItemInNs> {
+fn item_for_path_search<'db>(db: &dyn HirDatabase, item: ItemInNs<'db>) -> Option<ItemInNs<'db>> {
     Some(match item {
         ItemInNs::Types(_) | ItemInNs::Values(_) => match item_as_assoc(db, item) {
             Some(assoc_item) => match assoc_item.container(db) {
@@ -83,7 +83,7 @@ fn item_for_path_search(db: &dyn HirDatabase, item: ItemInNs) -> Option<ItemInNs
     })
 }
 
-fn item_as_assoc(db: &dyn HirDatabase, item: ItemInNs) -> Option<AssocItem> {
+fn item_as_assoc<'db>(db: &dyn HirDatabase, item: ItemInNs<'db>) -> Option<AssocItem<'db>> {
     item.into_module_def().as_assoc_item(db)
 }
 

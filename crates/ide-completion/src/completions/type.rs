@@ -12,7 +12,7 @@ use crate::{
 pub(crate) fn complete_type_path<'db>(
     acc: &mut Completions,
     ctx: &CompletionContext<'_, 'db>,
-    path_ctx @ PathCompletionCtx { qualified, .. }: &PathCompletionCtx<'_>,
+    path_ctx @ PathCompletionCtx { qualified, .. }: &PathCompletionCtx<'db>,
     location: &TypeLocation,
 ) {
     let _p = tracing::info_span!("complete_type_path").entered();

@@ -26,9 +26,9 @@ pub enum Visibility {
 }
 
 impl Visibility {
-    pub fn resolve(
-        db: &dyn SourceDatabase,
-        resolver: &crate::resolver::Resolver<'_>,
+    pub fn resolve<'db>(
+        db: &'db dyn SourceDatabase,
+        resolver: &crate::resolver::Resolver<'db>,
         raw_vis: &RawVisibility,
     ) -> Self {
         // we fall back to public visibility (i.e. fail open) if the path can't be resolved
@@ -65,7 +65,7 @@ impl Visibility {
     pub(crate) fn is_visible_from_def_map<'db>(
         self,
         db: &'db dyn SourceDatabase,
-        def_map: &'db DefMap,
+        def_map: &DefMap<'db>,
         from_module: ModuleIdLt<'db>,
     ) -> bool {
         if cfg!(debug_assertions) {
@@ -94,7 +94,7 @@ impl Visibility {
 
     fn is_visible_from_def_map_<'db>(
         db: &'db dyn SourceDatabase,
-        def_map: &'db DefMap,
+        def_map: &DefMap<'db>,
         mut to_module: ModuleIdLt<'db>,
         mut from_module: ModuleIdLt<'db>,
     ) -> bool {
@@ -125,24 +125,18 @@ impl Visibility {
 
         // from_module needs to be a descendant of to_module
         let mut def_map = def_map;
-        let mut parent_arc;
         loop {
             if from_module == to_module {
                 return true;
             }
-            match def_map[from_module].parent {
-                Some(parent) => from_module = parent,
-                None => {
-                    match def_map.parent() {
-                        Some(module) => {
-                            parent_arc = module.def_map(db);
-                            def_map = parent_arc;
-                            from_module = module;
-                        }
-                        // Reached the root module, nothing left to check.
-                        None => return false,
-                    }
-                }
+            if let Some(parent) = def_map[from_module].parent {
+                from_module = parent
+            } else if let Some(module) = def_map.parent() {
+                def_map = module.def_map(db);
+                from_module = module;
+            } else {
+                // Reached the root module, nothing left to check.
+                return false;
             }
         }
     }
@@ -155,7 +149,7 @@ impl Visibility {
         self,
         db: &dyn SourceDatabase,
         other: Visibility,
-        def_map: &DefMap,
+        def_map: &DefMap<'_>,
     ) -> Option<Visibility> {
         match (self, other) {
             (_, Visibility::Public) | (Visibility::Public, _) => Some(Visibility::Public),
@@ -221,7 +215,7 @@ impl Visibility {
         self,
         db: &dyn SourceDatabase,
         other: Visibility,
-        def_map: &DefMap,
+        def_map: &DefMap<'_>,
     ) -> Option<Visibility> {
         match (self, other) {
             (vis, Visibility::Public) | (Visibility::Public, vis) => Some(vis),

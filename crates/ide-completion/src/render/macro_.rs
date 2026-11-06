@@ -10,35 +10,35 @@ use crate::{
     render::RenderContext,
 };
 
-pub(crate) fn render_macro(
-    ctx: RenderContext<'_, '_>,
+pub(crate) fn render_macro<'db>(
+    ctx: RenderContext<'_, 'db>,
     PathCompletionCtx { kind, has_macro_bang, has_call_parens, .. }: &PathCompletionCtx<'_>,
 
     name: hir::Name,
     macro_: hir::Macro,
-) -> Builder {
+) -> Builder<'db> {
     let _p = tracing::info_span!("render_macro").entered();
     render(ctx, *kind == PathKind::Use, *has_macro_bang, *has_call_parens, name, macro_)
 }
 
-pub(crate) fn render_macro_pat(
-    ctx: RenderContext<'_, '_>,
+pub(crate) fn render_macro_pat<'db>(
+    ctx: RenderContext<'_, 'db>,
     _pattern_ctx: &PatternContext,
     name: hir::Name,
     macro_: hir::Macro,
-) -> Builder {
+) -> Builder<'db> {
     let _p = tracing::info_span!("render_macro_pat").entered();
     render(ctx, false, false, false, name, macro_)
 }
 
-fn render(
-    ctx @ RenderContext { completion, .. }: RenderContext<'_, '_>,
+fn render<'db>(
+    ctx @ RenderContext { completion, .. }: RenderContext<'_, 'db>,
     is_use_path: bool,
     has_macro_bang: bool,
     has_call_parens: bool,
     name: hir::Name,
     macro_: hir::Macro,
-) -> Builder {
+) -> Builder<'db> {
     let source_range = if ctx.is_immediately_after_macro_bang() {
         cov_mark::hit!(completes_macro_call_if_cursor_at_bang_token);
         completion.token.parent().map_or_else(|| ctx.source_range(), |it| it.text_range())

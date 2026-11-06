@@ -92,10 +92,7 @@ use hir_def::{
     EnumVariantId, ExpressionStoreOwnerId, ExternBlockId, ExternCrateId, FieldId, FunctionId,
     GenericDefId, GenericParamId, ImplId, LifetimeParamId, Lookup, MacroId, ModuleId, StaticId,
     StructId, TraitId, TypeAliasId, TypeParamId, UnionId, UseId, VariantId,
-    dyn_map::{
-        DynMap,
-        keys::{self, Key},
-    },
+    dyn_map::{DynMap, StaticKey, keys},
     expr_store::{Body, ExpressionStore},
     hir::{BindingId, Expr, LabelId},
     nameres::{block_def_map, crate_def_map},
@@ -121,7 +118,7 @@ use crate::{
 
 #[derive(Default)]
 pub(super) struct SourceToDefCache<'db> {
-    pub(super) dynmap_cache: FxHashMap<(ChildContainer, HirFileId), DynMap>,
+    pub(super) dynmap_cache: FxHashMap<(ChildContainer, HirFileId), DynMap<'db>>,
     expansion_info_cache: FxHashMap<MacroCallId, ExpansionInfo<'db>>,
     pub(super) file_to_def_cache: FxHashMap<FileId, SmallVec<[ModuleId; 1]>>,
     pub(super) included_file_cache: FxHashMap<EditionedFileId, Option<MacroCallId>>,
@@ -417,7 +414,8 @@ impl<'db> SourceToDefCtx<'db, '_> {
         &mut self,
         item: InFile<&ast::Adt>,
         src: InFile<ast::Meta>,
-    ) -> Option<(AttrId, MacroCallId, &[Option<Either<MacroCallId, BuiltinDeriveImplId>>])> {
+    ) -> Option<(AttrId, MacroCallId, &[Option<Either<MacroCallId, BuiltinDeriveImplId<'db>>>])>
+    {
         let map = self.dyn_map(item)?;
         map[keys::DERIVE_MACRO_CALL]
             .get(&AstPtr::new(&src.value))
@@ -434,8 +432,12 @@ impl<'db> SourceToDefCtx<'db, '_> {
         adt: InFile<&ast::Adt>,
     ) -> Option<
         impl Iterator<
-            Item = (AttrId, MacroCallId, &'slf [Option<Either<MacroCallId, BuiltinDeriveImplId>>]),
-        > + use<'slf>,
+            Item = (
+                AttrId,
+                MacroCallId,
+                &'slf [Option<Either<MacroCallId, BuiltinDeriveImplId<'db>>>],
+            ),
+        > + use<'slf, 'db>,
     > {
         self.dyn_map(adt).as_ref().map(|&map| {
             let dyn_map = &map[keys::DERIVE_MACRO_CALL];
@@ -450,17 +452,17 @@ impl<'db> SourceToDefCtx<'db, '_> {
     fn to_def<Ast: AstNode + 'static, ID: Copy + 'static>(
         &mut self,
         src: InFile<&Ast>,
-        key: Key<Ast, ID>,
+        key: StaticKey<Ast, ID>,
     ) -> Option<ID> {
         self.dyn_map(src)?[key].get(&AstPtr::new(src.value)).copied()
     }
 
-    fn dyn_map<Ast: AstNode + 'static>(&mut self, src: InFile<&Ast>) -> Option<&DynMap> {
+    fn dyn_map<Ast: AstNode + 'static>(&mut self, src: InFile<&Ast>) -> Option<&DynMap<'db>> {
         let container = self.find_container(src.map(|it| it.syntax()))?;
         Some(self.cache_for(container, src.file_id))
     }
 
-    fn cache_for(&mut self, container: ChildContainer, file_id: HirFileId) -> &DynMap {
+    fn cache_for(&mut self, container: ChildContainer, file_id: HirFileId) -> &DynMap<'db> {
         let db = self.db;
         self.cache
             .dynmap_cache
@@ -541,9 +543,10 @@ impl<'db> SourceToDefCtx<'db, '_> {
     }
 
     pub(super) fn proc_macro_to_def(&mut self, src: InFile<&ast::Fn>) -> Option<MacroId> {
-        self.dyn_map(src).and_then(|it| {
-            it[keys::PROC_MACRO].get(&AstPtr::new(src.value)).copied().map(MacroId::from)
-        })
+        self.dyn_map(src)?[keys::PROC_MACRO]
+            .get(&AstPtr::new(src.value))
+            .copied()
+            .map(MacroId::from)
     }
 
     pub(super) fn find_container(&mut self, src: InFile<&SyntaxNode>) -> Option<ChildContainer> {
@@ -745,7 +748,7 @@ impl_from! {
 }
 
 impl ChildContainer {
-    fn child_by_source(self, db: &dyn HirDatabase, file_id: HirFileId) -> DynMap {
+    fn child_by_source<'db>(self, db: &'db dyn HirDatabase, file_id: HirFileId) -> DynMap<'db> {
         let _p = tracing::info_span!("ChildContainer::child_by_source").entered();
         match self {
             ChildContainer::DefWithBodyId(it) => it.child_by_source(db, file_id),

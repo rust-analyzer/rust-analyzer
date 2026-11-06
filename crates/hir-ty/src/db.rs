@@ -131,7 +131,7 @@ pub trait HirDatabase: SourceDatabase + 'static {
         env: ParamEnvAndCrate<'db>,
         func: FunctionId,
         fn_subst: GenericArgs<'db>,
-    ) -> (Either<FunctionId, (BuiltinDeriveImplId, BuiltinDeriveImplMethod)>, GenericArgs<'db>)
+    ) -> (Either<FunctionId, (BuiltinDeriveImplId<'db>, BuiltinDeriveImplMethod)>, GenericArgs<'db>)
     {
         let db = self.as_dyn();
         crate::method_resolution::lookup_impl_method_query(db, env, func, fn_subst)

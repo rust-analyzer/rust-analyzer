@@ -57,8 +57,8 @@ pub(super) fn closure_expr(
     closure_ty(sema, config, &TypeInfo { original, adjusted: None }, edition, display_target)
 }
 
-pub(super) fn try_expr(
-    sema: &Semantics<'_, RootDatabase>,
+pub(super) fn try_expr<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     _config: &HoverConfig<'_>,
     try_expr: &ast::TryExpr,
     edition: Edition,
@@ -119,8 +119,8 @@ pub(super) fn try_expr(
 
     let mut res = HoverResult::default();
 
-    let mut targets: Vec<hir::ModuleDef> = Vec::new();
-    let mut push_new_def = |item: hir::ModuleDef| {
+    let mut targets: Vec<hir::ModuleDef<'db>> = Vec::new();
+    let mut push_new_def = |item: hir::ModuleDef<'db>| {
         if !targets.contains(&item) {
             targets.push(item);
         }
@@ -152,8 +152,8 @@ pub(super) fn try_expr(
     Some(res)
 }
 
-pub(super) fn deref_expr(
-    sema: &Semantics<'_, RootDatabase>,
+pub(super) fn deref_expr<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     _config: &HoverConfig<'_>,
     deref_expr: &ast::PrefixExpr,
     edition: Edition,
@@ -164,8 +164,8 @@ pub(super) fn deref_expr(
         sema.type_of_expr(&ast::Expr::from(deref_expr.clone()))?;
 
     let mut res = HoverResult::default();
-    let mut targets: Vec<hir::ModuleDef> = Vec::new();
-    let mut push_new_def = |item: hir::ModuleDef| {
+    let mut targets: Vec<hir::ModuleDef<'db>> = Vec::new();
+    let mut push_new_def = |item: hir::ModuleDef<'db>| {
         if !targets.contains(&item) {
             targets.push(item);
         }
@@ -264,8 +264,8 @@ pub(super) fn keyword(
 /// Returns missing types in a record pattern.
 /// Only makes sense when there's a rest pattern in the record pattern.
 /// i.e. `let S {a, ..} = S {a: 1, b: 2}`
-pub(super) fn struct_rest_pat(
-    sema: &Semantics<'_, RootDatabase>,
+pub(super) fn struct_rest_pat<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     _config: &HoverConfig<'_>,
     pattern: &ast::RecordPat,
     edition: Edition,
@@ -278,8 +278,8 @@ pub(super) fn struct_rest_pat(
     // example, S {a: 1, b: 2, ..} when struct S {a: u32, b: u32}
 
     let mut res = HoverResult::default();
-    let mut targets: Vec<hir::ModuleDef> = Vec::new();
-    let mut push_new_def = |item: hir::ModuleDef| {
+    let mut targets: Vec<hir::ModuleDef<'db>> = Vec::new();
+    let mut push_new_def = |item: hir::ModuleDef<'db>| {
         if !targets.contains(&item) {
             targets.push(item);
         }
@@ -968,8 +968,8 @@ fn render_notable_trait(
     }
 }
 
-fn type_info(
-    sema: &Semantics<'_, RootDatabase>,
+fn type_info<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     config: &HoverConfig<'_>,
     ty: TypeInfo<'_>,
     edition: Edition,
@@ -981,8 +981,8 @@ fn type_info(
     let db = sema.db;
     let TypeInfo { original, adjusted } = ty;
     let mut res = HoverResult::default();
-    let mut targets: Vec<hir::ModuleDef> = Vec::new();
-    let mut push_new_def = |item: hir::ModuleDef| {
+    let mut targets: Vec<hir::ModuleDef<'db>> = Vec::new();
+    let mut push_new_def = |item: hir::ModuleDef<'db>| {
         if !targets.contains(&item) {
             targets.push(item);
         }
@@ -1027,8 +1027,8 @@ fn type_info(
     Some(res)
 }
 
-fn closure_ty(
-    sema: &Semantics<'_, RootDatabase>,
+fn closure_ty<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     config: &HoverConfig<'_>,
     TypeInfo { original, adjusted }: &TypeInfo<'_>,
     edition: Edition,
@@ -1051,8 +1051,8 @@ fn closure_ty(
     if captures_rendered.trim().is_empty() {
         "This closure captures nothing".clone_into(&mut captures_rendered);
     }
-    let mut targets: Vec<hir::ModuleDef> = Vec::new();
-    let mut push_new_def = |item: hir::ModuleDef| {
+    let mut targets: Vec<hir::ModuleDef<'db>> = Vec::new();
+    let mut push_new_def = |item: hir::ModuleDef<'db>| {
         if !targets.contains(&item) {
             targets.push(item);
         }
@@ -1275,8 +1275,8 @@ impl KeywordHint {
     }
 }
 
-fn keyword_hints(
-    sema: &Semantics<'_, RootDatabase>,
+fn keyword_hints<'db>(
+    sema: &Semantics<'db, RootDatabase>,
     token: &SyntaxToken,
     parent: syntax::SyntaxNode,
     edition: Edition,
@@ -1289,8 +1289,8 @@ fn keyword_hints(
             match ast::Expr::cast(parent).and_then(|site| sema.type_of_expr(&site)) {
                 // ignore the unit type ()
                 Some(ty) if !ty.adjusted.as_ref().unwrap_or(&ty.original).is_unit() => {
-                    let mut targets: Vec<hir::ModuleDef> = Vec::new();
-                    let mut push_new_def = |item: hir::ModuleDef| {
+                    let mut targets: Vec<hir::ModuleDef<'db>> = Vec::new();
+                    let mut push_new_def = |item: hir::ModuleDef<'db>| {
                         if !targets.contains(&item) {
                             targets.push(item);
                         }
