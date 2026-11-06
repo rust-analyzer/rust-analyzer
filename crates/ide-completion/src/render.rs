@@ -3823,7 +3823,7 @@ fn test() {
 //- minicore: option, result
 struct Vec<T>(T);
 
-impl Vec<T> {
+impl<T> Vec<T> {
     fn new() -> Self { loop {} }
     fn try_with_capacity(capacity: usize) -> Result<Self, ()> { loop {} }
     fn push(&mut self, value: T) { loop {} }
@@ -3844,7 +3844,7 @@ fn test() {
                 [
                     (
                         "new()",
-                        "fn() -> Vec<{unknown}>",
+                        "fn() -> Vec<T>",
                         Some(
                             CompletionRelevanceFn {
                                 has_params: false,
@@ -3855,7 +3855,7 @@ fn test() {
                     ),
                     (
                         "try_with_capacity(…)",
-                        "fn(usize) -> Result<Vec<{unknown}>, ()>",
+                        "fn(usize) -> Result<Vec<T>, ()>",
                         Some(
                             CompletionRelevanceFn {
                                 has_params: true,
@@ -3866,7 +3866,7 @@ fn test() {
                     ),
                     (
                         "pop(…)",
-                        "fn(&mut self) -> Option<{unknown}>",
+                        "fn(&mut self) -> Option<T>",
                         Some(
                             CompletionRelevanceFn {
                                 has_params: true,
@@ -3877,7 +3877,7 @@ fn test() {
                     ),
                     (
                         "push(…)",
-                        "fn(&mut self, {unknown})",
+                        "fn(&mut self, T)",
                         Some(
                             CompletionRelevanceFn {
                                 has_params: true,
@@ -3888,7 +3888,7 @@ fn test() {
                     ),
                     (
                         "push_within_capacity(…)",
-                        "fn(&mut self, {unknown}) -> Result<&mut {unknown}, {unknown}>",
+                        "fn(&mut self, T) -> Result<&mut T, T>",
                         Some(
                             CompletionRelevanceFn {
                                 has_params: true,
@@ -3899,7 +3899,7 @@ fn test() {
                     ),
                     (
                         "split_off(…)",
-                        "fn(&mut self, usize) -> Vec<{unknown}>",
+                        "fn(&mut self, usize) -> Vec<T>",
                         Some(
                             CompletionRelevanceFn {
                                 has_params: true,
@@ -4075,7 +4075,7 @@ fn test() {
 //- minicore: option, result
 struct Vec<T>(T);
 
-impl Vec<T> {
+impl<T> Vec<T> {
     fn new() -> Self { loop {} }
     fn try_with_capacity(capacity: usize) -> Result<Self, ()> { loop {} }
     fn push(&mut self, value: T) { loop {} }
@@ -4089,12 +4089,12 @@ fn test() {
 }
                 "#,
             expect![[r#"
-                fn new() fn() -> Vec<{unknown}> []
-                fn try_with_capacity(…) fn(usize) -> Result<Vec<{unknown}>, ()> []
-                me split_off(…) fn(&mut self, usize) -> Vec<{unknown}> []
-                me pop(…) fn(&mut self) -> Option<{unknown}> []
-                me push(…) fn(&mut self, {unknown}) []
-                me push_within_capacity(…) fn(&mut self, {unknown}) -> Result<&mut {unknown}, {unknown}> []
+                fn new() fn() -> Vec<T> []
+                fn try_with_capacity(…) fn(usize) -> Result<Vec<T>, ()> []
+                me split_off(…) fn(&mut self, usize) -> Vec<T> []
+                me pop(…) fn(&mut self) -> Option<T> []
+                me push(…) fn(&mut self, T) []
+                me push_within_capacity(…) fn(&mut self, T) -> Result<&mut T, T> []
             "#]],
         );
     }
