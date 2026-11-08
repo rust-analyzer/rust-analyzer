@@ -781,9 +781,8 @@ impl FunctionSignature {
         AttrFlags::legacy_const_generic_indices(db, id).as_deref()
     }
 
-    pub fn is_intrinsic(db: &dyn SourceDatabase, id: FunctionId) -> bool {
-        let data = FunctionSignature::of(db, id);
-        data.flags.contains(FnFlags::RUSTC_INTRINSIC)
+    pub fn is_intrinsic(&self) -> bool {
+        self.flags.contains(FnFlags::RUSTC_INTRINSIC)
     }
 }
 
