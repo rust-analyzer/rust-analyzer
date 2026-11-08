@@ -304,7 +304,7 @@ impl EnumSignature {
         }
     }
 }
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct ConstFlags: u8 {
         const HAS_BODY = 1 << 1;
@@ -367,7 +367,7 @@ impl ConstSignature {
     }
 }
 
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct StaticFlags: u8 {
         const HAS_BODY = 1 << 1;
@@ -443,7 +443,7 @@ impl StaticSignature {
     }
 }
 
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct ImplFlags: u8 {
         const NEGATIVE = 1 << 1;
@@ -509,7 +509,7 @@ impl ImplSignature {
     }
 }
 
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct TraitFlags: u16 {
         const RUSTC_HAS_INCOHERENT_INHERENT_IMPLS = 1 << 1;
