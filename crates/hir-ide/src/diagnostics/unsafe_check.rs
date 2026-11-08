@@ -411,9 +411,9 @@ impl<'db> UnsafeVisitor<'db> {
         let value_or_partial = self.resolver.resolve_path_in_value_ns(self.db, path, hygiene);
         if let Some(ResolveValueResult::ValueNs(ValueNs::StaticId(id))) = value_or_partial {
             let static_data = StaticSignature::of(self.db, id);
-            if static_data.flags.contains(StaticFlags::MUTABLE) {
+            if static_data.is_mut() {
                 self.on_unsafe_op(node, UnsafetyReason::MutableStatic);
-            } else if static_data.flags.contains(StaticFlags::EXTERN)
+            } else if static_data.is_extern()
                 && !static_data.flags.contains(StaticFlags::EXPLICIT_SAFE)
             {
                 self.on_unsafe_op(node, UnsafetyReason::ExternStatic);

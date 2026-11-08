@@ -443,6 +443,18 @@ impl StaticSignature {
     }
 }
 
+impl StaticSignature {
+    #[inline]
+    pub fn is_extern(&self) -> bool {
+        self.flags.contains(StaticFlags::EXTERN)
+    }
+
+    #[inline]
+    pub fn is_mut(&self) -> bool {
+        self.flags.contains(StaticFlags::MUTABLE)
+    }
+}
+
 bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct ImplFlags: u8 {
@@ -506,6 +518,11 @@ impl ImplSignature {
     #[inline]
     pub fn is_default(&self) -> bool {
         self.flags.contains(ImplFlags::DEFAULT)
+    }
+
+    #[inline]
+    pub fn is_unsafe(&self) -> bool {
+        self.flags.contains(ImplFlags::UNSAFE)
     }
 }
 
@@ -582,6 +599,18 @@ impl TraitSignature {
         let (store, source_map, generic_params) = lower_trait(db, loc.container, source, id);
 
         (Arc::new(TraitSignature { store, generic_params, flags, name }), source_map)
+    }
+}
+
+impl TraitSignature {
+    #[inline]
+    pub fn is_auto(&self) -> bool {
+        self.flags.contains(TraitFlags::AUTO)
+    }
+
+    #[inline]
+    pub fn is_unsafe(&self) -> bool {
+        self.flags.contains(TraitFlags::UNSAFE)
     }
 }
 

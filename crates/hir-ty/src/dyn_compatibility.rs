@@ -6,7 +6,7 @@ use hir_def::{
     AssocItemId, ConstId, FunctionId, GenericDefId, HasModule, TraitId, TypeAliasId,
     TypeOrConstParamId, TypeParamId,
     hir::generics::{GenericParams, LocalTypeOrConstParamId},
-    signatures::{FunctionSignature, TraitFlags, TraitSignature},
+    signatures::{FunctionSignature, TraitSignature},
     unstable_features::UnstableFeatures,
 };
 use rustc_hash::FxHashSet;
@@ -380,7 +380,7 @@ where
             polarity: PredicatePolarity::Positive,
         }) = pred
             && let trait_data = TraitSignature::of(db, pred_trait_ref.def_id.0)
-            && trait_data.flags.contains(TraitFlags::AUTO)
+            && trait_data.is_auto()
             && let rustc_type_ir::TyKind::Param(ParamTy { index: 0, .. }) =
                 pred_trait_ref.self_ty().kind()
         {

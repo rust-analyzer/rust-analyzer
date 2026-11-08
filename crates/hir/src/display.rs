@@ -10,8 +10,8 @@ use hir_def::{
     item_tree::FieldsShape,
     layout::ExternAbi,
     signatures::{
-        ConstSignature, FunctionSignature, ImplSignature, StaticFlags, StaticSignature, TraitFlags,
-        TraitSignature, TypeAliasSignature,
+        ConstSignature, FunctionSignature, ImplSignature, StaticSignature, TraitSignature,
+        TypeAliasSignature,
     },
     type_ref::{TypeBound, TypeRef, TypeRefId},
     visibility::Visibility,
@@ -883,7 +883,7 @@ impl<'db> HirDisplay<'db> for Static {
         write_visibility(self.module(f.db).id, self.visibility(f.db), f)?;
         let data = StaticSignature::of(f.db, self.id);
         f.write_str("static ")?;
-        if data.flags.contains(StaticFlags::MUTABLE) {
+        if data.is_mut() {
             f.write_str("mut ")?;
         }
         write!(f, "{}: ", data.name.display(f.db, f.edition()))?;
@@ -947,10 +947,10 @@ impl<'db> HirDisplay<'db> for Trait {
 fn write_trait_header<'db>(trait_: Trait, f: &mut HirFormatter<'_, 'db>) -> Result {
     write_visibility(trait_.module(f.db).id, trait_.visibility(f.db), f)?;
     let data = TraitSignature::of(f.db, trait_.id);
-    if data.flags.contains(TraitFlags::UNSAFE) {
+    if data.is_unsafe() {
         f.write_str("unsafe ")?;
     }
-    if data.flags.contains(TraitFlags::AUTO) {
+    if data.is_auto() {
         f.write_str("auto ")?;
     }
     write!(f, "trait {}", data.name.display(f.db, f.edition()))?;

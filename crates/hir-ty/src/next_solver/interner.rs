@@ -1642,8 +1642,7 @@ impl<'db> Interner for DbInterner<'db> {
     }
 
     fn trait_is_auto(self, trait_: Self::TraitId) -> bool {
-        let trait_data = TraitSignature::of(self.db(), trait_.0);
-        trait_data.flags.contains(TraitFlags::AUTO)
+        TraitSignature::of(self.db(), trait_.0).is_auto()
     }
 
     fn trait_is_alias(self, trait_: Self::TraitId) -> bool {
@@ -1923,7 +1922,7 @@ impl<'db> Interner for DbInterner<'db> {
     }
 
     fn trait_is_unsafe(self, trait_: Self::TraitId) -> bool {
-        TraitSignature::of(self.db(), trait_.0).flags.contains(TraitFlags::UNSAFE)
+        TraitSignature::of(self.db(), trait_.0).is_unsafe()
     }
 
     fn impl_self_is_guaranteed_unsized(self, _def_id: Self::ImplId) -> bool {

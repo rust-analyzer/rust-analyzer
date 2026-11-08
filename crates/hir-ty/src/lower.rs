@@ -30,7 +30,7 @@ use hir_def::{
     resolver::{HasResolver, LifetimeNs, Resolver, TypeNs},
     signatures::{
         ConstSignature, FunctionSignature, ImplSignature, StaticSignature, StructSignature,
-        TraitFlags, TraitSignature, TypeAliasFlags, TypeAliasSignature,
+        TraitSignature, TypeAliasFlags, TypeAliasSignature,
     },
     type_ref::{
         ConstRef, FnType, LifetimeRef, LifetimeRefId, PathId, TraitBoundModifier,
@@ -1062,9 +1062,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
                     match b.kind().skip_binder() {
                         rustc_type_ir::ClauseKind::Trait(t) => {
                             let id = t.def_id();
-                            let is_auto =
-                                TraitSignature::of(db, id.0).flags.contains(TraitFlags::AUTO);
-                            if is_auto {
+                            if TraitSignature::of(db, id.0).is_auto() {
                                 auto_traits.push(t.def_id().0);
                             } else {
                                 if principal.is_some() {

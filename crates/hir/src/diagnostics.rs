@@ -23,8 +23,7 @@ use hir_def::{
     },
     resolver::ValueNs,
     signatures::{
-        ConstSignature, FunctionSignature, ImplFlags, ImplSignature, TraitFlags, TraitSignature,
-        TypeAliasSignature,
+        ConstSignature, FunctionSignature, ImplSignature, TraitSignature, TypeAliasSignature,
     },
     type_ref::TypeRefId,
     unstable_features::UnstableFeatures,
@@ -983,11 +982,10 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
             .then(|| self.db.impl_trait(def))
             .flatten()
             .map(|trait_ref| trait_ref.instantiate_identity().skip_norm_wip().def_id.0);
-        let mut trait_is_unsafe = trait_.is_some_and(|trait_| {
-            TraitSignature::of(self.db, trait_).flags.contains(TraitFlags::UNSAFE)
-        });
+        let mut trait_is_unsafe =
+            trait_.is_some_and(|trait_| TraitSignature::of(self.db, trait_).is_unsafe());
         let impl_is_negative = impl_signature.is_negative();
-        let impl_is_unsafe = impl_signature.flags.contains(ImplFlags::UNSAFE);
+        let impl_is_unsafe = impl_signature.is_unsafe();
 
         let trait_is_unresolved = trait_.is_none() && trait_impl;
         if trait_is_unresolved {

@@ -68,9 +68,9 @@ use hir_def::{
     per_ns::PerNs,
     resolver::{HasResolver, Resolver},
     signatures::{
-        ConstSignature, EnumSignature, FunctionSignature, ImplFlags, ImplSignature, StaticFlags,
-        StaticSignature, StructFlags, StructSignature, TraitFlags, TraitSignature,
-        TypeAliasSignature, UnionSignature, VariantFields,
+        ConstSignature, EnumSignature, FunctionSignature, ImplSignature, StaticSignature,
+        StructFlags, StructSignature, TraitSignature, TypeAliasSignature, UnionSignature,
+        VariantFields,
     },
     src::HasSource as _,
     unstable_features::UnstableFeatures,
@@ -2177,7 +2177,7 @@ impl Static {
     }
 
     pub fn is_mut(self, db: &dyn HirDatabase) -> bool {
-        StaticSignature::of(db, self.id).flags.contains(StaticFlags::MUTABLE)
+        StaticSignature::of(db, self.id).is_mut()
     }
 
     pub fn value(self, db: &dyn HirDatabase) -> Option<ast::Expr> {
@@ -2263,11 +2263,11 @@ impl Trait {
     }
 
     pub fn is_auto(self, db: &dyn HirDatabase) -> bool {
-        TraitSignature::of(db, self.id).flags.contains(TraitFlags::AUTO)
+        TraitSignature::of(db, self.id).is_auto()
     }
 
     pub fn is_unsafe(&self, db: &dyn HirDatabase) -> bool {
-        TraitSignature::of(db, self.id).flags.contains(TraitFlags::UNSAFE)
+        TraitSignature::of(db, self.id).is_unsafe()
     }
 
     pub fn type_or_const_param_count(
@@ -3963,7 +3963,7 @@ impl Impl {
 
     pub fn is_unsafe(self, db: &dyn HirDatabase) -> bool {
         match self.id {
-            AnyImplId::ImplId(id) => ImplSignature::of(db, id).flags.contains(ImplFlags::UNSAFE),
+            AnyImplId::ImplId(id) => ImplSignature::of(db, id).is_unsafe(),
             AnyImplId::BuiltinDeriveImplId(_) => false,
         }
     }
