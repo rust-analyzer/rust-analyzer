@@ -3956,7 +3956,7 @@ impl Impl {
 
     pub fn is_negative(self, db: &dyn HirDatabase) -> bool {
         match self.id {
-            AnyImplId::ImplId(id) => ImplSignature::of(db, id).flags.contains(ImplFlags::NEGATIVE),
+            AnyImplId::ImplId(id) => ImplSignature::of(db, id).is_negative(),
             AnyImplId::BuiltinDeriveImplId(_) => false,
         }
     }
