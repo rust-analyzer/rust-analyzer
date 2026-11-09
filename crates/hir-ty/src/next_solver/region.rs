@@ -1,6 +1,9 @@
 //! Things related to regions.
 
-use hir_def::LifetimeParamId;
+use hir_def::{
+    GenericDefId, GenericParamId, LifetimeParamId,
+    hir::generics::{GenericParamDataRef, LifetimeParamData},
+};
 use intern::{Interned, InternedRef, impl_internable};
 use macros::GenericTypeVisitable;
 use rustc_type_ir::{
@@ -10,9 +13,12 @@ use rustc_type_ir::{
     relate::Relate,
 };
 
-use crate::next_solver::{
-    GenericArg, OutlivesPredicate, impl_foldable_for_interned_slice, impl_stored_interned,
-    interned_slice,
+use crate::{
+    db::HirDatabase,
+    next_solver::{
+        GenericArg, OutlivesPredicate, impl_foldable_for_interned_slice, impl_stored_interned,
+        interned_slice,
+    },
 };
 
 use super::{SolverDefId, interner::DbInterner};
@@ -167,6 +173,29 @@ pub struct EarlyParamRegion {
     // FIXME: See `ParamTy`.
     pub id: LifetimeParamId,
     pub index: u32,
+}
+
+impl EarlyParamRegion {
+    pub fn param_data<'db>(
+        self,
+        generics: &crate::generics::Generics<'db>,
+    ) -> (LifetimeParamId, &'db LifetimeParamData) {
+        match generics.iter(false).nth(self.index as usize) {
+            Some((
+                GenericParamId::LifetimeParamId(id),
+                GenericParamDataRef::LifetimeParamData(data),
+            )) => (id, data),
+            it => panic!(
+                "expected a type param for def {:?} at index {}, found {it:?}",
+                generics.def(),
+                self.index,
+            ),
+        }
+    }
+
+    pub fn param_id(self, db: &dyn HirDatabase, def: GenericDefId) -> LifetimeParamId {
+        self.param_data(&crate::generics::generics(db, def)).0
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, GenericTypeVisitable)]

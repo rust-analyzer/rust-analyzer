@@ -7,6 +7,7 @@
 //!
 //! So the monomorphization should be called even if the substitution is empty.
 
+use hir_def::GenericDefId;
 use rustc_type_ir::inherent::IntoKind;
 use rustc_type_ir::{
     FallibleTypeFolder, TypeFlags, TypeFoldable, TypeSuperFoldable, TypeVisitableExt,
@@ -35,6 +36,7 @@ use super::{MirBody, MirLowerError, Operand, OperandKind, Rvalue, StatementKind,
 struct Filler<'db> {
     infcx: InferCtxt<'db>,
     trait_env: ParamEnvAndCrate<'db>,
+    def: GenericDefId,
     subst: GenericArgs<'db>,
 }
 
@@ -74,7 +76,10 @@ impl<'db> FallibleTypeFolder<DbInterner<'db>> for Filler<'db> {
                 .get(param.index as usize)
                 .and_then(|arg| arg.ty())
                 .ok_or_else(|| {
-                    MirLowerError::GenericArgNotProvided(param.id.into(), self.subst.store())
+                    MirLowerError::GenericArgNotProvided(
+                        param.param_id(self.infcx.interner.db, self.def).into(),
+                        self.subst.store(),
+                    )
                 })?),
             _ => ty.try_super_fold_with(self),
         }
@@ -85,7 +90,12 @@ impl<'db> FallibleTypeFolder<DbInterner<'db>> for Filler<'db> {
             return ct.try_super_fold_with(self);
         };
         self.subst.as_slice().get(param.index as usize).and_then(|arg| arg.konst()).ok_or_else(
-            || MirLowerError::GenericArgNotProvided(param.id.into(), self.subst.store()),
+            || {
+                MirLowerError::GenericArgNotProvided(
+                    param.param_id(self.infcx.interner.db, self.def).into(),
+                    self.subst.store(),
+                )
+            },
         )
     }
 
@@ -94,16 +104,26 @@ impl<'db> FallibleTypeFolder<DbInterner<'db>> for Filler<'db> {
             return Ok(region);
         };
         self.subst.as_slice().get(param.index as usize).and_then(|arg| arg.region()).ok_or_else(
-            || MirLowerError::GenericArgNotProvided(param.id.into(), self.subst.store()),
+            || {
+                MirLowerError::GenericArgNotProvided(
+                    param.param_id(self.infcx.interner.db, self.def).into(),
+                    self.subst.store(),
+                )
+            },
         )
     }
 }
 
 impl<'db> Filler<'db> {
-    fn new(db: &'db dyn HirDatabase, env: ParamEnvAndCrate<'db>, subst: GenericArgs<'db>) -> Self {
+    fn new(
+        db: &'db dyn HirDatabase,
+        env: ParamEnvAndCrate<'db>,
+        def: GenericDefId,
+        subst: GenericArgs<'db>,
+    ) -> Self {
         let interner = DbInterner::new_with(db, env.krate);
         let infcx = interner.infer_ctxt().build(TypingMode::PostAnalysis);
-        Self { infcx, trait_env: env, subst }
+        Self { infcx, trait_env: env, def, subst }
     }
 
     fn fill_ty(&mut self, t: &mut StoredTy) -> Result<(), MirLowerError<'db>> {
@@ -242,7 +262,11 @@ pub fn monomorphized_mir_body_query<'db>(
     subst: StoredGenericArgs,
     trait_env: StoredParamEnvAndCrate,
 ) -> Result<MirBody<'db>, MirLowerError<'db>> {
-    let mut filler = Filler::new(db, trait_env.as_ref(db), subst.as_ref());
+    let generic_def = match owner {
+        InferBodyId::DefWithBodyId(def) => def.generic_def(db),
+        InferBodyId::AnonConstId(konst) => konst.loc(db).owner.generic_def(db),
+    };
+    let mut filler = Filler::new(db, trait_env.as_ref(db), generic_def, subst.as_ref());
     let body = db.mir_body(owner)?;
     let mut body = (*body).clone();
     filler.fill_body(&mut body)?;
@@ -266,7 +290,8 @@ pub fn monomorphized_mir_body_for_closure_query<'db>(
     subst: StoredGenericArgs,
     trait_env: StoredParamEnvAndCrate,
 ) -> Result<MirBody<'db>, MirLowerError<'db>> {
-    let mut filler = Filler::new(db, trait_env.as_ref(db), subst.as_ref());
+    let generic_def = closure.loc(db).owner.generic_def(db);
+    let mut filler = Filler::new(db, trait_env.as_ref(db), generic_def, subst.as_ref());
     let body = db.mir_body_for_closure(closure)?;
     let mut body = (*body).clone();
     filler.fill_body(&mut body)?;

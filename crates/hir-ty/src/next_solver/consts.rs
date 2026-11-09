@@ -4,7 +4,10 @@ mod valtree;
 
 use std::hash::Hash;
 
-use hir_def::ConstParamId;
+use hir_def::{
+    ConstParamId, GenericDefId, GenericParamId,
+    hir::generics::{ConstParamData, GenericParamDataRef},
+};
 use intern::{Interned, InternedRef, impl_internable};
 use macros::{GenericTypeVisitable, TypeFoldable, TypeVisitable};
 use rustc_abi::TargetDataLayout;
@@ -17,6 +20,7 @@ use rustc_type_ir::{
 
 use crate::{
     ParamEnvAndCrate,
+    db::HirDatabase,
     next_solver::{
         AllocationData, ClauseKind, ParamEnv, impl_foldable_for_interned_slice,
         impl_stored_interned, interned_slice,
@@ -194,6 +198,26 @@ impl std::fmt::Debug for ParamConst {
 }
 
 impl ParamConst {
+    pub fn param_data<'db>(
+        self,
+        generics: &crate::generics::Generics<'db>,
+    ) -> (ConstParamId, &'db ConstParamData) {
+        match generics.iter(false).nth(self.index as usize) {
+            Some((GenericParamId::ConstParamId(id), GenericParamDataRef::ConstParamData(data))) => {
+                (id, data)
+            }
+            it => panic!(
+                "expected a type param for def {:?} at index {}, found {it:?}",
+                generics.def(),
+                self.index,
+            ),
+        }
+    }
+
+    pub fn param_id(self, db: &dyn HirDatabase, def: GenericDefId) -> ConstParamId {
+        self.param_data(&crate::generics::generics(db, def)).0
+    }
+
     pub fn find_const_ty_from_env<'db>(self, env: ParamEnv<'db>) -> Ty<'db> {
         let mut candidates = env.clauses.iter().filter_map(|clause| {
             // `ConstArgHasType` are never desugared to be higher ranked.
