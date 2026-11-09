@@ -84,8 +84,6 @@ declare_enum!(
     PartialOrd => [partial_cmp],
     Eq => [],
     PartialEq => [eq],
-    CoerceUnsized => [],
-    DispatchFromDyn => [],
     Reborrow => [],
 );
 
@@ -101,16 +99,9 @@ impl BuiltinDeriveImplTrait {
             BuiltinDeriveImplTrait::PartialOrd => lang_items.PartialOrdDerive,
             BuiltinDeriveImplTrait::Eq => lang_items.EqDerive,
             BuiltinDeriveImplTrait::PartialEq => lang_items.PartialEqDerive,
-            BuiltinDeriveImplTrait::CoerceUnsized | BuiltinDeriveImplTrait::DispatchFromDyn => {
-                lang_items.CoercePointeeDerive
-            }
             BuiltinDeriveImplTrait::Reborrow => lang_items.ReborrowDerive,
         }
     }
-}
-
-pub(crate) fn has_builtin_derive_impl(derive: BuiltinDeriveExpander) -> bool {
-    !matches!(derive, BuiltinDeriveExpander::CoerceShared)
 }
 
 impl BuiltinDeriveImplMethod {
@@ -126,27 +117,19 @@ impl BuiltinDeriveImplMethod {
     }
 }
 
-pub(crate) fn with_derive_traits(
-    derive: BuiltinDeriveExpander,
-    mut f: impl FnMut(BuiltinDeriveImplTrait),
-) {
-    debug_assert!(has_builtin_derive_impl(derive));
+pub(crate) fn derive_trait(derive: BuiltinDeriveExpander) -> Option<BuiltinDeriveImplTrait> {
     match derive {
-        BuiltinDeriveExpander::Copy => f(BuiltinDeriveImplTrait::Copy),
-        BuiltinDeriveExpander::Clone => f(BuiltinDeriveImplTrait::Clone),
-        BuiltinDeriveExpander::Default => f(BuiltinDeriveImplTrait::Default),
-        BuiltinDeriveExpander::Debug => f(BuiltinDeriveImplTrait::Debug),
-        BuiltinDeriveExpander::Hash => f(BuiltinDeriveImplTrait::Hash),
-        BuiltinDeriveExpander::Ord => f(BuiltinDeriveImplTrait::Ord),
-        BuiltinDeriveExpander::PartialOrd => f(BuiltinDeriveImplTrait::PartialOrd),
-        BuiltinDeriveExpander::Eq => f(BuiltinDeriveImplTrait::Eq),
-        BuiltinDeriveExpander::PartialEq => f(BuiltinDeriveImplTrait::PartialEq),
-        BuiltinDeriveExpander::CoercePointee => {
-            f(BuiltinDeriveImplTrait::CoerceUnsized);
-            f(BuiltinDeriveImplTrait::DispatchFromDyn);
-        }
-        BuiltinDeriveExpander::Reborrow => f(BuiltinDeriveImplTrait::Reborrow),
-        BuiltinDeriveExpander::CoerceShared => {}
+        BuiltinDeriveExpander::Copy => Some(BuiltinDeriveImplTrait::Copy),
+        BuiltinDeriveExpander::Clone => Some(BuiltinDeriveImplTrait::Clone),
+        BuiltinDeriveExpander::Default => Some(BuiltinDeriveImplTrait::Default),
+        BuiltinDeriveExpander::Debug => Some(BuiltinDeriveImplTrait::Debug),
+        BuiltinDeriveExpander::Hash => Some(BuiltinDeriveImplTrait::Hash),
+        BuiltinDeriveExpander::Ord => Some(BuiltinDeriveImplTrait::Ord),
+        BuiltinDeriveExpander::PartialOrd => Some(BuiltinDeriveImplTrait::PartialOrd),
+        BuiltinDeriveExpander::Eq => Some(BuiltinDeriveImplTrait::Eq),
+        BuiltinDeriveExpander::PartialEq => Some(BuiltinDeriveImplTrait::PartialEq),
+        BuiltinDeriveExpander::Reborrow => Some(BuiltinDeriveImplTrait::Reborrow),
+        BuiltinDeriveExpander::CoercePointee | BuiltinDeriveExpander::CoerceShared => None,
     }
 }
 

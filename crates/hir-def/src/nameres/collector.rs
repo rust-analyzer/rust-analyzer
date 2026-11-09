@@ -12,7 +12,7 @@ use hir_expand::{
     AttrMacroAttrIds, EditionedFileId, ErasedAstId, ExpandTo, HirFileId, InFile, MacroCallId,
     MacroCallKind, MacroDefId, MacroDefKind,
     attrs::{Attr, AttrId},
-    builtin::{BuiltinDeriveExpander, find_builtin_attr, find_builtin_derive, find_builtin_macro},
+    builtin::{find_builtin_attr, find_builtin_derive, find_builtin_macro},
     mod_path::{ModPath, PathKind},
     name::{AsName, Name},
     proc_macro::{CustomProcMacroExpander, ProcMacros},
@@ -33,7 +33,9 @@ use crate::{
     ImplLoc, Intern, ItemContainerId, Lookup, Macro2Id, Macro2Loc, MacroExpander, MacroId,
     MacroRulesId, MacroRulesLoc, MacroRulesLocFlags, ModuleDefId, ModuleId, ProcMacroId,
     ProcMacroLoc, StaticLoc, StructLoc, TraitLoc, TypeAliasLoc, UnionLoc, UnresolvedMacro, UseId,
-    UseLoc, file_item_tree,
+    UseLoc,
+    builtin_derive::BuiltinDeriveImplTrait,
+    file_item_tree,
     item_scope::{GlobId, ImportId, ImportOrExternCrate, PerNsGlobImports},
     item_tree::{
         self, Attrs, AttrsOrCfg, ImportAlias, ImportKind, ItemTree, ItemTreeAstId, Macro2,
@@ -219,7 +221,7 @@ enum MacroDirectiveKind<'db> {
 #[derive(Debug)]
 struct DeferredBuiltinDerive {
     call_id: MacroCallId,
-    derive: BuiltinDeriveExpander,
+    derive_trait: BuiltinDeriveImplTrait,
     module_id: ModuleId,
     depth: u32,
     container: ItemContainerId,
@@ -1599,16 +1601,15 @@ impl<'db> DefCollector<'db> {
                                         if super::enable_builtin_derive_fast_path()
                                             && let MacroDefKind::BuiltInDerive(_, builtin_derive) =
                                                 def_id.kind
-                                            && crate::builtin_derive::has_builtin_derive_impl(
-                                                builtin_derive,
-                                            )
+                                            && let Some(derive_trait) =
+                                                crate::builtin_derive::derive_trait(builtin_derive)
                                         {
                                             self.deferred_builtin_derives
                                                 .entry(ast_id_without_path.upcast())
                                                 .or_default()
                                                 .push(DeferredBuiltinDerive {
                                                     call_id,
-                                                    derive: builtin_derive,
+                                                    derive_trait,
                                                     module_id: directive.module_id,
                                                     container: directive.container,
                                                     depth: directive.depth,
@@ -1917,34 +1918,32 @@ impl ModCollector<'_, '_> {
                 };
                 let module = &mut def_map.modules[module_id];
                 for deferred_derive in deferred_derives {
-                    crate::builtin_derive::with_derive_traits(deferred_derive.derive, |trait_| {
-                        let impl_id = BuiltinDeriveImplId::new(
-                            db,
-                            BuiltinDeriveImplLoc {
-                                adt: id,
-                                trait_,
-                                derive_attr_id: deferred_derive.derive_attr_id,
-                                derive_index: deferred_derive.derive_index,
-                            },
-                        );
-                        module.scope.define_builtin_derive_impl(impl_id);
-                        module.scope.set_derive_macro_invoc(
-                            ast_id,
-                            Either::Right(impl_id),
-                            deferred_derive.derive_attr_id,
-                            deferred_derive.derive_index as usize,
-                        );
-                        // Change its helper attributes to the new id.
-                        if let Some(derive_helpers) =
-                            def_map.derive_helpers_in_scope.get_mut(&ast_id.map(|it| it.upcast()))
+                    let impl_id = BuiltinDeriveImplId::new(
+                        db,
+                        BuiltinDeriveImplLoc {
+                            adt: id,
+                            trait_: deferred_derive.derive_trait,
+                            derive_attr_id: deferred_derive.derive_attr_id,
+                            derive_index: deferred_derive.derive_index,
+                        },
+                    );
+                    module.scope.define_builtin_derive_impl(impl_id);
+                    module.scope.set_derive_macro_invoc(
+                        ast_id,
+                        Either::Right(impl_id),
+                        deferred_derive.derive_attr_id,
+                        deferred_derive.derive_index as usize,
+                    );
+                    // Change its helper attributes to the new id.
+                    if let Some(derive_helpers) =
+                        def_map.derive_helpers_in_scope.get_mut(&ast_id.map(|it| it.upcast()))
+                    {
+                        for (_, _, call_id) in
+                            &mut derive_helpers[deferred_derive.helpers_range.clone()]
                         {
-                            for (_, _, call_id) in
-                                &mut derive_helpers[deferred_derive.helpers_range.clone()]
-                            {
-                                *call_id = Either::Right(impl_id);
-                            }
+                            *call_id = Either::Right(impl_id);
                         }
-                    });
+                    }
                 }
             };
         let update_def =
