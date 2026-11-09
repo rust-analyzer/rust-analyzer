@@ -410,8 +410,10 @@ fn receiver_is_dispatchable<'db>(
         parent: trait_.into(),
         local_id: LocalTypeOrConstParamId::from_raw(la_arena::RawIdx::from_u32(0)),
     });
-    let self_param_ty =
-        Ty::new(interner, rustc_type_ir::TyKind::Param(ParamTy { index: 0, id: self_param_id }));
+    let self_param_ty = Ty::new(
+        interner,
+        rustc_type_ir::TyKind::Param(ParamTy { index: 0, id_fixme: self_param_id }),
+    );
 
     // `self: Self` can't be dispatched on, but this is already considered dyn-compatible
     // See rustc's comment on https://github.com/rust-lang/rust/blob/3f121b9461cce02a703a0e7e450568849dfaa074/compiler/rustc_trait_selection/src/traits/object_safety.rs#L433-L437

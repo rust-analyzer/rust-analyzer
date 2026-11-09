@@ -105,7 +105,7 @@ impl<'db> Ty<'db> {
     }
 
     pub fn new_param(interner: DbInterner<'db>, id: TypeParamId, index: u32) -> Self {
-        Ty::new(interner, TyKind::Param(ParamTy { id, index }))
+        Ty::new(interner, TyKind::Param(ParamTy { id_fixme: id, index }))
     }
 
     pub fn new_placeholder(interner: DbInterner<'db>, placeholder: PlaceholderType<'db>) -> Self {
@@ -1448,13 +1448,13 @@ pub struct ParamTy {
     // FIXME: I'm not pleased with this. Ideally a `Param` should only know its index - the defining item
     // is known from the `EarlyBinder`. This should also be beneficial for memory usage. But code currently
     // assumes it can get the definition from `Param` alone - so that's what we got.
-    pub id: TypeParamId,
+    pub id_fixme: TypeParamId,
     pub index: u32,
 }
 
 impl ParamTy {
     pub fn to_ty<'db>(self, interner: DbInterner<'db>) -> Ty<'db> {
-        Ty::new_param(interner, self.id, self.index)
+        Ty::new_param(interner, self.id_fixme, self.index)
     }
 
     pub fn param_data<'db>(

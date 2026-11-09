@@ -171,7 +171,7 @@ pub type PlaceholderRegion<'db> = rustc_type_ir::PlaceholderRegion<DbInterner<'d
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 pub struct EarlyParamRegion {
     // FIXME: See `ParamTy`.
-    pub id: LifetimeParamId,
+    pub id_fixme: LifetimeParamId,
     pub index: u32,
 }
 

@@ -128,11 +128,13 @@ impl<'a, 'db> ConfirmContext<'a, 'db> {
             |index, id, _| match id {
                 GenericParamId::TypeParamId(id) => Ty::new_param(self.interner(), id, index).into(),
                 GenericParamId::ConstParamId(id) => {
-                    Const::new_param(self.interner(), ParamConst { id, index }).into()
+                    Const::new_param(self.interner(), ParamConst { id_fixme: id, index }).into()
                 }
-                GenericParamId::LifetimeParamId(id) => {
-                    Region::new_early_param(self.interner(), EarlyParamRegion { id, index }).into()
-                }
+                GenericParamId::LifetimeParamId(id) => Region::new_early_param(
+                    self.interner(),
+                    EarlyParamRegion { id_fixme: id, index },
+                )
+                .into(),
             },
         );
         let illegal_sized_bound = self.predicates_require_illegal_sized_bound(

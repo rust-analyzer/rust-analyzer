@@ -694,7 +694,7 @@ fn write_projection<'db>(
         {
             // FIXME: We shouldn't use `param.id`, it should be removed. We should know the
             // `GenericDefId` from the formatted type (store it inside the `HirFormatter`).
-            let bounds = GenericPredicates::query_all(f.db, param.id.parent())
+            let bounds = GenericPredicates::query_all(f.db, param.id_fixme.parent())
                 .iter_identity()
                 .map(Unnormalized::skip_norm_wip)
                 .filter(|wc| {
@@ -759,9 +759,9 @@ impl<'db> HirDisplay<'db> for Const<'db> {
             }
             ConstKind::Infer(..) => write!(f, "#c#"),
             ConstKind::Param(param) => {
-                let generics = GenericParams::of(f.db, param.id.parent());
-                let param_data = &generics[param.id.local_id()];
-                f.start_location_link_generic(param.id.into());
+                let generics = GenericParams::of(f.db, param.id_fixme.parent());
+                let param_data = &generics[param.id_fixme.local_id()];
+                f.start_location_link_generic(param.id_fixme.into());
                 write!(f, "{}", param_data.name().unwrap().display(f.db, f.edition()))?;
                 f.end_location_link();
                 Ok(())
@@ -1661,12 +1661,12 @@ impl<'db> HirDisplay<'db> for Ty<'db> {
             TyKind::Param(param) => {
                 // FIXME: We should not access `param.id`, it should be removed, and we should know the
                 // parent from the formatted type.
-                let generics = GenericParams::of(db, param.id.parent());
-                let param_data = &generics[param.id.local_id()];
+                let generics = GenericParams::of(db, param.id_fixme.parent());
+                let param_data = &generics[param.id_fixme.local_id()];
                 match param_data {
                     TypeOrConstParamData::TypeParamData(p) => match p.provenance {
                         TypeParamProvenance::TypeParamList | TypeParamProvenance::TraitSelf => {
-                            f.start_location_link_generic(param.id.into());
+                            f.start_location_link_generic(param.id_fixme.into());
                             write!(
                                 f,
                                 "{}",
@@ -1678,17 +1678,18 @@ impl<'db> HirDisplay<'db> for Ty<'db> {
                             f.end_location_link();
                         }
                         TypeParamProvenance::ArgumentImplTrait => {
-                            let bounds = GenericPredicates::query_all(f.db, param.id.parent())
-                                .iter_identity()
-                                .map(Unnormalized::skip_norm_wip)
-                                .filter(|wc| match wc.kind().skip_binder() {
-                                    ClauseKind::Trait(tr) => tr.self_ty() == *self,
-                                    ClauseKind::Projection(proj) => proj.self_ty() == *self,
-                                    ClauseKind::TypeOutlives(to) => to.0 == *self,
-                                    _ => false,
-                                })
-                                .collect::<Vec<_>>();
-                            let krate = param.id.parent().module(db).krate(db);
+                            let bounds =
+                                GenericPredicates::query_all(f.db, param.id_fixme.parent())
+                                    .iter_identity()
+                                    .map(Unnormalized::skip_norm_wip)
+                                    .filter(|wc| match wc.kind().skip_binder() {
+                                        ClauseKind::Trait(tr) => tr.self_ty() == *self,
+                                        ClauseKind::Projection(proj) => proj.self_ty() == *self,
+                                        ClauseKind::TypeOutlives(to) => to.0 == *self,
+                                        _ => false,
+                                    })
+                                    .collect::<Vec<_>>();
+                            let krate = param.id_fixme.parent().module(db).krate(db);
                             write_bounds_like_dyn_trait_with_prefix(
                                 f,
                                 "impl",
@@ -1700,7 +1701,7 @@ impl<'db> HirDisplay<'db> for Ty<'db> {
                         }
                     },
                     TypeOrConstParamData::ConstParamData(p) => {
-                        f.start_location_link_generic(param.id.into());
+                        f.start_location_link_generic(param.id_fixme.into());
                         write!(f, "{}", p.name.display(f.db, f.edition()))?;
                         f.end_location_link();
                     }
@@ -2321,9 +2322,9 @@ impl<'db> HirDisplay<'db> for Region<'db> {
     fn hir_fmt(&self, f: &mut HirFormatter<'_, 'db>) -> Result {
         match self.kind() {
             RegionKind::ReEarlyParam(param) => {
-                let generics = GenericParams::of(f.db, param.id.parent);
-                let param_data = &generics[param.id.local_id];
-                f.start_location_link_generic(param.id.into());
+                let generics = GenericParams::of(f.db, param.id_fixme.parent);
+                let param_data = &generics[param.id_fixme.local_id];
+                f.start_location_link_generic(param.id_fixme.into());
                 write!(f, "{}", param_data.name.display(f.db, f.edition()))?;
                 f.end_location_link();
                 Ok(())

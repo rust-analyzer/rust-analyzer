@@ -551,7 +551,7 @@ impl<'db, 'a> TyLoweringContext<'db, 'a> {
                     id.parent,
                 )
             } else {
-                Region::new_early_param(self.interner, EarlyParamRegion { id, index })
+                Region::new_early_param(self.interner, EarlyParamRegion { id_fixme: id, index })
             }
         }
     }
@@ -2926,7 +2926,7 @@ fn push_const_arg_has_type_predicates<'db>(
             *const_param_tys.get_or_insert_with(|| const_param_types(db, generics.def()));
         predicates.push(Clause(
             ClauseKind::ConstArgHasType(
-                Const::new_param(interner, ParamConst { id: param_id, index: param_index }),
+                Const::new_param(interner, ParamConst { id_fixme: param_id, index: param_index }),
                 const_param_tys.get(param_id.local_id()),
             )
             .upcast(interner),

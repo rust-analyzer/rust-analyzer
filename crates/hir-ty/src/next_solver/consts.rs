@@ -187,7 +187,7 @@ pub type PlaceholderConst<'db> = rustc_type_ir::PlaceholderConst<DbInterner<'db>
 #[derive(Copy, Clone, Hash, Eq, PartialEq)]
 pub struct ParamConst {
     // FIXME: See `ParamTy`.
-    pub id: ConstParamId,
+    pub id_fixme: ConstParamId,
     pub index: u32,
 }
 
