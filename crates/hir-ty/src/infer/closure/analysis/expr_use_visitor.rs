@@ -1135,7 +1135,14 @@ impl<'a, 'db, D: Delegate<'db>> ExprUseVisitor<'a, 'db, D> {
     }
 
     fn error_reported_in_ty(&self, ty: Ty<'db>) -> Result {
-        if ty.is_ty_error() { Err(ErrorGuaranteed) } else { Ok(()) }
+        // `insert_type_vars_shallow` replaces type errors with dummy vars, so abort on them
+        if ty.is_ty_error()
+            || ty.is_ty_var() && self.cx.vars_emitted_type_must_be_known_for.contains(&ty.into())
+        {
+            Err(ErrorGuaranteed)
+        } else {
+            Ok(())
+        }
     }
 }
 

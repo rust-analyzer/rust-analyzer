@@ -327,6 +327,25 @@ fn main() {
     }
 
     #[test]
+    fn mismatched_tuple_pattern_does_not_panic() {
+        check_with_config(
+            InlayHintsConfig { closure_capture_hints: true, ..DISABLED_CONFIG },
+            r#"
+//- minicore: fn
+struct String;
+struct Foo { x: String }
+
+fn main() {
+    let foo = Foo { x: String };
+    let closure = || {
+        let (_, t2) = foo.x;
+    };
+}
+"#,
+        );
+    }
+
+    #[test]
     fn move_token() {
         check_with_config(
             InlayHintsConfig { closure_capture_hints: true, ..DISABLED_CONFIG },
