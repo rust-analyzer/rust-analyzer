@@ -413,6 +413,20 @@ fn rpit<'a: 'b, 'b: 'a>() -> impl Sized {
     );
 }
 
+/// A recursive opaque has a self-referential hidden type, which inference gives up on.
+#[test]
+fn self_referential_opaque_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn f() -> Option<impl Sized> {
+    let Some(_) = f();
+    Some(f())
+}
+"#,
+    );
+}
+
 /// Synthetic control: nothing opaque is involved, so the diagnostic must stay.
 #[test]
 fn non_exhaustive_let_still_reported() {
@@ -422,6 +436,71 @@ fn non_exhaustive_let_still_reported() {
 fn f(o: Option<u8>) {
     let Some(_x) = o;
       //^^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+}
+"#,
+    );
+}
+
+/// Bailing out everywhere would fix the panic but lose this diagnostic, so revealing the hidden
+/// type has to keep working.
+#[test]
+fn revealed_opaque_keeps_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized
+enum E { A, B }
+fn rpit<'a: 'b, 'b: 'a>() -> impl Sized {
+    let E::A = rpit::<'b, 'a>();
+      //^^^^ 💡 error: non-exhaustive pattern: `B` not covered
+    E::A
+}
+"#,
+    );
+}
+
+#[test]
+fn revealed_opaque_inside_adt_keeps_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn h() -> Option<impl Sized> {
+    let Some(()) = h();
+      //^^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+    Some(())
+}
+"#,
+    );
+}
+
+/// The hidden type carries an erased region while the pattern type carries an inference error
+/// region, so comparing the revealed type with the pattern type for equality drops the
+/// diagnostic. This is what `same_ctor_shape` is for.
+#[test]
+fn revealed_opaque_with_region_keeps_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn g<'a>(x: &'a ()) -> Option<impl Sized + 'a> {
+    let Some(_) = g(x);
+      //^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+    Some(x)
+}
+"#,
+    );
+}
+
+/// The match counterpart of `ill_typed_opaque_scrutinee_does_not_crash`: the revealed type and
+/// the pattern type disagree, so analyzing them together would produce a false diagnostic.
+#[test]
+fn ill_typed_match_on_opaque_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized
+enum E { A, B }
+fn rpit<'a: 'b, 'b: 'a>() -> impl Sized {
+    match rpit::<'b, 'a>() {
+        E::A => {}
+    }
 }
 "#,
     );
