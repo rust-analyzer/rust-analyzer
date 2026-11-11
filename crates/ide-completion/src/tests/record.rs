@@ -590,6 +590,54 @@ enum Foo {
             kw pub(super)
         "#]],
     );
+
+    check_edit(
+        "span: Span,",
+        r#"
+struct Foo {
+    data: i32,
+    span: Span,
+}
+struct Bar {
+    data: f32,
+    sp$0
+}
+"#,
+        r#"
+struct Foo {
+    data: i32,
+    span: Span,
+}
+struct Bar {
+    data: f32,
+    span: Span,
+}
+"#,
+    );
+
+    check_edit(
+        "span: Span,",
+        r#"
+struct Foo {
+    data: i32,
+    span: Span,
+}
+struct Bar {
+    data: f32,
+    pub sp$0
+}
+"#,
+        r#"
+struct Foo {
+    data: i32,
+    span: Span,
+}
+struct Bar {
+    data: f32,
+    pub span: Span,
+}
+"#,
+    );
 }
 
 #[test]

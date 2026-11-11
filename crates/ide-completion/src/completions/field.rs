@@ -104,12 +104,7 @@ fn complete_record_fields(acc: &mut Completions, ctx: &CompletionContext<'_, '_>
     fields.retain(|_, name| !current.contains(name.text()));
 
     for text in fields.into_keys() {
-        CompletionItem::new(
-            CompletionItemKind::Binding,
-            field.syntax().text_range(),
-            text,
-            ctx.edition,
-        )
-        .add_to(acc, ctx.db);
+        CompletionItem::new(CompletionItemKind::Binding, ctx.source_range(), text, ctx.edition)
+            .add_to(acc, ctx.db);
     }
 }
