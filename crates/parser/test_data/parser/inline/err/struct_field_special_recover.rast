@@ -1,0 +1,47 @@
+SOURCE_FILE
+  STRUCT
+    STRUCT_KW "struct"
+    WHITESPACE " "
+    NAME
+      IDENT "S"
+    WHITESPACE " "
+    RECORD_FIELD_LIST
+      L_CURLY "{"
+      WHITESPACE " "
+      RECORD_FIELD
+        NAME
+          IDENT "a"
+      WHITESPACE " "
+      RECORD_FIELD
+        NAME
+          IDENT "b"
+        COLON ":"
+        WHITESPACE " "
+        PATH_TYPE
+          PATH
+            PATH_SEGMENT
+              NAME_REF
+                IDENT "i32"
+      WHITESPACE " "
+      RECORD_FIELD
+        NAME
+          IDENT "c"
+        COLON ":"
+        WHITESPACE " "
+        PATH_TYPE
+          PATH
+            PATH
+              PATH_SEGMENT
+                NAME_REF
+                  IDENT "x"
+            COLON2 "::"
+            PATH_SEGMENT
+              NAME_REF
+                IDENT "Ty"
+      WHITESPACE " "
+      R_CURLY "}"
+  WHITESPACE "\n"
+error 12: expected COLON
+error 12: expected type
+error 12: expected COMMA
+error 19: expected COMMA

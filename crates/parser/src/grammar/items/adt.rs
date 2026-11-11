@@ -169,7 +169,13 @@ pub(crate) fn record_field_list(p: &mut Parser<'_>) {
         if p.at(IDENT) {
             name(p);
             p.expect(T![:]);
-            types::type_(p);
+            if p.at(IDENT) && p.nth(1) == T![:] && !p.nth_at(1, T![::]) {
+                // test_err struct_field_special_recover
+                // struct S { a b: i32 c: x::Ty }
+                p.error("expected type");
+            } else {
+                types::type_(p);
+            }
             // test record_field_default_values
             // struct S { f: f32 = 0.0 }
             if p.eat(T![=]) {
