@@ -463,6 +463,15 @@ fn main() {
     format_args!(r#"hashed \{here} arg"#);
     format_args!("plain {here} arg");
 }
+fn showcase(param: &str) {
+    format_args!("{param}");
+}
+fn format_showcase(param: &str, param2: &str) {
+    let non_param = "local variable";
+
+    format_args!("Direct: {param} {param2} {non_param}");
+    format_args!("Indirect: {} {} {}", param, param2, non_param);
+}
 "####,
         expect_file!["./test_data/highlight_raw_string_format_specifiers.html"],
         false,

@@ -1,6 +1,5 @@
 //! Syntax highlighting for format macro strings.
 use ide_db::{
-    SymbolKind,
     defs::Definition,
     syntax_helpers::format_string::{FormatSpecifier, is_format_string, lex_format_specifiers},
 };
@@ -32,8 +31,6 @@ pub(super) fn highlight_format_string(
                 });
             }
         });
-
-        return;
     }
 
     if let Some(parts) = sema.as_format_args_parts(string) {
@@ -50,7 +47,7 @@ pub(super) fn highlight_format_string(
 }
 
 fn highlight_format_specifier(kind: FormatSpecifier) -> Option<HlTag> {
-    Some(match kind {
+    match kind {
         FormatSpecifier::Open
         | FormatSpecifier::Close
         | FormatSpecifier::Colon
@@ -61,11 +58,11 @@ fn highlight_format_specifier(kind: FormatSpecifier) -> Option<HlTag> {
         | FormatSpecifier::DollarSign
         | FormatSpecifier::Dot
         | FormatSpecifier::Asterisk
-        | FormatSpecifier::QuestionMark => HlTag::FormatSpecifier,
+        | FormatSpecifier::QuestionMark => Some(HlTag::FormatSpecifier),
 
-        FormatSpecifier::Integer | FormatSpecifier::Zero => HlTag::NumericLiteral,
+        FormatSpecifier::Integer | FormatSpecifier::Zero => Some(HlTag::NumericLiteral),
 
-        FormatSpecifier::Identifier => HlTag::Symbol(SymbolKind::Local),
-        FormatSpecifier::Escape => HlTag::EscapeSequence,
-    })
+        FormatSpecifier::Identifier => None,
+        FormatSpecifier::Escape => Some(HlTag::EscapeSequence),
+    }
 }
