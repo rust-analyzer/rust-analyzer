@@ -724,6 +724,21 @@ pub fn respanned_helper(_attr: TokenStream, input: TokenStream) -> TokenStream {
                 disabled: false,
             },
         ),
+        (
+            r#"
+#[proc_macro_attribute]
+pub fn block_spanned_helper(_attr: TokenStream, input: TokenStream) -> TokenStream {
+    input
+}
+"#
+            .into(),
+            ProcMacro {
+                name: Symbol::intern("block_spanned_helper"),
+                kind: ProcMacroKind::Attr,
+                expander: sync::Arc::new(BlockSpannedHelperProcMacroExpander),
+                disabled: false,
+            },
+        ),
     ])
 }
 
@@ -1293,6 +1308,44 @@ impl ProcMacroExpander for RespannedHelperProcMacroExpander {
             #subtree
 
             fn __respanned() { generated::helper() }
+        })
+    }
+
+    fn eq_dyn(&self, other: &dyn ProcMacroExpander) -> bool {
+        other.type_id() == TypeId::of::<Self>()
+    }
+}
+
+// Appends a function calling `generated::helper()` whose tokens carry the span of the whole last
+// `{ ... }` group of the input, like `quote_spanned!(block.span()=> ...)`.
+#[derive(Debug)]
+struct BlockSpannedHelperProcMacroExpander;
+impl ProcMacroExpander for BlockSpannedHelperProcMacroExpander {
+    fn expand(
+        &self,
+        _: &dyn SourceDatabase,
+        subtree: &TopSubtree,
+        _attrs: Option<&TopSubtree>,
+        _env: &Env,
+        _def_site: Span,
+        _call_site: Span,
+        _mixed_site: Span,
+        _current_dir: String,
+    ) -> Result<TopSubtree, ProcMacroExpansionError> {
+        let span = subtree
+            .iter()
+            .filter_map(|tt| match tt {
+                TtElement::Subtree(s, _) if s.delimiter.kind == tt::DelimiterKind::Brace => {
+                    Some(s.delimiter.open.cover(s.delimiter.close))
+                }
+                _ => None,
+            })
+            .last()
+            .ok_or_else(|| ProcMacroExpansionError::Panic("incorrect Input".into()))?;
+        Ok(quote! { span =>
+            #subtree
+
+            fn __block_spanned() { generated::helper() }
         })
     }
 

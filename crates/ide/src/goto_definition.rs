@@ -2353,6 +2353,37 @@ fn page() -> Unreso$0lved { loop {} }
     }
 
     #[test]
+    fn goto_def_ignores_tokens_respanned_onto_block() {
+        check(
+            r#"
+//- proc_macros: block_spanned_helper
+mod generated { pub fn helper() {} }
+struct Api;
+     //^^^
+#[proc_macros::block_spanned_helper]
+fn page() { let _ = Ap$0i; }
+"#,
+        );
+    }
+
+    #[test]
+    fn goto_def_falls_back_to_tokens_respanned_onto_block() {
+        check(
+            r#"
+//- proc_macros: block_spanned_helper
+mod generated {
+  //^^^^^^^^^
+    pub fn helper() {}
+         //^^^^^^
+}
+#[proc_macros::block_spanned_helper]
+fn page() $0{ }
+        //^^^
+"#,
+        );
+    }
+
+    #[test]
     fn goto_ident_from_pat_macro() {
         check(
             r#"
