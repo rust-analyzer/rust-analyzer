@@ -1641,6 +1641,30 @@ impl<'db> SemanticsImpl<'db> {
         })
     }
 
+    /// Iterates the descendants of the given node in preorder, descending into macro expansions
+    /// while doing so: each function-like macro call is followed by the descendants of its
+    /// expansion. Attribute and derive macros are not expanded.
+    pub fn descendants_with_macros(
+        &self,
+        node: SyntaxNode,
+    ) -> impl Iterator<Item = SyntaxNode> + '_ {
+        let mut stack = vec![node.descendants()];
+        iter::from_fn(move || {
+            loop {
+                let Some(node) = stack.last_mut()?.next() else {
+                    stack.pop();
+                    continue;
+                };
+                if let Some(macro_call) = ast::MacroCall::cast(node.clone())
+                    && let Some(expansion) = self.expand_macro_call(&macro_call)
+                {
+                    stack.push(expansion.value.descendants());
+                }
+                return Some(node);
+            }
+        })
+    }
+
     pub fn ancestors_at_offset_with_macros(
         &self,
         node: &SyntaxNode,

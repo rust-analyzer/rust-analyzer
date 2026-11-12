@@ -114,12 +114,13 @@ pub(crate) fn outgoing_calls(
         .into_iter()
         .filter_map(|it| it.parent_ancestors().nth(1).and_then(ast::Item::cast))
         .filter_map(|item| match item {
-            ast::Item::Const(c) => c.body().map(|it| it.syntax().descendants()),
-            ast::Item::Fn(f) => f.body().map(|it| it.syntax().descendants()),
-            ast::Item::Static(s) => s.body().map(|it| it.syntax().descendants()),
+            ast::Item::Const(c) => c.body().map(|it| it.syntax().clone()),
+            ast::Item::Fn(f) => f.body().map(|it| it.syntax().clone()),
+            ast::Item::Static(s) => s.body().map(|it| it.syntax().clone()),
             _ => None,
         })
-        .flatten()
+        // Walk macro expansions too: a macro call's unexpanded syntax is only a token tree.
+        .flat_map(|body| sema.descendants_with_macros(body))
         .filter_map(ast::CallableExpr::cast)
         .filter_map(|call_node| {
             let (nav_target, range) = match call_node {
@@ -508,15 +509,22 @@ macro_rules! call {
         $ident()
     }
 }
+macro_rules! nested {
+    ($ident:ident) => {
+        call!($ident)
+    }
+}
 define!(callee)
 fn caller$0() {
     call!(callee);
+    nested!(callee);
 }
 "#,
-            expect![[r#"caller Function FileId(0) 160..194 163..169"#]],
+            expect!["caller Function FileId(0) 236..291 239..245"],
             expect![[]],
-            // FIXME
-            expect![[]],
+            expect![
+                "callee Function FileId(0) 220..235 228..234 : FileId(0):260..266, FileId(0):281..287"
+            ],
         );
     }
 
@@ -635,8 +643,7 @@ macro_rules! call {
 "#,
             expect!["caller Function FileId(0) 38..72 41..47"],
             expect![[]],
-            // FIXME
-            expect![[]],
+            expect!["callee Function FileId(0) 22..37 30..36 : FileId(0):62..68, FileId(0):56..61"],
         );
         check_hierarchy(
             false,
@@ -663,8 +670,9 @@ macro_rules! call {
 "#,
             expect!["caller Function FileId(0) 38..72 41..47"],
             expect![[]],
-            // FIXME
-            expect![[]],
+            expect![[r#"
+                callee Function FileId(1) 45..51 45..51 : FileId(0):62..68, FileId(0):56..61
+                callee Function FileId(0) 22..29 : FileId(0):62..68, FileId(0):56..61"#]],
         );
     }
 
