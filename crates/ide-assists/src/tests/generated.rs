@@ -3509,6 +3509,29 @@ fn foo() {
 }
 
 #[test]
+fn doctest_simplify_match() {
+    check_doc_test(
+        "simplify_match",
+        r#####"
+//- minicore: option
+fn f(x: i32) -> i32 {
+    $0match Some(x + 1) {
+        Some(n) => n,
+        None => 0,
+    }
+}
+"#####,
+        r#####"
+fn f(x: i32) -> i32 {
+    match x + 1 {
+        n => n,
+    }
+}
+"#####,
+    )
+}
+
+#[test]
 fn doctest_sort_items() {
     check_doc_test(
         "sort_items",

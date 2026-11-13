@@ -222,6 +222,7 @@ mod handlers {
     mod replace_qualified_name_with_use;
     mod replace_string_with_char;
     mod replace_turbofish_with_explicit_type;
+    mod simplify_match;
     mod sort_items;
     mod split_import;
     mod term_search;
@@ -370,6 +371,7 @@ mod handlers {
             replace_named_generic_with_impl::replace_named_generic_with_impl,
             replace_qualified_name_with_use::replace_qualified_name_with_use,
             replace_turbofish_with_explicit_type::replace_turbofish_with_explicit_type,
+            simplify_match::simplify_match,
             sort_items::sort_items,
             split_import::split_import,
             term_search::term_search,
