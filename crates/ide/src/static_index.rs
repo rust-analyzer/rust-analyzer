@@ -302,14 +302,46 @@ impl<'a> StaticIndex<'a> {
                 def_map: Default::default(),
             };
             let mut visited_files = FxHashSet::default();
+            let mut local_roots = FxHashSet::default();
             for module in work {
                 let file_id =
                     module.definition_source_file_id(db).original_file(db).file_id(&analysis.db);
+                let source_root_id = db.file_source_root(file_id).source_root_id(db);
+                if !db.source_root(source_root_id).source_root(db).is_library {
+                    local_roots.insert(source_root_id);
+                }
                 if visited_files.contains(&file_id) {
                     continue;
                 }
                 this.add_file(file_id);
                 visited_files.insert(file_id);
+            }
+            // Files loaded into a local source root by eager macro expansion --
+            // e.g. build-script output under OUT_DIR pulled in via `include!` --
+            // are never a module's definition file, so the loop above never
+            // reaches them. Index the rest of each local root, in path order
+            // for deterministic output, skipping files already visited.
+            // Restrict to Rust sources: roots also contain manifests and other
+            // non-code files, which would otherwise become spurious documents.
+            for root_id in local_roots {
+                let source_root = db.source_root(root_id).source_root(db);
+                let mut extra: Vec<_> = source_root
+                    .iter()
+                    .filter(|file_id| {
+                        source_root
+                            .path_for_file(file_id)
+                            .and_then(|p| p.name_and_extension())
+                            .is_some_and(|(_, ext)| ext == Some("rs"))
+                    })
+                    .collect();
+                extra.sort_by_key(|file_id| {
+                    source_root.path_for_file(file_id).map(|p| format!("{p:?}"))
+                });
+                for file_id in extra {
+                    if visited_files.insert(file_id) {
+                        this.add_file(file_id);
+                    }
+                }
             }
             this
         })
@@ -615,6 +647,33 @@ struct Hello(i32);
             VendoredLibrariesConfig::Included {
                 workspace_root: &VfsPath::new_virtual_path("/workspace".to_owned()),
             },
+        );
+    }
+
+    #[test]
+    fn eagerly_included_file() {
+        // Files pulled into a local source root by eager macro expansion --
+        // e.g. build-script output under OUT_DIR loaded via `include!` --
+        // are never a module's definition file, but the static index must
+        // still contain them for cross-file navigation to generated code.
+        check_all_ranges(
+            r#"
+//- minicore:include
+//- /lib.rs
+include!("gen.rs");
+
+fn use_generated() -> u32 {
+ //^^^^^^^^^^^^^      ^^^
+    generated_value()
+  //^^^^^^^^^^^^^^^
+}
+//- /gen.rs
+pub fn generated_value() -> u32 {
+     //^^^^^^^^^^^^^^^      ^^^
+    42
+}
+"#,
+            VendoredLibrariesConfig::Excluded,
         );
     }
 }
