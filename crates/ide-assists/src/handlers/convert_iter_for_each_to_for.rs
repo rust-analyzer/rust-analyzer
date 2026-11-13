@@ -1,8 +1,9 @@
 use hir::{Name, sym};
-use ide_db::famous_defs::FamousDefs;
+use ide_db::{famous_defs::FamousDefs, syntax_helpers::node_ext};
 use syntax::{
     AstNode,
-    ast::{self, HasArgList, HasLoopBody, edit::AstNodeEdit},
+    ast::{self, HasArgList, HasLoopBody, edit::AstNodeEdit, syntax_factory::SyntaxFactory},
+    syntax_editor::SyntaxEditor,
 };
 
 use crate::{AssistContext, AssistId, Assists, utils::wrap_paren};
@@ -42,6 +43,7 @@ pub(crate) fn convert_iter_for_each_to_for(
         _ => return None,
     };
 
+    // FIXME: supports try_for_each() and ControlFlow handler
     let (method, receiver) = validate_method_call_expr(ctx, method)?;
 
     let param_list = closure.param_list()?;
@@ -67,6 +69,7 @@ pub(crate) fn convert_iter_for_each_to_for(
                 _ => make.block_expr(Vec::new(), Some(body.reset_indent().indent(1.into()))),
             }
             .indent(indent);
+            let block = replace_return_with_continue(block);
 
             let expr_for_loop = make.expr_for_loop(param, receiver, block);
             editor.replace(target_node, expr_for_loop.syntax());
@@ -138,15 +141,18 @@ pub(crate) fn convert_for_loop_with_for_each(
                     .into();
             }
 
-            let loop_arg = make.expr_closure([make.untyped_param(pat)], body.into());
-            let for_each = make.expr_method_call(
-                receiver,
-                make.name_ref("for_each"),
-                make.arg_list([loop_arg.into()]),
-            );
-            let for_each = make.expr_stmt(for_each.into());
+            let control = LoopControl::from_loop(&for_loop.reset_indent());
+            // FIXME: insert some import for `ControlFlow`
+            let new_loop = control
+                .generate_iter_for(receiver, pat.reset_indent(), make)
+                .indent(for_loop.indent_level());
 
-            editor.replace(for_loop.syntax(), for_each.syntax());
+            if new_loop.is_block_like() {
+                editor.replace(for_loop.syntax(), new_loop.syntax());
+            } else {
+                editor.replace(for_loop.syntax(), make.expr_stmt(new_loop).syntax());
+            }
+
             builder.add_file_edits(ctx.vfs_file_id(), editor);
         },
     )
@@ -228,6 +234,137 @@ fn validate_method_call_expr(
 
     let iter_trait = FamousDefs(sema, krate).core_iter_Iterator()?;
     it_type.impls_trait(sema.db, iter_trait, &[]).then_some((expr, receiver))
+}
+
+fn replace_return_with_continue(block: ast::BlockExpr) -> ast::BlockExpr {
+    let (editor, block) = SyntaxEditor::with_ast_node(&block);
+    node_ext::for_each_return_expr(block.stmt_list(), &mut |expr| {
+        editor.replace(expr.syntax(), editor.make().expr_continue(None).syntax());
+    });
+    ast::BlockExpr::cast(editor.finish().new_root().clone()).unwrap()
+}
+
+struct LoopControl {
+    editor: SyntaxEditor,
+    body: Option<ast::StmtList>,
+    breaks: Vec<ast::BreakExpr>,
+    continues: Vec<ast::ContinueExpr>,
+    returns: Vec<ast::ReturnExpr>,
+}
+
+impl LoopControl {
+    fn from_loop(loop_expr: &dyn HasLoopBody) -> Self {
+        let mut breaks = vec![];
+        let mut continues = vec![];
+        let mut returns = vec![];
+
+        let label = loop_expr.label();
+        let (editor, body) = SyntaxEditor::with_ast_node(&loop_expr.loop_body().unwrap());
+        let body = body.stmt_list();
+
+        node_ext::for_each_return_expr(body.clone(), &mut |expr| {
+            returns.push(expr);
+        });
+        node_ext::for_each_break_and_continue_expr(label, body.clone(), &mut |expr| match expr {
+            ast::Expr::BreakExpr(expr) => breaks.push(expr),
+            ast::Expr::ContinueExpr(expr) => continues.push(expr),
+            expr => unreachable!("{expr:?}"),
+        });
+
+        Self { editor, body, breaks, continues, returns }
+    }
+
+    fn generate_iter_for(
+        self,
+        receiver: ast::Expr,
+        pat: ast::Pat,
+        make: &SyntaxFactory,
+    ) -> ast::Expr {
+        let editor = self.editor;
+        let make_new = editor.make();
+
+        let call = |name, arg| {
+            ast::Expr::from(make_new.expr_call(
+                make_new.expr_path(make_new.path_from_text(name)),
+                make_new.arg_list([arg]),
+            ))
+        };
+        let insert_continue = || {
+            if let Some(stmt_list) = self.body {
+                let tail_continue = call("ControlFlow::Continue", make_new.expr_unit());
+                stmt_list.add_expr(&editor, tail_continue);
+            }
+        };
+        let build = |editor: SyntaxEditor, method| {
+            let body = ast::BlockExpr::cast(editor.finish().new_root().clone()).unwrap();
+            let loop_arg = make.expr_closure([make.untyped_param(pat)], body.into());
+            make.expr_method_call(receiver, make.name_ref(method), make.arg_list([loop_arg.into()]))
+        };
+        let tuple_struct_pat =
+            |name, arg| ast::Pat::from(make.tuple_struct_pat(make.path_from_text(name), [arg]));
+
+        if self.returns.is_empty() && self.breaks.is_empty() {
+            let continue_to = make_new.expr_return(None);
+
+            for expr in self.continues {
+                editor.replace(expr.syntax(), continue_to.syntax());
+            }
+            return build(editor, "for_each").into();
+        }
+
+        if self.returns.is_empty() {
+            let continue_to =
+                make_new.expr_return(Some(call("ControlFlow::Continue", make_new.expr_unit())));
+            let break_to =
+                make_new.expr_return(Some(call("ControlFlow::Break", make_new.expr_unit())));
+
+            for expr in self.continues {
+                editor.replace(expr.syntax(), continue_to.syntax());
+            }
+            for expr in self.breaks {
+                editor.replace(expr.syntax(), break_to.syntax());
+            }
+            insert_continue();
+            return build(editor, "try_for_each").into();
+        }
+
+        let continue_to =
+            make_new.expr_return(Some(call("ControlFlow::Continue", make_new.expr_unit())));
+        let break_to = make_new.expr_return(Some(call(
+            "ControlFlow::Break",
+            make_new.expr_path(make_new.path_from_text("None")),
+        )));
+        let return_to =
+            |expr| make_new.expr_return(Some(call("ControlFlow::Break", call("Some", expr))));
+
+        for expr in self.continues {
+            editor.replace(expr.syntax(), continue_to.syntax());
+        }
+        for expr in self.breaks {
+            editor.replace(expr.syntax(), break_to.syntax());
+        }
+        for expr in self.returns {
+            editor.replace(
+                expr.syntax(),
+                return_to(expr.expr().unwrap_or_else(|| make_new.expr_unit())).syntax(),
+            );
+        }
+
+        insert_continue();
+        let iter_for = build(editor, "try_for_each");
+        let return_pat = tuple_struct_pat(
+            "ControlFlow::Break",
+            tuple_struct_pat("Some", make.simple_ident_pat(make.name("result")).into()),
+        );
+        let let_expr = make.expr_let(return_pat, iter_for.into());
+        let return_stmt = make.expr_stmt(
+            make.expr_return(Some(make.expr_path(make.path_from_text("result")))).into(),
+        );
+        let if_expr =
+            make.expr_if(let_expr.into(), make.block_expr([return_stmt.into()], None), None);
+
+        if_expr.into()
+    }
 }
 
 #[cfg(test)]
@@ -312,6 +449,40 @@ fn main() {
 }
 "#,
         )
+    }
+
+    #[test]
+    fn test_for_each_return_expr() {
+        check_assist(
+            convert_iter_for_each_to_for,
+            r#"
+//- minicore: iterators
+fn main() {
+    {
+        let it = core::iter::repeat(92);
+        it.$0for_each(|param| match param {
+            (0, 0) => return,
+            (1, 0) => (|| return)(),
+            (x, y) => println!("x: {}, y: {}", x, y),
+        });
+    }
+}
+"#,
+            r#"
+fn main() {
+    {
+        let it = core::iter::repeat(92);
+        for param in it {
+            match param {
+                (0, 0) => continue,
+                (1, 0) => (|| return)(),
+                (x, y) => println!("x: {}, y: {}", x, y),
+            }
+        }
+    }
+}
+"#,
+        );
     }
 
     #[test]
@@ -459,6 +630,148 @@ fn main() {
     });
 }
 "#,
+        )
+    }
+
+    #[test]
+    fn each_to_for_with_continue() {
+        check_assist(
+            convert_for_loop_with_for_each,
+            r"
+fn main() {
+    let x = vec![1, 2, 3];
+    for $0v in x {
+        if v == 2 {
+            continue;
+        }
+        v *= 2;
+    }
+}",
+            r"
+fn main() {
+    let x = vec![1, 2, 3];
+    x.into_iter().for_each(|v| {
+        if v == 2 {
+            return;
+        }
+        v *= 2;
+    });
+}",
+        )
+    }
+
+    #[test]
+    fn each_to_for_with_break() {
+        check_assist(
+            convert_for_loop_with_for_each,
+            r"
+fn main() {
+    let x = vec![1, 2, 3];
+    for $0v in x {
+        if v == 2 {
+            continue;
+        }
+        if v == 3 {
+            break;
+        }
+        v *= 2;
+    }
+}",
+            r"
+fn main() {
+    let x = vec![1, 2, 3];
+    x.into_iter().try_for_each(|v| {
+        if v == 2 {
+            return ControlFlow::Continue(());
+        }
+        if v == 3 {
+            return ControlFlow::Break(());
+        }
+        v *= 2;
+        ControlFlow::Continue(())
+    });
+}",
+        )
+    }
+
+    #[test]
+    fn each_to_for_with_break_in_tail_expr() {
+        check_assist(
+            convert_for_loop_with_for_each,
+            r"
+fn main() {
+    let x = vec![1, 2, 3];
+    let cb = |_| ();
+    for $0v in x {
+        if v == 2 {
+            continue;
+        }
+        cb(if v == 3 {
+            break;
+        } else {
+            v *= 2;
+        })
+    }
+}",
+            r"
+fn main() {
+    let x = vec![1, 2, 3];
+    let cb = |_| ();
+    x.into_iter().try_for_each(|v| {
+        if v == 2 {
+            return ControlFlow::Continue(());
+        }
+        cb(if v == 3 {
+            return ControlFlow::Break(());
+        } else {
+            v *= 2;
+        });
+        ControlFlow::Continue(())
+    });
+}",
+        );
+    }
+
+    #[test]
+    fn each_to_for_with_return() {
+        check_assist(
+            convert_for_loop_with_for_each,
+            r"
+fn main() {
+    let x = vec![1, 2, 3, 4];
+    for $0v in x {
+        if v == 2 {
+            continue;
+        }
+        if v == 3 {
+            break;
+        }
+        if v == 4 {
+            return 6;
+        }
+        v *= 2;
+    }
+}",
+            r"
+fn main() {
+    let x = vec![1, 2, 3, 4];
+    if let ControlFlow::Break(Some(result)) = x.into_iter().try_for_each(|v| {
+        if v == 2 {
+            return ControlFlow::Continue(());
+        }
+        if v == 3 {
+            return ControlFlow::Break(None);
+        }
+        if v == 4 {
+            return ControlFlow::Break(Some(6));
+        }
+        v *= 2;
+        ControlFlow::Continue(())
+    })
+    {
+        return result;
+    }
+}",
         )
     }
 

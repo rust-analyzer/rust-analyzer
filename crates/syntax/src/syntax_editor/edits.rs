@@ -393,6 +393,37 @@ impl ast::VariantList {
     }
 }
 
+impl ast::StmtList {
+    pub fn add_expr(&self, editor: &SyntaxEditor, expr: ast::Expr) {
+        let lead_ws = self
+            .syntax()
+            .children_with_tokens()
+            .filter_map(|it| it.into_token())
+            .find_map(ast::Whitespace::cast);
+        let r_curly = self.r_curly_token().map(crate::NodeOrToken::Token);
+        let last_element = self
+            .syntax()
+            .children_with_tokens()
+            .filter(|it| !it.kind().is_trivia() && Some(it) != r_curly.as_ref())
+            .last()
+            .unwrap();
+
+        editor.insert(Position::after(&last_element), expr.syntax());
+        if let Some(lead_ws) = lead_ws {
+            editor.insert(Position::after(&last_element), lead_ws.syntax());
+        }
+
+        match self.tail_expr() {
+            Some(old) if !old.is_block_like() => {
+                // XXX: This may cause wrong in StmtList::tail_expr,
+                // but it can avoid overlapping with the edits inside old tail_expr
+                editor.insert(Position::after(old.syntax()), editor.make().token(T![;]))
+            }
+            _ => (),
+        }
+    }
+}
+
 impl ast::Fn {
     pub fn replace_or_insert_body(&self, editor: &SyntaxEditor, body: ast::BlockExpr) {
         let make = editor.make();

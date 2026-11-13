@@ -398,6 +398,20 @@ pub fn for_each_break_and_continue_expr(
     }
 }
 
+pub fn for_each_return_expr(body: Option<ast::StmtList>, cb: &mut dyn FnMut(ast::ReturnExpr)) {
+    if let Some(b) = body {
+        let tree_depth_iterator = TreeWithDepthIterator::new(b);
+        for (expr, depth) in tree_depth_iterator {
+            match expr {
+                ast::Expr::ReturnExpr(expr) if depth == 0 => {
+                    cb(expr);
+                }
+                _ => (),
+            }
+        }
+    }
+}
+
 fn for_each_break_expr(
     label: Option<ast::Label>,
     body: Option<ast::StmtList>,
@@ -482,28 +496,41 @@ impl Iterator for TreeWithDepthIterator {
     type Item = (ast::Expr, u32);
 
     fn next(&mut self) -> Option<Self::Item> {
+        type Node = Either<ast::Expr, ast::Item>;
         while let Some(event) = self.preorder.find_map(|ev| match ev {
-            WalkEvent::Enter(it) => ast::Expr::cast(it).map(WalkEvent::Enter),
-            WalkEvent::Leave(it) => ast::Expr::cast(it).map(WalkEvent::Leave),
+            WalkEvent::Enter(it) => Node::cast(it).map(WalkEvent::Enter),
+            WalkEvent::Leave(it) => Node::cast(it).map(WalkEvent::Leave),
         }) {
             match event {
                 WalkEvent::Enter(
-                    ast::Expr::LoopExpr(_) | ast::Expr::WhileExpr(_) | ast::Expr::ForExpr(_),
+                    Either::Left(
+                        ast::Expr::LoopExpr(_)
+                        | ast::Expr::WhileExpr(_)
+                        | ast::Expr::ForExpr(_)
+                        | ast::Expr::ClosureExpr(_),
+                    )
+                    | Either::Right(_),
                 ) => {
                     self.depth += 1;
                 }
                 WalkEvent::Leave(
-                    ast::Expr::LoopExpr(_) | ast::Expr::WhileExpr(_) | ast::Expr::ForExpr(_),
+                    Either::Left(
+                        ast::Expr::LoopExpr(_)
+                        | ast::Expr::WhileExpr(_)
+                        | ast::Expr::ForExpr(_)
+                        | ast::Expr::ClosureExpr(_),
+                    )
+                    | Either::Right(_),
                 ) => {
                     self.depth -= 1;
                 }
-                WalkEvent::Enter(ast::Expr::BlockExpr(e)) if e.label().is_some() => {
+                WalkEvent::Enter(Either::Left(ast::Expr::BlockExpr(e))) if e.label().is_some() => {
                     self.depth += 1;
                 }
-                WalkEvent::Leave(ast::Expr::BlockExpr(e)) if e.label().is_some() => {
+                WalkEvent::Leave(Either::Left(ast::Expr::BlockExpr(e))) if e.label().is_some() => {
                     self.depth -= 1;
                 }
-                WalkEvent::Enter(expr) => return Some((expr, self.depth)),
+                WalkEvent::Enter(Either::Left(expr)) => return Some((expr, self.depth)),
                 _ => (),
             }
         }
