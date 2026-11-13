@@ -50,7 +50,7 @@ pub(crate) fn generate_impl(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> O
     let name = nominal.name()?;
     let target = nominal.syntax().text_range();
 
-    if ctx.find_node_at_offset::<ast::RecordFieldList>().is_some() {
+    if !can_trigger_assist(ctx, &nominal) {
         return None;
     }
 
@@ -98,7 +98,7 @@ pub(crate) fn generate_trait_impl(acc: &mut Assists, ctx: &AssistContext<'_, '_>
     let name = nominal.name()?;
     let target = nominal.syntax().text_range();
 
-    if ctx.find_node_at_offset::<ast::RecordFieldList>().is_some() {
+    if !can_trigger_assist(ctx, &nominal) {
         return None;
     }
 
@@ -245,6 +245,21 @@ pub(crate) fn generate_impl_trait(acc: &mut Assists, ctx: &AssistContext<'_, '_>
     )
 }
 
+fn can_trigger_assist(ctx: &AssistContext<'_, '_>, node: &impl AstNode) -> bool {
+    let body = node
+        .syntax()
+        .children()
+        .find(|it| it.first_child_or_token().is_some_and(|it| it.kind().is_l_delimiter()));
+
+    let Some(body) = body else { return true };
+    let l_delim = body.first_child_or_token().filter(|it| it.kind().is_l_delimiter());
+    let r_delim = body.last_child_or_token().filter(|it| it.kind().is_r_delimiter());
+
+    l_delim.is_some_and(|it| it.text_range().contains_inclusive(ctx.offset()))
+        || r_delim.is_some_and(|it| it.text_range().contains_inclusive(ctx.offset()))
+        || !body.text_range().contains(ctx.offset())
+}
+
 fn extract_expr(item: ast::AssocItem) -> Option<ast::Expr> {
     let ast::AssocItem::Fn(f) = item else {
         return None;
@@ -254,7 +269,7 @@ fn extract_expr(item: ast::AssocItem) -> Option<ast::Expr> {
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::{check_assist, check_assist_target};
+    use crate::tests::{check_assist, check_assist_not_applicable, check_assist_target};
 
     use super::*;
 
@@ -392,6 +407,86 @@ mod tests {
                 where
                     T: Trait,
                 {$0
+                }
+            "#,
+        );
+    }
+
+    #[test]
+    fn test_add_impl_applicable() {
+        check_assist(
+            generate_impl,
+            r#"
+                struct Foo$0 {
+                    x: i32
+                }
+            "#,
+            r#"
+                struct Foo {
+                    x: i32
+                }
+
+                impl Foo {$0}
+            "#,
+        );
+        check_assist(
+            generate_impl,
+            r#"
+                struct Foo {$0
+                    x: i32
+                }
+            "#,
+            r#"
+                struct Foo {
+                    x: i32
+                }
+
+                impl Foo {$0}
+            "#,
+        );
+        check_assist(
+            generate_impl,
+            r#"
+                struct Foo {
+                    x: i32
+                }$0
+            "#,
+            r#"
+                struct Foo {
+                    x: i32
+                }
+
+                impl Foo {$0}
+            "#,
+        );
+        check_assist_not_applicable(
+            generate_impl,
+            r#"
+                struct Foo {
+                    $0x: i32
+                }
+            "#,
+        );
+        check_assist(
+            generate_trait_impl,
+            r#"
+                struct Foo {
+                    x: i32
+                }$0
+            "#,
+            r#"
+                struct Foo {
+                    x: i32
+                }
+
+                impl ${1:_} for Foo {$0}
+            "#,
+        );
+        check_assist_not_applicable(
+            generate_trait_impl,
+            r#"
+                struct Foo {
+                    $0x: i32
                 }
             "#,
         );
