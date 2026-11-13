@@ -1252,6 +1252,7 @@ impl Printer<'_> {
             }
             LifetimeRef::Placeholder => w!(self, "'_"),
             LifetimeRef::Error => w!(self, "'{{error}}"),
+            LifetimeRef::HrtbParam(_) => w!(self, "'_"), // FIXME: properly handle it, currently do not have enough data to handle
             &LifetimeRef::Param(p) => self.print_lifetime_param(p),
         }
     }
@@ -1368,23 +1369,22 @@ impl Printer<'_> {
             }
 
             match bound {
-                TypeBound::Path(path, modifier) => {
+                TypeBound::Path(binder, path, modifier) => {
+                    if let Some(lifetimes) = binder {
+                        w!(
+                            self,
+                            "for<{}> ",
+                            lifetimes
+                                .iter()
+                                .map(|it| it.display(self.db, self.edition))
+                                .format(", ")
+                                .to_string()
+                        );
+                    }
                     match modifier {
                         TraitBoundModifier::None => (),
                         TraitBoundModifier::Maybe => w!(self, "?"),
                     }
-                    self.print_path(&self.store[*path]);
-                }
-                TypeBound::ForLifetime(lifetimes, path) => {
-                    w!(
-                        self,
-                        "for<{}> ",
-                        lifetimes
-                            .iter()
-                            .map(|it| it.display(self.db, self.edition))
-                            .format(", ")
-                            .to_string()
-                    );
                     self.print_path(&self.store[*path]);
                 }
                 TypeBound::Lifetime(lt) => self.print_lifetime_ref(*lt),

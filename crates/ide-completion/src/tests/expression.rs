@@ -3221,10 +3221,10 @@ fn foo() {
 }
         "#,
         expect![[r#"
-                me bar(…) (as ExcludedTrait) fn(&self)
-                me baz(…) (as ExcludedTrait) fn(&self)
-                me foo(…) (as ExcludedTrait) fn(&self)
-            "#]],
+            me bar(…) (as ExcludedTrait) fn(&self)
+            me baz(…) (as ExcludedTrait) fn(&self)
+            me foo(…) (as ExcludedTrait) fn(&self)
+        "#]],
     );
     check_with_config(
         CompletionConfig {
@@ -3250,10 +3250,10 @@ fn foo() {
 }
         "#,
         expect![[r#"
-                me bar(…) (as ExcludedTrait) fn(&self)
-                me baz(…) (as ExcludedTrait) fn(&self)
-                me foo(…) (as ExcludedTrait) fn(&self)
-            "#]],
+            me bar(…) (as ExcludedTrait) fn(&self)
+            me baz(…) (as ExcludedTrait) fn(&self)
+            me foo(…) (as ExcludedTrait) fn(&self)
+        "#]],
     );
 }
 

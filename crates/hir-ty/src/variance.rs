@@ -60,7 +60,7 @@ fn variances_of_query(db: &dyn HirDatabase, def: GenericDefId) -> StoredVariance
     }
 
     let generics = generics(db, def);
-    let count = generics.len(true);
+    let count = generics.len(false);
     if count == 0 {
         return VariancesOf::empty().store();
     }

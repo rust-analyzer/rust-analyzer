@@ -543,7 +543,10 @@ fn rename_to_self<'db>(
         })
     };
 
-    if ty != impl_ty {
+    let rebased_impl_ty = impl_ty.try_rebase_into(sema.db, &ty);
+    if let Some(impl_ty) = rebased_impl_ty
+        && !ty.could_unify_with(sema.db, &impl_ty)
+    {
         bail!("Parameter type differs from impl block type");
     }
 

@@ -303,7 +303,7 @@ fn infer_std_crash_5() {
             32..320 'for co...     }': !
             32..320 'for co...     }': {unknown}
             32..320 'for co...     }': &'? mut {unknown}
-            32..320 'for co...     }': fn next<{unknown}>(&'? mut {unknown}) -> Option<<{unknown} as Iterator>::Item>
+            32..320 'for co...     }': fn next<{unknown}>(&'?0.0 mut {unknown}) -> Option<<{unknown} as Iterator>::Item>
             32..320 'for co...     }': Option<<{unknown} as Iterator>::Item>
             32..320 'for co...     }': ()
             32..320 'for co...     }': ()
@@ -501,10 +501,10 @@ fn issue_3999_slice() {
         }
         "#,
         expect![[r#"
-            7..13 'params': &'? [usize]
+            7..13 'params': &'_ [usize]
             25..80 '{     ...   } }': ()
             31..78 'match ...     }': ()
-            37..43 'params': &'? [usize]
+            37..43 'params': &'_ [usize]
             54..66 '[ps @ .., _]': [usize]
             55..62 'ps @ ..': &'? [usize]
             60..62 '..': [usize]
@@ -559,7 +559,7 @@ fn issue_4235_name_conflicts() {
         "#,
         expect![[r#"
             31..37 'FOO {}': FOO
-            63..67 'self': &'? FOO
+            63..67 'self': &'_ FOO
             69..71 '{}': ()
             85..119 '{     ...o(); }': ()
             95..96 'a': &'? FOO
@@ -748,12 +748,12 @@ fn issue_4885() {
         }
         "#,
         expect![[r#"
-            70..73 'key': &'? K
+            70..73 'key': &'_ K
             132..148 '{     ...key) }': impl Future<Output = <K as Foo<R>>::Bar>
-            138..141 'bar': fn bar<R, K>(&'? K) -> impl Future<Output = <K as Foo<R>>::Bar>
+            138..141 'bar': fn bar<R, K>(&'?0.0 K) -> impl Future<Output = <K as Foo<R>>::Bar>
             138..146 'bar(key)': impl Future<Output = <K as Foo<R>>::Bar>
-            142..145 'key': &'? K
-            162..165 'key': &'? K
+            142..145 'key': &'_ K
+            162..165 'key': &'_ K
             224..227 '{ }': ()
         "#]],
     );
@@ -804,7 +804,7 @@ fn issue_4800() {
         }
         "#,
         expect![[r#"
-            379..383 'self': &'? mut PeerSet<D>
+            379..383 'self': &'_ mut PeerSet<D>
             401..424 '{     ...     }': dyn Future<Output = ()> + 'static
             411..418 'loop {}': !
             416..418 '{}': ()
@@ -887,10 +887,10 @@ fn main() {
 }
 "#,
         expect![[r#"
-            86..90 'self': &'? S<T>
+            86..90 'self': &'_ S<T>
             92..94 '_t': T
             99..101 '{}': ()
-            127..131 'self': &'? S<T>
+            127..131 'self': &'_ S<T>
             133..135 '_f': F
             140..142 '{}': ()
             155..217 '{     ...10); }': ()
@@ -900,8 +900,8 @@ fn main() {
             171..182 'PhantomData': PhantomData<i32>
             189..190 's': S<i32>
             189..201 's.g(|_x| {})': ()
-            193..200 '|_x| {}': impl FnOnce(&'? i32)
-            194..196 '_x': &'? i32
+            193..200 '|_x| {}': impl FnOnce(&'?0.0 i32)
+            194..196 '_x': &'_ i32
             198..200 '{}': ()
             207..208 's': S<i32>
             207..214 's.f(10)': ()
@@ -934,13 +934,13 @@ fn flush(&self) {
 }
 "#,
         expect![[r#"
-            129..133 'self': &'? Mutex<T>
+            129..133 'self': &'_ Mutex<T>
             156..158 '{}': MutexGuard<'?, T>
-            242..246 'self': &'? MutexGuard<'a, T>
-            265..276 '{ loop {} }': &'? T
+            242..246 'self': &'_ MutexGuard<'a, T>
+            265..276 '{ loop {} }': &'_ T
             267..274 'loop {}': !
             272..274 '{}': ()
-            289..293 'self': &'? {unknown}
+            289..293 'self': &'_ {unknown}
             295..345 '{     ...()); }': ()
             305..306 'w': &'? Mutex<BufWriter>
             331..342 '*(w.lock())': BufWriter
@@ -1289,7 +1289,7 @@ fn test() {
             16..66 'for _ ...     }': !
             16..66 'for _ ...     }': {unknown}
             16..66 'for _ ...     }': &'? mut {unknown}
-            16..66 'for _ ...     }': fn next<{unknown}>(&'? mut {unknown}) -> Option<<{unknown} as Iterator>::Item>
+            16..66 'for _ ...     }': fn next<{unknown}>(&'?0.0 mut {unknown}) -> Option<<{unknown} as Iterator>::Item>
             16..66 'for _ ...     }': Option<<{unknown} as Iterator>::Item>
             16..66 'for _ ...     }': ()
             16..66 'for _ ...     }': ()
@@ -1684,7 +1684,7 @@ fn dyn_with_unresolved_trait() {
         r#"
 fn foo(a: &dyn DoesNotExist) {
     a.bar();
-  //^&'? {unknown}
+  //^&'_ {unknown}
 }
         "#,
     );
@@ -2224,13 +2224,13 @@ impl<'a, T: Deref<Target = impl Trait>> Struct<'a, T> {
 }
 "#,
         expect![[r#"
-            137..141 'self': &'? Struct<'a, T>
-            152..160 '{ self }': &'? Struct<'a, T>
-            154..158 'self': &'? Struct<'a, T>
-            174..178 'self': &'? Struct<'a, T>
+            137..141 'self': &'_ Struct<'a, T>
+            152..160 '{ self }': &'_ Struct<'a, T>
+            154..158 'self': &'_ Struct<'a, T>
+            174..178 'self': &'_ Struct<'a, T>
             180..215 '{     ...     }': ()
             194..195 '_': &'? Struct<'?, T>
-            198..202 'self': &'? Struct<'a, T>
+            198..202 'self': &'_ Struct<'a, T>
             198..208 'self.foo()': &'? Struct<'?, T>
         "#]],
     );
@@ -2296,9 +2296,9 @@ fn test(x: bool) {
             69..80 '{ loop {} }': Map<T, U>
             71..78 'loop {}': !
             76..78 '{}': ()
-            93..97 'self': &'? Map<T, U>
-            99..100 '_': &'? T
-            120..131 '{ loop {} }': Option<&'? U>
+            93..97 'self': &'_ Map<T, U>
+            99..100 '_': &'_ T
+            120..131 '{ loop {} }': Option<&'_ U>
             122..129 'loop {}': !
             127..129 '{}': ()
             143..144 'x': bool
@@ -2764,22 +2764,22 @@ where
 }
 "#,
         expect![[r#"
-            214..223 'filter_fn': dyn Fn(&'? T) -> bool + 'static
+            214..223 'filter_fn': dyn Fn(&'?0.0 T) -> bool + 'static
             253..360 '{     ...     }': Filter<'a, 'b, T>
             263..354 'Self {...     }': Filter<'a, 'b, T>
-            293..302 'filter_fn': dyn Fn(&'? T) -> bool + 'static
+            293..302 'filter_fn': dyn Fn(&'?0.0 T) -> bool + 'static
             319..323 'None': Option<T>
             340..343 '&()': &'? ()
             341..343 '()': ()
-            580..584 'self': &'? [T; N]
-            586..592 'filter': &'? Filter<'?, '?, T>
+            580..584 'self': &'_ [T; N]
+            586..592 'filter': &'_ Filter<'_, '_, T>
             622..704 '{     ...     }': T
-            636..637 '_': Filter<Iter<'?, T>, dyn Fn(&'? T) -> bool + '?>
-            640..644 'self': &'? [T; N]
+            636..637 '_': Filter<Iter<'?, T>, dyn Fn(&'_ T) -> bool + '?>
+            640..644 'self': &'_ [T; N]
             640..656 'self.i...iter()': Iter<'?, T>
-            640..681 'self.i...er_fn)': Filter<Iter<'?, T>, dyn Fn(&'? T) -> bool + '?>
-            664..670 'filter': &'? Filter<'?, '?, T>
-            664..680 'filter...ter_fn': dyn Fn(&'? T) -> bool + 'static
+            640..681 'self.i...er_fn)': Filter<Iter<'?, T>, dyn Fn(&'_ T) -> bool + '?>
+            664..670 'filter': &'_ Filter<'_, '_, T>
+            664..680 'filter...ter_fn': dyn Fn(&'_ T) -> bool + 'static
             691..698 'loop {}': !
             696..698 '{}': ()
         "#]],

@@ -5938,7 +5938,7 @@ const FOO$0: &str = "bar";
             ```
 
             ```rust
-            const FOO: &str = "bar"
+            const FOO: &'static str = "bar"
             ```
 
             ---
@@ -6092,7 +6092,7 @@ const FOO$0: &i32 = &2;
             ```
 
             ```rust
-            const FOO: &i32 = &2
+            const FOO: &'static i32 = &2
             ```
 
             ---
@@ -6267,7 +6267,7 @@ const FOO$0: Option<&i32> = Some(2).as_ref();
             ```
 
             ```rust
-            const FOO: Option<&i32> = Some(&2)
+            const FOO: Option<&'static i32> = Some(&2)
             ```
         "#]],
     );
@@ -6313,7 +6313,7 @@ const FOO$0: &dyn Debug = &2i32;
             ```
 
             ```rust
-            const FOO: &dyn Debug = &2
+            const FOO: &'static dyn Debug = &2
             ```
         "#]],
     );
@@ -6334,7 +6334,7 @@ const FOO$0: &[i32] = &[1, 2, 3 + 4];
             ```
 
             ```rust
-            const FOO: &[i32] = &[1, 2, 7]
+            const FOO: &'static [i32] = &[1, 2, 7]
             ```
         "#]],
     );
@@ -6351,7 +6351,7 @@ const FOO$0: &[i32; 5] = &[12; 5];
             ```
 
             ```rust
-            const FOO: &[i32; {const}] = &[12, 12, 12, 12, 12]
+            const FOO: &'static [i32; {const}] = &[12, 12, 12, 12, 12]
             ```
         "#]],
     );
@@ -6372,7 +6372,7 @@ const FOO$0: (&i32, &[i32], &i32) = {
             ```
 
             ```rust
-            const FOO: (&i32, &[i32], &i32) = (&1, &[1, 2, 3], &1)
+            const FOO: (&'static i32, &'static [i32], &'static i32) = (&1, &[1, 2, 3], &1)
             ```
         "#]],
     );
@@ -6415,7 +6415,7 @@ const FOO$0: &S<[u8]> = core::mem::transmute::<&[u8], _>(&[1, 2, 3]);
             ```
 
             ```rust
-            const FOO: &S<[u8]> = &S
+            const FOO: &'static S<[u8]> = &S
             ```
         "#]],
     );
@@ -6435,7 +6435,7 @@ const FOO$0: &str = "foo";
             ```
 
             ```rust
-            const FOO: &str = "foo"
+            const FOO: &'static str = "foo"
             ```
         "#]],
     );
@@ -6477,7 +6477,7 @@ const FOO$0: (&str, &str) = {
             ```
 
             ```rust
-            const FOO: (&str, &str) = ("foo", "foo")
+            const FOO: (&'static str, &'static str) = ("foo", "foo")
             ```
         "#]],
     );

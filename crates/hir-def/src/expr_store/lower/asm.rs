@@ -13,7 +13,7 @@ use crate::{
     hir::{AsmOperand, AsmOptions, Expr, ExprId, InlineAsm, InlineAsmKind, InlineAsmRegOrRegClass},
 };
 
-impl ExprCollector<'_> {
+impl ExprCollector<'_, '_> {
     pub(super) fn lower_inline_asm(
         &mut self,
         asm: ast::AsmExpr,

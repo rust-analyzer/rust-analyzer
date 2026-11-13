@@ -115,6 +115,11 @@ impl Name {
     }
 
     #[inline]
+    pub fn anon_lifetime() -> Name {
+        Self::new_symbol_root(sym::tick_underscore)
+    }
+
+    #[inline]
     pub fn new_symbol(symbol: Symbol, ctx: SyntaxContext) -> Self {
         debug_assert!(!symbol.as_str().starts_with("r#"));
         _ = ctx;
@@ -205,6 +210,11 @@ impl Name {
     #[inline]
     pub fn is_generated(&self) -> bool {
         is_generated(self.as_str())
+    }
+
+    #[inline]
+    pub fn is_anon_lifetime(&self) -> bool {
+        *self == sym::tick_underscore
     }
 }
 

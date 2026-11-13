@@ -6,10 +6,12 @@ mod tests;
 use std::iter;
 
 use crate::{
+    ModuleDefId,
     expr_store::{
         lower::{ExprCollector, generics::ImplTraitLowerFn},
         path::NormalPath,
     },
+    item_scope::BuiltinShadowMode,
     type_ref::LifetimeRef,
 };
 
@@ -39,7 +41,7 @@ thread_local! {
 // If you modify the logic of the lowering, make sure to check if `hir_segment_to_ast_segment()`
 // also needs an update.
 pub(super) fn lower_path(
-    collector: &mut ExprCollector<'_>,
+    collector: &mut ExprCollector<'_, '_>,
     mut path: ast::Path,
     impl_trait_lower_fn: ImplTraitLowerFn<'_>,
 ) -> Option<Path> {
@@ -256,11 +258,42 @@ pub(super) fn lower_path(
         *last_segment_args = None;
     }
 
+    let segments_len = segments.len();
     let mod_path = Interned::new(ModPath::from_segments(kind, segments));
+
+    let (resolved_module_def_id, is_trait_assoc_item) = {
+        let (per_ns, remaining_idx) = collector.def_map.resolve_path(
+            collector.local_def_map,
+            collector.db,
+            collector.module,
+            &mod_path,
+            BuiltinShadowMode::Module,
+            None,
+        );
+        let def = per_ns.types.map(|item| item.def);
+
+        let is_trait_assoc_item = matches!(def, Some(ModuleDefId::TraitId(..)))
+            && remaining_idx.is_some_and(|idx| idx > 0);
+        (def, is_trait_assoc_item)
+    };
+
+    if collector.lifetime_elision_kind.can_elide() && !is_trait_assoc_item && segments_len != 0 {
+        // `segments_len == 0` can happen with some erroneous paths, e.g. `<ty>`.
+        let had_last_segment_args = generic_args.len() == segments_len;
+        let args_in_source =
+            if had_last_segment_args { generic_args.pop().flatten() } else { None };
+        let merged_args_with_elided =
+            collector.collect_path_elided_lifetimes(resolved_module_def_id, args_in_source);
+        if merged_args_with_elided.is_some() || had_last_segment_args {
+            generic_args.resize_with(segments_len - 1, || None);
+            generic_args.push(merged_args_with_elided);
+            debug_assert_eq!(segments_len, generic_args.len());
+        }
+    }
 
     if let Some(old_lifetimes_constrained_by_input) = old_lifetimes_constrained_by_input {
         let type_alias_constrained_lifetimes = collector.get_constrained_lifetimes_if_type_alias(
-            &mod_path,
+            resolved_module_def_id,
             generic_args.last().and_then(|g| g.as_ref()),
         );
         if let Some(lifetimes) = type_alias_constrained_lifetimes {
