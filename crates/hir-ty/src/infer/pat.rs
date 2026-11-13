@@ -589,7 +589,10 @@ impl<'db> InferenceContext<'db> {
             // Preserve the smart pointer type for THIR lowering and closure upvar analysis.
             pat_adjustments.push(PatAdjustment { kind: pat_adjust_kind, source: expected.store() });
         } else {
-            // FIXME: Emit an error.
+            self.push_diagnostic(InferenceDiagnostic::DerefPatternRecursionLimit {
+                pat,
+                found: expected.store(),
+            });
             inner_ty = self.types.types.error;
         }
 

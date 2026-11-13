@@ -622,6 +622,7 @@ pub(super) mod resolve_completely {
 
                 if let InferenceDiagnostic::CannotBeDereferenced { found: ty, .. }
                 | InferenceDiagnostic::CannotImplicitlyDerefTraitObject { found: ty, .. }
+                | InferenceDiagnostic::DerefPatternRecursionLimit { found: ty, .. }
                 | InferenceDiagnostic::CannotIndexInto { found: ty, .. }
                 | InferenceDiagnostic::ExpectedFunction { found: ty, .. }
                 | InferenceDiagnostic::ExpectedArrayOrSlicePat { found: ty, .. }

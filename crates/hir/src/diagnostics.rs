@@ -136,6 +136,7 @@ diagnostics![AnyDiagnostic<'db> ->
     CannotBeDereferenced<'db>,
     UnaryOperatorCannotBeApplied<'db>,
     CannotImplicitlyDerefTraitObject<'db>,
+    DerefPatternRecursionLimit<'db>,
     CannotIndexInto<'db>,
     CastToUnsized<'db>,
     ExpectedArrayOrSlicePat<'db>,
@@ -386,6 +387,12 @@ pub struct MutRefInImmRefPat {
 
 #[derive(Debug)]
 pub struct CannotImplicitlyDerefTraitObject<'db> {
+    pub pat: InFile<ExprOrPatPtr>,
+    pub found: Type<'db>,
+}
+
+#[derive(Debug)]
+pub struct DerefPatternRecursionLimit<'db> {
     pub pat: InFile<ExprOrPatPtr>,
     pub found: Type<'db>,
 }
@@ -1765,6 +1772,10 @@ impl<'db> AnyDiagnostic<'db> {
             InferenceDiagnostic::CannotImplicitlyDerefTraitObject { pat, found } => {
                 let pat = pat_syntax(*pat)?.map(Into::into);
                 CannotImplicitlyDerefTraitObject { pat, found: new_ty(found.as_ref()) }.into()
+            }
+            InferenceDiagnostic::DerefPatternRecursionLimit { pat, found } => {
+                let pat = pat_syntax(*pat)?.map(Into::into);
+                DerefPatternRecursionLimit { pat, found: new_ty(found.as_ref()) }.into()
             }
             InferenceDiagnostic::CannotIndexInto { expr, found } => {
                 let expr = expr_syntax(*expr)?;
