@@ -683,6 +683,8 @@ define_symbols! {
     deref_patterns,
     mut_ref,
     type_changing_struct_update,
+    auto_traits,
+    doc_notable_trait,
     RangeMin,
     RangeMax,
     RangeSub,

@@ -9452,6 +9452,7 @@ fn main() {
 fn notable_local() {
     check(
         r#"
+#![feature(doc_notable_trait)]
 #[doc(notable_trait)]
 trait Notable {
     type Assoc;
@@ -9579,6 +9580,7 @@ fn notable_ranged() {
     check_hover_range(
         r#"
 //- minicore: future, iterator
+#![feature(doc_notable_trait)]
 struct S;
 #[doc(notable_trait)]
 trait Notable {}
@@ -9607,6 +9609,7 @@ fn notable_actions() {
     check_actions(
         r#"
 //- minicore: future, iterator
+#![feature(doc_notable_trait)]
 struct S;
 struct S2;
 #[doc(notable_trait)]
@@ -9626,7 +9629,7 @@ impl Iterator for S {
                         file_id: FileId(
                             0,
                         ),
-                        offset: 7,
+                        offset: 38,
                     },
                 ),
                 GoToType(
@@ -9665,8 +9668,8 @@ impl Iterator for S {
                                 file_id: FileId(
                                     0,
                                 ),
-                                full_range: 21..59,
-                                focus_range: 49..56,
+                                full_range: 52..90,
+                                focus_range: 80..87,
                                 name: "Notable",
                                 kind: Trait,
                                 description: "trait Notable",
@@ -9678,8 +9681,8 @@ impl Iterator for S {
                                 file_id: FileId(
                                     0,
                                 ),
-                                full_range: 10..20,
-                                focus_range: 17..19,
+                                full_range: 41..51,
+                                focus_range: 48..50,
                                 name: "S2",
                                 kind: Struct,
                                 description: "struct S2",
@@ -10459,6 +10462,78 @@ fn f<T: UnCompat$0>
 
             ```rust
             trait UnCompat
+            ```
+        "#]],
+    );
+}
+
+#[test]
+fn rpit_keyword() {
+    check(
+        r#"
+//- minicore: send, unpin
+//- /main.rs crate:main deps:std
+trait Trait {}
+impl Trait for T {}
+fn foo() -> $0impl Trait {
+    &raw const ()
+}
+//- /libstd.rs crate:std
+#[doc(keyword = "impl")]
+/// keyword docs
+mod impl_keyword {}
+"#,
+        expect![[r#"
+            *impl*
+            ```rust
+            impl Trait + Unpin
+            impl Trait = *const ()
+            ```
+
+            ---
+
+            ```rust
+            impl
+            ```
+
+            ---
+
+            keyword docs
+        "#]],
+    );
+
+    check(
+        r#"
+//- minicore: send, unpin
+trait Trait {}
+impl Trait for T {}
+fn foo() -> $0impl Trait {
+    2
+}
+"#,
+        expect![[r#"
+            *impl*
+            ```rust
+            impl Trait + Send + Unpin
+            impl Trait = i32
+            ```
+        "#]],
+    );
+
+    check(
+        r#"
+//- minicore: send, unpin
+trait Trait {}
+impl Trait for T {}
+fn foo() -> $0impl Trait + Unpin {
+    2
+}
+"#,
+        expect![[r#"
+            *impl*
+            ```rust
+            impl Trait + Unpin + Send
+            impl Trait + Unpin = i32
             ```
         "#]],
     );

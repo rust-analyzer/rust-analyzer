@@ -89,6 +89,8 @@
 
 #![rustc_coherence_is_core]
 #![feature(lang_items)]
+#![feature(auto_traits)]
+#![feature(doc_notable_trait)]
 
 pub mod marker {
     // region:sized

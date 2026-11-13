@@ -329,6 +329,7 @@ fn hover_offset(
             res.extend(definitions);
             continue;
         }
+        res.extend(render::rpit(sema, config, &token, edition, display_target));
         let keywords = || render::keyword(sema, config, &token, edition, display_target);
         let underscore = || {
             if !is_same_kind {

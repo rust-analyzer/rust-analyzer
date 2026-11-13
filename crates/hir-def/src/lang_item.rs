@@ -400,12 +400,37 @@ pub fn crate_notable_traits(db: &dyn SourceDatabase, krate: Crate) -> Option<Box
     let mut traits = Vec::new();
 
     let crate_def_map = crate_def_map(db, krate);
+    if !crate_def_map.features().doc_notable_trait {
+        return None;
+    }
 
     for (_, module_data) in crate_def_map.modules() {
         for def in module_data.scope.declarations() {
             if let ModuleDefId::TraitId(trait_) = def
                 && AttrFlags::query(db, trait_.into()).contains(AttrFlags::IS_DOC_NOTABLE_TRAIT)
             {
+                traits.push(trait_);
+            }
+        }
+    }
+
+    if traits.is_empty() { None } else { Some(traits.into_iter().collect()) }
+}
+
+#[salsa::tracked(returns(as_deref))]
+pub fn crate_auto_traits(db: &dyn SourceDatabase, krate: Crate) -> Option<Box<[TraitId]>> {
+    let mut traits = Vec::new();
+
+    let crate_def_map = crate_def_map(db, krate);
+    if !crate_def_map.features().auto_traits {
+        return None;
+    }
+
+    for (_, module_data) in crate_def_map.modules() {
+        for def in module_data.scope.declarations() {
+            let ModuleDefId::TraitId(trait_) = def else { continue };
+            let sig = crate::signatures::TraitSignature::of(db, trait_);
+            if sig.flags.contains(crate::signatures::TraitFlags::AUTO) {
                 traits.push(trait_);
             }
         }
