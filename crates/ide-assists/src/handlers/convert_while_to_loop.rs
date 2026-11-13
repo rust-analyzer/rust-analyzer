@@ -55,12 +55,10 @@ pub(crate) fn convert_while_to_loop(acc: &mut Assists, ctx: &AssistContext<'_, '
             let make = editor.make();
             let while_indent_level = IndentLevel::from_node(while_expr.syntax());
 
-            let break_block = make
-                .block_expr(
-                    iter::once(make.expr_stmt(make.expr_break(None, None).into()).into()),
-                    None,
-                )
-                .indent(IndentLevel(1));
+            let break_block = make.block_expr(
+                iter::once(make.expr_stmt(make.expr_break(None, None).into()).into()),
+                None,
+            );
 
             editor.replace_all(
                 while_kw.syntax_element()..=while_cond.syntax().syntax_element(),
@@ -68,14 +66,17 @@ pub(crate) fn convert_while_to_loop(acc: &mut Assists, ctx: &AssistContext<'_, '
             );
 
             if is_pattern_cond(while_cond.clone()) {
-                let then_branch = while_body.reset_indent().indent(IndentLevel(1));
-                let if_expr = make.expr_if(while_cond, then_branch, Some(break_block.into()));
+                let then_branch = while_body.reset_indent();
+                let if_expr = make
+                    .expr_if(while_cond.reset_indent(), then_branch, Some(break_block.into()))
+                    .indent(IndentLevel(1));
                 let stmts = iter::once(make.expr_stmt(if_expr.into()).into());
                 let block_expr = make.block_expr(stmts, None);
                 editor.replace(while_body.syntax(), block_expr.indent(while_indent_level).syntax());
             } else {
-                let if_cond = invert_boolean_expression(make, while_cond);
-                let if_expr = make.expr_if(if_cond, break_block, None).indent(while_indent_level);
+                let if_cond = invert_boolean_expression(make, while_cond.reset_indent());
+                let if_expr =
+                    make.expr_if(if_cond, break_block, None).indent(while_indent_level + 1);
                 if !while_body.syntax().text().contains_char('\n') {
                     editor.insert(
                         Position::after(&l_curly),
@@ -305,9 +306,12 @@ fn main() {
             convert_while_to_loop,
             r#"
 fn main() {
+    let cond = |cond| cond;
     {
         {
-            while$0 cond {
+            while$0 cond(
+                true
+            ) {
                 foo(
                     "xxx",
                 );
@@ -318,10 +322,14 @@ fn main() {
 "#,
             r#"
 fn main() {
+    let cond = |cond| cond;
     {
         {
             loop {
-                if !cond {
+                if !cond(
+                    true
+                )
+                {
                     break;
                 }
                 foo(
@@ -340,7 +348,9 @@ fn main() {
 fn main() {
     {
         {
-            while$0 let Some(_) = foo() {
+            while$0 let Some(_) = foo(
+                "xxx"
+            ) {
                 bar(
                     "xxx",
                 );
@@ -354,7 +364,10 @@ fn main() {
     {
         {
             loop {
-                if let Some(_) = foo() {
+                if let Some(_) = foo(
+                    "xxx"
+                )
+                {
                     bar(
                         "xxx",
                     );

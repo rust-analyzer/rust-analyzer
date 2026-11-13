@@ -67,19 +67,19 @@ pub(crate) fn replace_let_with_if_let(
                     }
                 }
             };
+            let init = init.reset_indent();
+            let let_else = let_stmt.let_else().map(|it| it.reset_indent());
             let init_expr =
                 if let_expr_needs_paren(&init) { make.expr_paren(init).into() } else { init };
 
             let block = make.block_expr([], None);
-            let block = block.indent(IndentLevel::from_node(let_stmt.syntax()));
             let if_expr = make.expr_if(
                 make.expr_let(pat, init_expr).into(),
                 block,
-                let_stmt
-                    .let_else()
-                    .and_then(|let_else| let_else.block_expr().map(ast::ElseBranch::from)),
+                let_else.and_then(|let_else| let_else.block_expr().map(ast::ElseBranch::from)),
             );
-            let if_stmt = make.expr_stmt(if_expr.into());
+            let if_stmt =
+                make.expr_stmt(if_expr.into()).indent(IndentLevel::from_node(let_stmt.syntax()));
 
             editor.replace(let_stmt.syntax(), if_stmt.syntax());
             builder.add_file_edits(ctx.vfs_file_id(), editor);
@@ -223,6 +223,34 @@ fn main() {
     let a = Some(1);
     if let Some(_) = a {
     } else { unreachable!() }
+}
+            ",
+        )
+    }
+
+    #[test]
+    fn indent() {
+        check_assist(
+            replace_let_with_if_let,
+            r"
+//- minicore: option
+fn main() {
+    $0let Some(_) = Some(
+        1
+    ) else {
+        unreachable!()
+    };
+}
+            ",
+            r"
+fn main() {
+    if let Some(_) = Some(
+        1
+    )
+    {
+    } else {
+        unreachable!()
+    }
 }
             ",
         )

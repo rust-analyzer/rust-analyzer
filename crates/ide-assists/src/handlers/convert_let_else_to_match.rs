@@ -95,7 +95,7 @@ pub(crate) fn convert_let_else_to_match(
             );
             let else_arm = make.match_arm(make.wildcard_pat().into(), None, else_expr);
             let arms = [binding_arm, else_arm].map(|arm| arm.indent(1.into()));
-            let match_ = make.expr_match(init, make.match_arm_list(arms));
+            let match_ = make.expr_match(init.reset_indent(), make.match_arm_list(arms));
             let match_ = match_.indent(let_stmt.indent_level());
 
             if bindings.is_empty() {
@@ -618,12 +618,17 @@ fn main() {
             r#"
 fn main() {
     let v = vec![1, 2, 3];
-    let &[mut x, y, ..] = &v.iter().collect::<Vec<_>>()[..] else$0 { return };
+    let &[mut x, y, ..] = &v
+        .iter()
+        .collect::<Vec<_>>()[..] else$0 { return };
 }"#,
             r#"
 fn main() {
     let v = vec![1, 2, 3];
-    let (mut x, y) = match &v.iter().collect::<Vec<_>>()[..] {
+    let (mut x, y) = match &v
+        .iter()
+        .collect::<Vec<_>>()[..]
+    {
         &[x, y, ..] => (x, y),
         _ => return,
     };

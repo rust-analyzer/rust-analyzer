@@ -188,7 +188,7 @@ pub(crate) fn convert_bool_then_to_if(
             let mapless_make = SyntaxFactory::without_mappings();
             let closure_body = match closure_body.reset_indent() {
                 ast::Expr::BlockExpr(block) => block,
-                e => mapless_make.block_expr(None, Some(e)),
+                e => mapless_make.block_expr(None, Some(e.indent(1.into()))),
             };
 
             let (editor, closure_body) = SyntaxEditor::with_ast_node(&closure_body);
@@ -223,7 +223,7 @@ pub(crate) fn convert_bool_then_to_if(
             };
             let if_expr = make
                 .expr_if(
-                    cond,
+                    cond.reset_indent(),
                     closure_body,
                     Some(ast::ElseBranch::Block(make.block_expr(None, Some(none_path)))),
                 )
@@ -603,6 +603,39 @@ fn main() {
 fn main() {
     let test = &[()];
     let value = (!test.is_empty()).then(|| ());
+}
+",
+        );
+    }
+
+    #[test]
+    fn indent() {
+        check_assist(
+            convert_bool_then_to_if,
+            r"
+//- minicore:bool_impl
+fn main() {
+    let foo = |cond| cond;
+    foo(
+        true
+    ).t$0hen(|| foo(
+        false
+    ))
+}
+",
+            r"
+fn main() {
+    let foo = |cond| cond;
+    if foo(
+        true
+    )
+    {
+        Some(foo(
+            false
+        ))
+    } else {
+        None
+    }
 }
 ",
         );

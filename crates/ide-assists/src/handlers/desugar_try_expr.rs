@@ -90,7 +90,7 @@ pub(crate) fn desugar_try_expr(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -
             let match_arm_list = make.match_arm_list([happy_arm, sad_arm]);
 
             let expr_match = make
-                .expr_match(expr.clone(), match_arm_list)
+                .expr_match(expr.reset_indent(), match_arm_list)
                 .indent(IndentLevel::from_node(try_expr.syntax()));
 
             editor.replace(try_expr.syntax(), expr_match.syntax());
@@ -284,6 +284,53 @@ fn test() {
 fn test() {
     let Ok(pat): Result<bool, _> = Ok(true) else {
         return Err(todo!());
+    };
+}
+            "#,
+            "Replace try expression with let else",
+        );
+    }
+
+    #[test]
+    fn test_desugar_try_expr_indent() {
+        check_assist(
+            desugar_try_expr,
+            r#"
+//- minicore: try, option
+fn test() {
+    let pat = Some(
+        true
+    )$0?;
+}
+            "#,
+            r#"
+fn test() {
+    let pat = match Some(
+        true
+    )
+    {
+        Some(it) => it,
+        None => return None,
+    };
+}
+            "#,
+        );
+        check_assist_by_label(
+            desugar_try_expr,
+            r#"
+//- minicore: try, option
+fn test() {
+    let pat = Some(
+        true
+    )$0?;
+}
+            "#,
+            r#"
+fn test() {
+    let Some(pat) = Some(
+        true
+    ) else {
+        return None;
     };
 }
             "#,

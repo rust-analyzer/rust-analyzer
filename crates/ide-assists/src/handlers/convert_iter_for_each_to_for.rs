@@ -65,10 +65,11 @@ pub(crate) fn convert_iter_for_each_to_for(
             let block = match body {
                 ast::Expr::BlockExpr(block) => block.reset_indent(),
                 _ => make.block_expr(Vec::new(), Some(body.reset_indent().indent(1.into()))),
-            }
-            .indent(indent);
+            };
 
-            let expr_for_loop = make.expr_for_loop(param, receiver, block);
+            let expr_for_loop = make
+                .expr_for_loop(param.reset_indent(), receiver.reset_indent(), block)
+                .indent(indent);
             editor.replace(target_node, expr_for_loop.syntax());
             builder.add_file_edits(ctx.vfs_file_id(), editor);
         },
@@ -570,6 +571,58 @@ fn main() {
     });
 }
 "#,
+        );
+    }
+
+    #[test]
+    fn indent() {
+        check_assist(
+            convert_iter_for_each_to_for,
+            r#"
+//- minicore: iterators
+fn main() {
+    let it = |n| core::iter::repeat(n);
+    it(
+        92
+    ).$0for_each(|(x, y)| {
+        println!("x: {}, y: {}", x, y);
+    })
+}
+"#,
+            r#"
+fn main() {
+    let it = |n| core::iter::repeat(n);
+    for (x, y) in it(
+        92
+    )
+    {
+        println!("x: {}, y: {}", x, y);
+    }
+}
+"#,
+        );
+        check_assist(
+            convert_for_loop_with_for_each,
+            r"
+fn main() {
+    for $0v in vec![
+        1,
+        2,
+        3,
+    ] {
+        v *= 2;
+    }
+}",
+            r"
+fn main() {
+    vec![
+        1,
+        2,
+        3,
+    ].into_iter().for_each(|v| {
+        v *= 2;
+    });
+}",
         );
     }
 }
