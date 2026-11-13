@@ -374,12 +374,12 @@ impl CompletionRelevance {
             // When a fn is bumped due to return type:
             // Bump Constructor or Builder methods with no arguments,
             // over them than with self arguments
-            if function.has_params {
-                // bump associated functions
-                fn_score = fn_score.saturating_sub(1);
-            } else if function.has_self_param {
+            if function.has_self_param {
                 // downgrade methods (below Constructor)
                 fn_score = fn_score.min(1);
+            } else if function.has_params {
+                // bump associated functions
+                fn_score = fn_score.saturating_sub(1);
             }
 
             score += fn_score;

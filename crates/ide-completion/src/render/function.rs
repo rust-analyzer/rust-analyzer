@@ -189,13 +189,14 @@ fn compute_return_type_match(
     self_type: hir::Type<'_>,
     ret_type: &hir::Type<'_>,
 ) -> CompletionRelevanceReturnType {
-    if match_types(ctx.completion, &self_type, ret_type).is_some() {
+    let is_construct = |ty: &_| {
+        let expected = Some(crate::CompletionRelevanceTypeMatch::Exact);
+        match_types(ctx.completion, &self_type, ty) == expected
+    };
+    if is_construct(ret_type) {
         // fn([..]) -> Self
         CompletionRelevanceReturnType::DirectConstructor
-    } else if ret_type
-        .type_arguments()
-        .any(|ret_type_arg| match_types(ctx.completion, &self_type, &ret_type_arg).is_some())
-    {
+    } else if ret_type.type_arguments().any(|ret_type_arg| is_construct(&ret_type_arg)) {
         // fn([..]) -> Result<Self, E> OR Wrapped<Foo, Self>
         CompletionRelevanceReturnType::Constructor
     } else if ret_type
