@@ -31,6 +31,7 @@ import { HOVER_REFERENCE_COMMAND } from "./client";
 import type { DependencyId } from "./dependencies_provider";
 import { log } from "./util";
 import type { SyntaxElement } from "./syntax_tree_provider";
+import { normalizeLocalDocsUri } from "./external_docs";
 
 export * from "./run";
 export { newProject } from "./new_project";
@@ -1040,6 +1041,11 @@ export function openDocs(ctx: CtxInit): Cmd {
 
         let docLink = fileType & vscode.FileType.File ? docLinks.local : docLinks.web;
         if (docLink) {
+            docLink = normalizeLocalDocsUri(
+                docLink,
+                editor.document.uri.authority || undefined,
+                editor.document.uri.scheme,
+            );
             // instruct vscode to handle the vscode-remote link directly
             if (docLink.startsWith("vscode-remote://")) {
                 docLink = docLink.replace("vscode-remote://", "vscode://vscode-remote/");
