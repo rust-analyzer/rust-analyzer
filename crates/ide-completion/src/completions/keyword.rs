@@ -736,7 +736,7 @@ fn main() {
 "#,
             r#"
 fn main() {
-    let $1 = $0;
+    let $1 = $2;$0
 }
 "#,
         );
@@ -749,7 +749,7 @@ fn main() {
 "#,
             r#"
 fn main() {
-    let mut $1 = $0;
+    let mut $1 = $2;$0
 }
 "#,
         );
@@ -826,7 +826,7 @@ fn main() {
 "#,
             r#"
 fn main() {
-    if { let $1 = $0; } {}
+    if { let $1 = $2;$0 } {}
 }
 "#,
         );
@@ -839,7 +839,7 @@ fn main() {
 "#,
             r#"
 fn main() {
-    if { let mut $1 = $0; } {}
+    if { let mut $1 = $2;$0 } {}
 }
 "#,
         );
@@ -860,7 +860,7 @@ fn main() {
 fn main() {
     match () {
         () => {
-    let $1 = $0;
+    let $1 = $2;$0
 }
     }
 }
@@ -879,7 +879,7 @@ fn main() {
 fn main() {
     match () {
         () => {
-    let mut $1 = $0;
+    let mut $1 = $2;$0
 }
     }
 }
@@ -899,7 +899,7 @@ fn main() {
             r#"
 fn main() {
     || {
-    let $1 = $0;
+    let $1 = $2;$0
 }
 }
 "#,
