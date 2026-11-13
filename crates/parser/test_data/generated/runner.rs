@@ -1014,6 +1014,10 @@ mod err {
         run_and_expect_errors("test_data/parser/inline/err/struct_field_recover.rs");
     }
     #[test]
+    fn struct_field_special_recover() {
+        run_and_expect_errors("test_data/parser/inline/err/struct_field_special_recover.rs");
+    }
+    #[test]
     fn top_level_let() { run_and_expect_errors("test_data/parser/inline/err/top_level_let.rs"); }
     #[test]
     fn tuple_expr_empty_expr() {
