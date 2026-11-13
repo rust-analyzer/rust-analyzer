@@ -233,6 +233,16 @@ impl<DB: HirDatabase + ?Sized> Semantics<'_, DB> {
         token.parent().into_iter().flat_map(move |it| self.ancestors_with_macros(it))
     }
 
+    // FIXME: Rethink this API
+    pub fn ancestors_at_offset_with_descend<'slf>(
+        &'slf self,
+        node: &SyntaxNode,
+        offset: TextSize,
+    ) -> impl Iterator<Item = SyntaxNode> + 'slf {
+        self.imp
+            .descend_node_at_offset(node, offset)
+            .kmerge_by(|left, right| left.text_range().len().lt(&right.text_range().len()))
+    }
     /// Find an AstNode by offset inside SyntaxNode, if it is inside *Macrofile*,
     /// search up until it is of the target AstNode type
     pub fn find_node_at_offset_with_macros<N: AstNode>(

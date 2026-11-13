@@ -414,11 +414,17 @@ fn hover_ranged(
     display_target: DisplayTarget,
 ) -> Option<RangeInfo<HoverResult>> {
     // FIXME: make this work in attributes
-    let expr_or_pat = file
-        .covering_element(range)
-        .ancestors()
+    // XXX: Maybe checking range.end() and use kmerge is a good idea?
+    let expr_or_pat = sema
+        .ancestors_at_offset_with_descend(&file, range.start())
         .take_while(|it| ast::MacroCall::can_cast(it.kind()) || !ast::Item::can_cast(it.kind()))
-        .find_map(Either::<ast::Expr, ast::Pat>::cast)?;
+        .filter_map(Either::<ast::Expr, ast::Pat>::cast)
+        .find(|it| {
+            let origin = sema.original_range_opt(it.syntax());
+            origin.is_some_and(|it| {
+                it.range.contains_range(range) && it.file_id.file_id(sema.db) == file_id
+            })
+        })?;
     let res = match &expr_or_pat {
         Either::Left(ast::Expr::TryExpr(try_expr)) => {
             render::try_expr(sema, config, try_expr, edition, display_target)

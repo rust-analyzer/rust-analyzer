@@ -8189,6 +8189,22 @@ fn f() {
 }
 
 #[test]
+fn hover_ranged_inside_macro_call() {
+    check_hover_range(
+        r#"
+macro_rules! identity { ($($t:tt)*) => { $($t)* }; }
+fn f() {
+    identity!( ($01i32 + 2i32$0) as u8 );
+}
+"#,
+        expect![[r#"
+            ```rust
+            i32
+            ```"#]],
+    );
+}
+
+#[test]
 fn hover_deref() {
     check(
         r#"
