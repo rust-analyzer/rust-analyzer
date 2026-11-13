@@ -399,8 +399,9 @@ impl ast::Fn {
         if let Some(old_body) = self.body() {
             editor.replace(old_body.syntax(), body.syntax());
         } else {
-            let single_space = make.whitespace(" ");
-            let elements = vec![single_space.into(), body.syntax().clone().into()];
+            let ws =
+                make.whitespace(if self.syntax().text().contains_char('\n') { "\n" } else { " " });
+            let elements = vec![ws.into(), body.syntax().clone().into()];
 
             if let Some(semicolon) = self.semicolon_token() {
                 editor.replace_with_many(semicolon, elements);

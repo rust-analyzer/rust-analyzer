@@ -2538,7 +2538,8 @@ impl Test for () {
     fn f<B>()
     where
         B: IntoIterator,
-        <B as IntoIterator>::Item: Copy {
+        <B as IntoIterator>::Item: Copy
+    {
         ${0:todo!()}
     }
 }
