@@ -4,9 +4,7 @@ use ide_db::{
 };
 use itertools::Itertools;
 use syntax::{
-    Edition,
-    SyntaxKind::WHITESPACE,
-    T,
+    Edition, T,
     ast::{self, AstNode, HasName, syntax_factory::SyntaxFactory},
     syntax_editor::{Position, SyntaxEditor},
 };
@@ -308,13 +306,7 @@ fn update_attribute(
         editor.replace(old_tree.syntax(), new_tree.syntax());
     } else {
         // Remove the attr and any trailing whitespace
-
-        if let Some(line_break) =
-            attr.syntax().next_sibling_or_token().filter(|t| t.kind() == WHITESPACE)
-        {
-            editor.delete(line_break)
-        }
-
+        editor.delete_whitespace(attr.syntax().next_sibling_or_token());
         editor.delete(attr.syntax())
     }
 }

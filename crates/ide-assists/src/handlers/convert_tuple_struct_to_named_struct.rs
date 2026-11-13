@@ -330,9 +330,7 @@ fn delete_rest_pat(
     let following = next_non_trivia_token(place.end().clone()).filter(|t| t.kind() == T![,]);
     let preceding = previous_non_trivia_token(place.start().clone()).filter(|t| t.kind() == T![,]);
     if let Some(comma) = following.or(preceding) {
-        if let Some(ws) = comma.next_token().filter(|t| t.kind() == SyntaxKind::WHITESPACE) {
-            editor.delete(ws);
-        }
+        editor.delete_whitespace(comma.next_token());
         editor.delete(comma);
     }
     Some(())

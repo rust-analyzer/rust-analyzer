@@ -385,12 +385,7 @@ impl ArmsEdit {
                 }
                 syntax::NodeOrToken::Token(tok) => tok.prev_token(),
             };
-            if let Some(prev) = prev
-                && prev.kind() == SyntaxKind::WHITESPACE
-            {
-                editor.delete(prev);
-            }
-
+            editor.delete_whitespace(prev);
             editor.delete_all(range);
         }
     }

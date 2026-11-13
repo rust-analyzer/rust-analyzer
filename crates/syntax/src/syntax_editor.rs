@@ -125,6 +125,14 @@ impl SyntaxEditor {
         self.insert_all(position, elements)
     }
 
+    pub fn delete_whitespace(&self, element: Option<impl Element>) {
+        let Some(element) = element.map(Element::syntax_element) else { return };
+
+        if element.kind() == SyntaxKind::WHITESPACE {
+            self.delete(element);
+        }
+    }
+
     pub fn delete(&self, element: impl Element) {
         let element = element.syntax_element();
         debug_assert!(is_ancestor_or_self_of_element(&element, &self.root));

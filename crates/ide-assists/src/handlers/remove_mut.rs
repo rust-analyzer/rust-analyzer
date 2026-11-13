@@ -1,4 +1,4 @@
-use syntax::{SyntaxKind, T};
+use syntax::T;
 
 use crate::{AssistContext, AssistId, Assists};
 
@@ -23,10 +23,7 @@ pub(crate) fn remove_mut(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Opti
     let target = mut_token.text_range();
     acc.add(AssistId::refactor("remove_mut"), "Remove `mut` keyword", target, |builder| {
         let editor = builder.make_editor(&mut_token.parent().unwrap());
-        match mut_token.next_token() {
-            Some(it) if it.kind() == SyntaxKind::WHITESPACE => editor.delete(it),
-            _ => (),
-        }
+        editor.delete_whitespace(mut_token.next_token());
         editor.delete(mut_token);
         builder.add_file_edits(ctx.vfs_file_id(), editor);
     })

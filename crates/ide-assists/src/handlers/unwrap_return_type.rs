@@ -4,7 +4,7 @@ use ide_db::{
     syntax_helpers::node_ext::{for_each_tail_expr, walk_expr},
 };
 use syntax::{
-    AstNode, NodeOrToken, SyntaxKind,
+    AstNode,
     ast::{self, HasArgList, HasGenericArgs},
     match_ast,
 };
@@ -82,12 +82,7 @@ pub(crate) fn unwrap_return_type(acc: &mut Assists, ctx: &AssistContext<'_, '_>)
 
         let is_unit_type = is_unit_type(&happy_type);
         if is_unit_type {
-            if let Some(NodeOrToken::Token(token)) = ret_type.syntax().next_sibling_or_token()
-                && token.kind() == SyntaxKind::WHITESPACE
-            {
-                editor.delete(token);
-            }
-
+            editor.delete_whitespace(ret_type.syntax().next_sibling_or_token());
             editor.delete(ret_type.syntax());
         } else {
             editor.replace(type_ref.syntax(), happy_type.syntax());
@@ -118,13 +113,8 @@ pub(crate) fn unwrap_return_type(acc: &mut Assists, ctx: &AssistContext<'_, '_>)
                         );
                         match tail_parent {
                             Some(Either::Left(_expr)) => {
-                                if let Some(ws) = tail_expr
-                                    .syntax()
-                                    .prev_sibling_or_token()
-                                    .filter(|e| e.kind() == SyntaxKind::WHITESPACE)
-                                {
-                                    editor.delete(ws);
-                                }
+                                editor
+                                    .delete_whitespace(tail_expr.syntax().prev_sibling_or_token());
                                 editor.delete(tail_expr.syntax());
                             }
                             Some(Either::Right(stmt_list)) => {

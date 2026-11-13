@@ -344,13 +344,7 @@ fn update_variant(
     editor.replace(variant.field_list()?.syntax(), field_list.syntax());
 
     // remove any ws after the name
-    if let Some(ws) = name
-        .syntax()
-        .siblings_with_tokens(syntax::Direction::Next)
-        .find_map(|tok| tok.into_token().filter(|tok| tok.kind() == WHITESPACE))
-    {
-        editor.delete(ws);
-    }
+    editor.delete_whitespace(name.syntax().next_sibling_or_token());
 
     Some(())
 }

@@ -1,7 +1,7 @@
 use crate::assist_context::{AssistContext, Assists};
 use ide_db::{assists::AssistId, defs::Definition, search::SearchScope};
 use syntax::{
-    AstNode, SyntaxKind, T,
+    AstNode, T,
     ast::{
         self, HasAttrs, HasGenericParams, HasName, HasVisibility, edit::AstNodeEdit,
         syntax_factory::SyntaxFactory,
@@ -211,26 +211,17 @@ fn trait_name(items: &ast::AssocItemList, make: &SyntaxFactory) -> ast::Name {
 
 /// `E0449` Trait items always share the visibility of their trait
 fn remove_items_visibility(editor: &SyntaxEditor, item: &ast::AssocItem) {
-    if let Some(has_vis) = ast::AnyHasVisibility::cast(item.syntax().clone()) {
-        if let Some(vis) = has_vis.visibility()
-            && let Some(token) = vis.syntax().next_sibling_or_token()
-            && token.kind() == SyntaxKind::WHITESPACE
-        {
-            editor.delete(token);
-        }
-        if let Some(vis) = has_vis.visibility() {
-            editor.delete(vis.syntax());
-        }
+    if let Some(has_vis) = ast::AnyHasVisibility::cast(item.syntax().clone())
+        && let Some(vis) = has_vis.visibility()
+    {
+        editor.delete_whitespace(vis.syntax().next_sibling_or_token());
+        editor.delete(vis.syntax());
     }
 }
 
 fn remove_doc_comments(editor: &SyntaxEditor, item: &ast::AssocItem) {
     for doc in item.doc_comments() {
-        if let Some(next) = doc.syntax().last_token().and_then(|it| it.next_token())
-            && next.kind() == SyntaxKind::WHITESPACE
-        {
-            editor.delete(next);
-        }
+        editor.delete_whitespace(doc.syntax().last_token().and_then(|it| it.next_token()));
         editor.delete(doc.syntax());
     }
 }
@@ -242,11 +233,7 @@ fn strip_body(editor: &SyntaxEditor, item: &ast::AssocItem) {
     {
         // In contrast to function bodies, we want to see no ws before a semicolon.
         // So let's remove them if we see any.
-        if let Some(prev) = body.syntax().prev_sibling_or_token()
-            && prev.kind() == SyntaxKind::WHITESPACE
-        {
-            editor.delete(prev);
-        }
+        editor.delete_whitespace(body.syntax().prev_sibling_or_token());
 
         editor.replace(body.syntax(), make.token(T![;]));
     };

@@ -422,11 +422,7 @@ fn let_and_guard(
         if let Some(rhs) = left_bin.rhs() {
             editor.replace(left_bin.syntax(), rhs.syntax());
         } else {
-            if let Some(next) = left_bin.syntax().next_sibling_or_token()
-                && next.kind() == SyntaxKind::WHITESPACE
-            {
-                editor.delete(next);
-            }
+            editor.delete_whitespace(left_bin.syntax().next_sibling_or_token());
             editor.delete(left_bin.syntax());
         }
 

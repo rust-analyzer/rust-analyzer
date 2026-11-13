@@ -158,9 +158,8 @@ fn delete_else_before(container: SyntaxNode, editor: &SyntaxEditor) {
     else {
         return;
     };
-    itertools::chain(else_token.prev_token(), else_token.next_token())
-        .filter(|it| it.kind() == SyntaxKind::WHITESPACE)
-        .for_each(|it| editor.delete(it));
+    editor.delete_whitespace(else_token.prev_token());
+    editor.delete_whitespace(else_token.next_token());
     let indent = IndentLevel::from_node(&container);
     let newline = make.whitespace(&format!("\n{indent}"));
     editor.replace(else_token, newline);

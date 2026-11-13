@@ -1,4 +1,4 @@
-use syntax::{AstNode, SyntaxKind, T, TextRange, ast};
+use syntax::{AstNode, T, TextRange, ast};
 
 use crate::{AssistContext, AssistId, Assists};
 
@@ -56,14 +56,8 @@ pub(crate) fn remove_else_branches(acc: &mut Assists, ctx: &AssistContext<'_, '_
         target,
         |builder| {
             let editor = builder.make_editor(&else_token.parent().unwrap());
-            match else_token.prev_token() {
-                Some(it) if it.kind() == SyntaxKind::WHITESPACE => editor.delete(it),
-                _ => (),
-            }
-            match else_token.next_token() {
-                Some(it) if it.kind() == SyntaxKind::WHITESPACE => editor.delete(it),
-                _ => (),
-            }
+            editor.delete_whitespace(else_token.prev_token());
+            editor.delete_whitespace(else_token.next_token());
             editor.delete(else_token);
             editor.delete(else_branches);
             builder.add_file_edits(ctx.vfs_file_id(), editor);
