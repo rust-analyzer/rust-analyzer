@@ -330,6 +330,10 @@ impl Marker {
         Marker { pos, bomb: DropBomb::new("Marker must be either completed or abandoned") }
     }
 
+    pub(crate) fn is_empty(&self, p: &Parser<'_>) -> bool {
+        self.pos as usize == p.events.len() - 1
+    }
+
     /// Finishes the syntax tree node and assigns `kind` to it,
     /// and mark the create a `CompletedMarker` for possible future
     /// operation like `.precede()` to deal with forward_parent.

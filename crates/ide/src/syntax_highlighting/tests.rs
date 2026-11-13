@@ -1284,6 +1284,22 @@ fn foo(x: &fn(&dyn Trait)) {}
     let _ = analysis.highlight(HL_CONFIG, file_id).unwrap();
 }
 
+#[test]
+fn highlight_invalid_expr_macro_expansion_no_crash() {
+    let (analysis, file_id) = fixture::file(
+        r#"
+macro_rules! bar {
+    () => {#}
+}
+
+fn expect() {
+    let _ = bar!();
+}
+"#,
+    );
+    let _ = analysis.highlight(HL_CONFIG, file_id).unwrap();
+}
+
 /// Highlights the code given by the `ra_fixture` argument, renders the
 /// result as HTML, and compares it with the HTML file given as `snapshot`.
 /// Note that the `snapshot` file is overwritten by the rendered HTML.

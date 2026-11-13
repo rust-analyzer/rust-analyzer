@@ -258,8 +258,13 @@ fn expr_bp(
     });
 
     if !p.at_ts(EXPR_FIRST) {
-        p.err_recover("expected expression", atom::EXPR_RECOVERY_SET);
-        m.abandon(p);
+        let is_empty = m.is_empty(p);
+        let recovered = p.err_recover("expected expression", atom::EXPR_RECOVERY_SET);
+        if recovered || is_empty {
+            m.abandon(p);
+        } else {
+            m.complete(p, ERROR);
+        }
         return None;
     }
     let mut lhs = match lhs(p, r) {
