@@ -14,6 +14,7 @@ pub(crate) fn complete_type_path<'db>(
     ctx: &CompletionContext<'_, 'db>,
     path_ctx @ PathCompletionCtx { qualified, .. }: &PathCompletionCtx<'_>,
     location: &TypeLocation,
+    needs_import: &mut bool,
 ) {
     let _p = tracing::info_span!("complete_type_path").entered();
 
@@ -182,6 +183,7 @@ pub(crate) fn complete_type_path<'db>(
 
                         let n_params = trait_.type_or_const_param_count(ctx.sema.db, false);
                         if arg_idx >= n_params {
+                            *needs_import = false;
                             return; // only show assoc types
                         }
                     }

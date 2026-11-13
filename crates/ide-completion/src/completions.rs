@@ -727,7 +727,7 @@ pub(super) fn complete_name_ref<'db>(
 ) {
     match kind {
         NameRefKind::Path(path_ctx) => {
-            flyimport::import_on_the_fly_path(acc, ctx, path_ctx);
+            let mut needs_import = true;
 
             match &path_ctx.kind {
                 PathKind::Expr { expr_ctx } => {
@@ -739,7 +739,7 @@ pub(super) fn complete_name_ref<'db>(
                     snippet::complete_expr_snippet(acc, ctx, path_ctx, expr_ctx);
                 }
                 PathKind::Type { location } => {
-                    r#type::complete_type_path(acc, ctx, path_ctx, location);
+                    r#type::complete_type_path(acc, ctx, path_ctx, location, &mut needs_import);
 
                     match location {
                         TypeLocation::TupleField => {
@@ -790,6 +790,10 @@ pub(super) fn complete_name_ref<'db>(
                 PathKind::Use => {
                     use_::complete_use_path(acc, ctx, path_ctx, nameref);
                 }
+            }
+
+            if needs_import {
+                flyimport::import_on_the_fly_path(acc, ctx, path_ctx);
             }
         }
         NameRefKind::ExternCrate => extern_crate::complete_extern_crate(acc, ctx),
