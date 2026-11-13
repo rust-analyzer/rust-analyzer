@@ -742,6 +742,10 @@ impl GlobalState {
         self.source_root_config = project_folders.source_root_config;
         self.local_roots_parent_map = Arc::new(self.source_root_config.source_root_parent_map());
 
+        let mut change = ChangeWithProcMacros::default();
+        change.set_roots(self.source_root_config.partition(&self.vfs.read().0));
+        self.analysis_host.apply_change(change);
+
         info!(?cause, "recreating the crate graph");
         let cancellation_time = self.recreate_crate_graph(cause, switching_from_empty_workspace);
 
