@@ -6,6 +6,7 @@ import {
     type SpawnOptionsWithoutStdio,
     type ExecOptionsWithStringEncoding,
 } from "child_process";
+import * as path from "path";
 import { inspect } from "util";
 import type { CargoRunnableArgs, ShellRunnableArgs } from "./lsp_ext";
 
@@ -340,25 +341,26 @@ export function normalizeDriveLetter(path: string, isWindowsOS: boolean = isWind
 
 export const RUST_TOOLCHAIN_FILES = ["rust-toolchain.toml", "rust-toolchain"] as const;
 
-export async function findRustToolchainFiles(): Promise<vscode.Uri[]> {
-    const found: vscode.Uri[] = [];
-    const workspaceFolders = vscode.workspace.workspaceFolders;
-    if (!workspaceFolders) {
-        return found;
-    }
-
-    for (const folder of workspaceFolders) {
+/**
+ * Finds the rust-toolchain file that applies to `startPath` by searching it and then each of its
+ * parent directories, like rustup does.
+ */
+export async function findRustToolchainFile(startPath: string): Promise<vscode.Uri | undefined> {
+    let directory = startPath;
+    while (true) {
         for (const filename of RUST_TOOLCHAIN_FILES) {
-            const toolchainUri = vscode.Uri.joinPath(folder.uri, filename);
+            const toolchainUri = vscode.Uri.file(path.join(directory, filename));
             try {
                 await vscode.workspace.fs.stat(toolchainUri);
-                found.push(toolchainUri);
-                // Only add the first toolchain file found per workspace folder
-                break;
+                return toolchainUri;
             } catch {
                 // File doesn't exist, continue
             }
         }
+        const parent = path.dirname(directory);
+        if (parent === directory) {
+            return undefined;
+        }
+        directory = parent;
     }
-    return found;
 }
