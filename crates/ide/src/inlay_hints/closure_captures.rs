@@ -176,6 +176,26 @@ fn main() {
     }
 
     #[test]
+    fn field_capture_through_mut_reference_after_destructuring_assignment() {
+        check_with_config(
+            InlayHintsConfig { closure_capture_hints: true, ..DISABLED_CONFIG },
+            r#"
+struct V(i32);
+
+fn func(func_arg: &mut V) {
+    let closure = || {
+//                ^ move(func_arg.0, &mut func_arg.0)
+        let x;
+        V(x) = func_arg;
+        func_arg.0 = 0;
+    };
+    closure();
+}
+"#,
+        );
+    }
+
+    #[test]
     fn all_capture_kinds_async_closure() {
         check_with_config(
             InlayHintsConfig { closure_capture_hints: true, ..DISABLED_CONFIG },
