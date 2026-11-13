@@ -679,9 +679,7 @@ mod m {
     }
 }
 
-use m::
-    x::B
-;
+use m::x::B;
 
 fn main() {
     B;

@@ -492,13 +492,19 @@ impl ast::UseTreeList {
                 false
             }
         };
+        let remove_whitespace = |element: Option<SyntaxElement>| match element {
+            Some(element) if element.kind() == SyntaxKind::WHITESPACE => editor.delete(element),
+            _ => (),
+        };
 
         let remove_brace_in_use_tree_list = |u: &ast::UseTreeList| {
             if has_single_subtree_that_is_not_self(u) {
                 if let Some(a) = u.l_curly_token() {
+                    remove_whitespace(a.next_sibling_or_token());
                     editor.delete(a)
                 }
                 if let Some(a) = u.r_curly_token() {
+                    remove_whitespace(a.prev_sibling_or_token());
                     editor.delete(a)
                 }
                 u.comma().for_each(|u| editor.delete(u));
