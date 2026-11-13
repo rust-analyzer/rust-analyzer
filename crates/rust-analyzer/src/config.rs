@@ -631,6 +631,9 @@ config_data! {
         /// Will not be completed in `use`.
         completion_addColonsToModule: bool = true,
 
+        /// Automatically add a semicolon for macros.
+        completion_addSemicolonToMacro: MacroSemicolonStyle = MacroSemicolonStyle::Item,
+
         /// Automatically add a semicolon when completing unit-returning functions.
         ///
         /// In `match` arms it completes a comma instead.
@@ -1926,6 +1929,11 @@ impl Config {
             },
             add_colons_to_module: *self.completion_addColonsToModule(source_root),
             add_semicolon_to_unit: *self.completion_addSemicolonToUnit(source_root),
+            add_semicolon_to_macro: match self.completion_addSemicolonToMacro(source_root) {
+                MacroSemicolonStyle::None => ide::MacroSemicolonStyle::None,
+                MacroSemicolonStyle::Item => ide::MacroSemicolonStyle::Item,
+                MacroSemicolonStyle::Always => ide::MacroSemicolonStyle::Always,
+            },
             snippet_cap: SnippetCap::new(self.completion_snippet()),
             insert_use: self.insert_use_config(source_root),
             prefer_no_std: self.imports_preferNoStd(source_root).to_owned(),
@@ -3078,6 +3086,14 @@ pub enum AutoImportExclusionType {
     Methods,
     SubItems,
     Variants,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum MacroSemicolonStyle {
+    None,
+    Item,
+    Always,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -4247,7 +4263,18 @@ fn field_props(field: &str, ty: &str, doc: &[&str], default: &str) -> serde_json
                         }
                     }
                 ]
-             }
+            }
+        },
+        "MacroSemicolonStyle" => set! {
+            "type": {
+                "type": "string",
+                "enum": ["none", "item", "always"],
+                "enumDescriptions": [
+                    "Never complete semicolon",
+                    "Complete semicolon when path in item position",
+                    "Always complete semicolon"
+                ],
+            },
         },
         _ => panic!("missing entry for {ty}: {default} (field {field})"),
     }

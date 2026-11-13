@@ -75,6 +75,7 @@ pub(crate) const TEST_CONFIG: CompletionConfig<'_> = CompletionConfig {
     callable: Some(CallableSnippets::FillArguments),
     add_colons_to_module: true,
     add_semicolon_to_unit: true,
+    add_semicolon_to_macro: crate::MacroSemicolonStyle::Item,
     snippet_cap: SnippetCap::new(true),
     insert_use: InsertUseConfig {
         granularity: ImportGranularity::Crate,

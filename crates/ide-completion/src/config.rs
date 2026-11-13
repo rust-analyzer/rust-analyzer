@@ -29,6 +29,7 @@ pub struct CompletionConfig<'a> {
     pub callable: Option<CallableSnippets>,
     pub add_colons_to_module: bool,
     pub add_semicolon_to_unit: bool,
+    pub add_semicolon_to_macro: MacroSemicolonStyle,
     pub snippet_cap: Option<SnippetCap>,
     pub insert_use: InsertUseConfig,
     pub prefer_no_std: bool,
@@ -48,6 +49,15 @@ pub enum AutoImportExclusionType {
     Methods,
     SubItems,
     Variants,
+}
+
+// FIXME: Implement 'Auto' mode
+// https://github.com/rust-lang/rust-analyzer/pull/22536#issuecomment-4834287685
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum MacroSemicolonStyle {
+    None,
+    Item,
+    Always,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -280,7 +280,7 @@ pub(super) fn add_call_parens<'b>(
 
         (snippet, "(…)")
     };
-    if ret_type.is_unit() {
+    if ret_type.is_unit() && ctx.config.add_semicolon_to_unit {
         match ctx.complete_semicolon {
             CompleteSemicolon::DoNotComplete => {}
             CompleteSemicolon::CompleteSemi | CompleteSemicolon::CompleteComma => {

@@ -13,7 +13,7 @@
 use hir::ChangeWithProcMacros;
 use ide::{
     AnalysisHost, CallableSnippets, CompletionConfig, CompletionFieldsToResolve, DiagnosticsConfig,
-    FilePosition, RaFixtureConfig, TextSize,
+    FilePosition, MacroSemicolonStyle, RaFixtureConfig, TextSize,
 };
 use ide_db::{
     SnippetCap,
@@ -339,6 +339,7 @@ fn completion_config() -> CompletionConfig<'static> {
         limit: None,
         add_colons_to_module: true,
         add_semicolon_to_unit: true,
+        add_semicolon_to_macro: MacroSemicolonStyle::Item,
         fields_to_resolve: CompletionFieldsToResolve::empty(),
         exclude_flyimport: vec![],
         exclude_traits: &[],

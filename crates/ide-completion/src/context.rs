@@ -938,22 +938,22 @@ impl<'a, 'db> CompletionContext<'a, 'db> {
         );
 
         // FIXME: This should be part of `CompletionAnalysis` / `expand_and_analyze`
-        let complete_semicolon = if !config.add_semicolon_to_unit {
-            CompleteSemicolon::DoNotComplete
-        } else if let Some(term_node) =
-            sema.token_ancestors_with_macros(token.clone()).find(|node| {
-                matches!(
-                    node.kind(),
-                    BLOCK_EXPR
-                        | MATCH_ARM
-                        | CLOSURE_EXPR
-                        | ARG_LIST
-                        | PAREN_EXPR
-                        | ARRAY_EXPR
-                        | MATCH_EXPR
-                )
-            })
-        {
+        let term_node = sema.token_ancestors_with_macros(token.clone()).find(|node| {
+            if Either::<ast::Type, ast::Pat>::can_cast(node.kind()) {
+                return true;
+            }
+            matches!(
+                node.kind(),
+                BLOCK_EXPR
+                    | MATCH_ARM
+                    | CLOSURE_EXPR
+                    | ARG_LIST
+                    | PAREN_EXPR
+                    | ARRAY_EXPR
+                    | MATCH_EXPR
+            )
+        });
+        let complete_semicolon = if let Some(term_node) = term_node {
             let next_token = iter::successors(token.next_token(), |it| it.next_token())
                 .map(|it| it.kind())
                 .find(|kind| !kind.is_trivia());

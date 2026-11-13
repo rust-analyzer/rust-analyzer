@@ -5,7 +5,8 @@ use ide_db::{SymbolKind, documentation::Documentation};
 use syntax::{SmolStr, ToSmolStr, format_smolstr};
 
 use crate::{
-    context::{PathCompletionCtx, PathKind, PatternContext},
+    MacroSemicolonStyle,
+    context::{CompleteSemicolon, PathCompletionCtx, PathKind, PatternContext},
     item::{Builder, CompletionItem},
     render::RenderContext,
 };
@@ -18,7 +19,15 @@ pub(crate) fn render_macro(
     macro_: hir::Macro,
 ) -> Builder {
     let _p = tracing::info_span!("render_macro").entered();
-    render(ctx, *kind == PathKind::Use, *has_macro_bang, *has_call_parens, name, macro_)
+    render(
+        ctx,
+        *kind == PathKind::Use,
+        matches!(kind, PathKind::Item { .. }),
+        *has_macro_bang,
+        *has_call_parens,
+        name,
+        macro_,
+    )
 }
 
 pub(crate) fn render_macro_pat(
@@ -28,12 +37,13 @@ pub(crate) fn render_macro_pat(
     macro_: hir::Macro,
 ) -> Builder {
     let _p = tracing::info_span!("render_macro_pat").entered();
-    render(ctx, false, false, false, name, macro_)
+    render(ctx, false, false, false, false, name, macro_)
 }
 
 fn render(
     ctx @ RenderContext { completion, .. }: RenderContext<'_, '_>,
     is_use_path: bool,
+    is_item: bool,
     has_macro_bang: bool,
     has_call_parens: bool,
     name: hir::Name,
@@ -71,7 +81,19 @@ fn render(
 
     match ctx.snippet_cap() {
         Some(cap) if needs_bang && !has_call_parens => {
-            let snippet = format!("{escaped_name}!{bra}$0{ket}");
+            let needs_semi = match completion.config.add_semicolon_to_macro {
+                MacroSemicolonStyle::None => false,
+                MacroSemicolonStyle::Item => is_item,
+                MacroSemicolonStyle::Always => {
+                    is_item
+                        || matches!(completion.complete_semicolon, CompleteSemicolon::CompleteSemi)
+                }
+            };
+            let semi = match ket {
+                ")" | "]" if needs_semi => ";",
+                _ => "",
+            };
+            let snippet = format!("{escaped_name}!{bra}$0{ket}{semi}");
             let lookup = banged_name(name);
             item.insert_snippet(cap, snippet).lookup_by(lookup);
         }
@@ -158,7 +180,7 @@ fn guess_macro_braces(
 
 #[cfg(test)]
 mod tests {
-    use crate::tests::check_edit;
+    use crate::tests::{TEST_CONFIG, check_edit, check_edit_with_config};
 
     #[test]
     fn dont_insert_macro_call_parens_unnecessary() {
@@ -256,6 +278,183 @@ fn main() { $0 }
 macro_rules! foo { () => {} }
 pub use crate::foo as bar;
 fn main() { bar![$0] }
+"#,
+        );
+    }
+
+    #[test]
+    fn macro_semicolons() {
+        check_edit_with_config(
+            crate::CompletionConfig {
+                add_semicolon_to_macro: crate::MacroSemicolonStyle::None,
+                ..TEST_CONFIG
+            },
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+f$0
+"#,
+            r#"
+macro_rules! foo { () => {} }
+foo!($0)
+"#,
+        );
+
+        check_edit(
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+f$0
+"#,
+            r#"
+macro_rules! foo { () => {} }
+foo!($0);
+"#,
+        );
+
+        check_edit(
+            "foo!",
+            r#"
+#[rust_analyzer::macro_style(brackets)]
+macro_rules! foo { () => {} }
+f$0
+"#,
+            r#"
+#[rust_analyzer::macro_style(brackets)]
+macro_rules! foo { () => {} }
+foo![$0];
+"#,
+        );
+
+        check_edit(
+            "foo!",
+            r#"
+#[rust_analyzer::macro_style(braces)]
+macro_rules! foo { () => {} }
+f$0
+"#,
+            r#"
+#[rust_analyzer::macro_style(braces)]
+macro_rules! foo { () => {} }
+foo! {$0}
+"#,
+        );
+
+        check_edit(
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+impl () {
+    f$0
+}
+"#,
+            r#"
+macro_rules! foo { () => {} }
+impl () {
+    foo!($0);
+}
+"#,
+        );
+
+        check_edit(
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+mod bar {
+    f$0
+}
+"#,
+            r#"
+macro_rules! foo { () => {} }
+mod bar {
+    foo!($0);
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn macro_semicolons_always() {
+        let config = || crate::CompletionConfig {
+            add_semicolon_to_macro: crate::MacroSemicolonStyle::Always,
+            ..TEST_CONFIG
+        };
+        check_edit_with_config(
+            config(),
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+f$0
+"#,
+            r#"
+macro_rules! foo { () => {} }
+foo!($0);
+"#,
+        );
+
+        check_edit_with_config(
+            config(),
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+fn main() { f$0 }
+"#,
+            r#"
+macro_rules! foo { () => {} }
+fn main() { foo!($0); }
+"#,
+        );
+
+        check_edit_with_config(
+            config(),
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+fn main() { g(f$0) }
+"#,
+            r#"
+macro_rules! foo { () => {} }
+fn main() { g(foo!($0)) }
+"#,
+        );
+
+        check_edit_with_config(
+            config(),
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+fn main() { let f$0 = (); }
+"#,
+            r#"
+macro_rules! foo { () => {} }
+fn main() { let foo!($0) = (); }
+"#,
+        );
+
+        // XXX: Maybe add comma to better?
+        check_edit_with_config(
+            config(),
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+fn main() { match () { () => f$0 } }
+"#,
+            r#"
+macro_rules! foo { () => {} }
+fn main() { match () { () => foo!($0) } }
+"#,
+        );
+
+        check_edit_with_config(
+            config(),
+            "foo!",
+            r#"
+macro_rules! foo { () => {} }
+fn main() -> f$0 {}
+"#,
+            r#"
+macro_rules! foo { () => {} }
+fn main() -> foo!($0) {}
 "#,
         );
     }

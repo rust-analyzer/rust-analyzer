@@ -1316,6 +1316,28 @@
             {
                 "title": "Completion",
                 "properties": {
+                    "rust-analyzer.completion.addSemicolonToMacro": {
+                        "markdownDescription": "Automatically add a semicolon for macros.",
+                        "default": "item",
+                        "type": {
+                            "type": "string",
+                            "enum": [
+                                "none",
+                                "item",
+                                "always"
+                            ],
+                            "enumDescriptions": [
+                                "Never complete semicolon",
+                                "Complete semicolon when path in item position",
+                                "Always complete semicolon"
+                            ]
+                        }
+                    }
+                }
+            },
+            {
+                "title": "Completion",
+                "properties": {
                     "rust-analyzer.completion.addSemicolonToUnit": {
                         "markdownDescription": "Automatically add a semicolon when completing unit-returning functions.\n\nIn `match` arms it completes a comma instead.",
                         "default": true,
