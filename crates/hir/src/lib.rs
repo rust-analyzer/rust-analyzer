@@ -2589,9 +2589,10 @@ impl Macro {
         matches!(self.kind(db), MacroKind::Derive | MacroKind::DeriveBuiltIn)
     }
 
-    pub fn preferred_brace_style(&self, db: &dyn HirDatabase) -> Option<MacroBraces> {
+    pub fn preferred_brace_style<'db>(&self, db: &'db dyn HirDatabase) -> Option<MacroBraces<'db>> {
         let attrs = self.attrs(db);
         MacroBraces::extract(attrs.attrs)
+            .or_else(|| AttrFlags::macro_style_snippet(db, self.id).map(MacroBraces::Snippet))
     }
 }
 
@@ -2607,6 +2608,7 @@ impl Macro {
 //  - `braces` for `{...}` style.
 //  - `brackets` for `[...]` style.
 //  - `parentheses` for `(...)` style.
+//  - `snippet = "..."` for custom snippet, e.g `"${path}!($1, $2)"`.
 //
 // Malformed attributes will be ignored without warnings.
 //
@@ -2614,13 +2616,14 @@ impl Macro {
 // users definitely do not want to be completed!
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum MacroBraces {
+pub enum MacroBraces<'a> {
     Braces,
     Brackets,
     Parentheses,
+    Snippet(&'a str),
 }
 
-impl MacroBraces {
+impl MacroBraces<'static> {
     fn extract(attrs: AttrFlags) -> Option<Self> {
         if attrs.contains(AttrFlags::MACRO_STYLE_BRACES) {
             Some(Self::Braces)

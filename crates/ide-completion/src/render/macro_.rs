@@ -1,6 +1,6 @@
 //! Renderer for macro invocations.
 
-use hir::{HirDisplay, db::HirDatabase};
+use hir::{HirDisplay, MacroBraces, db::HirDatabase};
 use ide_db::{SymbolKind, documentation::Documentation};
 use syntax::{SmolStr, ToSmolStr, format_smolstr};
 
@@ -31,6 +31,8 @@ pub(crate) fn render_macro_pat(
     render(ctx, false, false, false, name, macro_)
 }
 
+const PATH_PREFIX: &str = "${path}";
+
 fn render(
     ctx @ RenderContext { completion, .. }: RenderContext<'_, '_>,
     is_use_path: bool,
@@ -50,12 +52,18 @@ fn render(
         (name.as_str(), name.display(ctx.db(), completion.edition).to_smolstr());
     let docs = ctx.docs(macro_);
     let is_fn_like = macro_.is_fn_like(completion.db);
-    let (bra, ket) = if is_fn_like {
-        guess_macro_braces(ctx.db(), macro_, name, docs.as_ref())
+    let (bra, ket, custom) = if is_fn_like {
+        match guess_macro_braces(ctx.db(), macro_, name, docs.as_ref()) {
+            MacroBraces::Braces => (" {", "}", ""),
+            MacroBraces::Brackets => ("[", "]", ""),
+            MacroBraces::Parentheses => ("(", ")", ""),
+            MacroBraces::Snippet(snippet) => ("", "", snippet),
+        }
     } else {
-        ("", "")
+        ("", "", "")
     };
 
+    let force_custom = !custom.is_empty() && !custom.starts_with(PATH_PREFIX);
     let needs_bang = is_fn_like && !is_use_path && !has_macro_bang;
 
     let mut item = CompletionItem::new(
@@ -70,8 +78,15 @@ fn render(
         .set_relevance(ctx.completion_relevance());
 
     match ctx.snippet_cap() {
-        Some(cap) if needs_bang && !has_call_parens => {
-            let snippet = format!("{escaped_name}!{bra}$0{ket}");
+        Some(cap) if needs_bang && (!has_call_parens || force_custom) => {
+            let snippet = if !custom.is_empty() {
+                match custom.strip_prefix(PATH_PREFIX) {
+                    Some(custom) => format!("{escaped_name}{custom}"),
+                    None => custom.into(),
+                }
+            } else {
+                format!("{escaped_name}!{bra}$0{ket}")
+            };
             let lookup = banged_name(name);
             item.insert_snippet(cap, snippet).lookup_by(lookup);
         }
@@ -112,18 +127,14 @@ fn banged_name(name: &str) -> SmolStr {
     SmolStr::from_iter([name, "!"])
 }
 
-fn guess_macro_braces(
-    db: &dyn HirDatabase,
+fn guess_macro_braces<'db>(
+    db: &'db dyn HirDatabase,
     macro_: hir::Macro,
     macro_name: &str,
     docs: Option<&Documentation<'_>>,
-) -> (&'static str, &'static str) {
+) -> MacroBraces<'db> {
     if let Some(style) = macro_.preferred_brace_style(db) {
-        return match style {
-            hir::MacroBraces::Braces => (" {", "}"),
-            hir::MacroBraces::Brackets => ("[", "]"),
-            hir::MacroBraces::Parentheses => ("(", ")"),
-        };
+        return style;
     }
 
     let orig_name = macro_.name(db);
@@ -148,12 +159,12 @@ fn guess_macro_braces(
 
     // Insert a space before `{}`.
     // We prefer the last one when some votes equal.
-    let (_vote, (bra, ket)) = votes
+    let (_vote, style) = votes
         .iter()
-        .zip(&[(" {", "}"), ("[", "]"), ("(", ")")])
+        .zip(&[MacroBraces::Braces, MacroBraces::Brackets, MacroBraces::Parentheses])
         .max_by_key(|&(&vote, _)| vote)
         .unwrap();
-    (*bra, *ket)
+    *style
 }
 
 #[cfg(test)]
@@ -256,6 +267,77 @@ fn main() { $0 }
 macro_rules! foo { () => {} }
 pub use crate::foo as bar;
 fn main() { bar![$0] }
+"#,
+        );
+    }
+
+    #[test]
+    fn custom_macro_snippets() {
+        check_edit(
+            "foo!",
+            r#"
+#[rust_analyzer::macro_style(snippet = "${path}!{\n    $1\n}")]
+macro_rules! foo { () => {} }
+
+fn main() { f$0 }
+"#,
+            r#"
+#[rust_analyzer::macro_style(snippet = "${path}!{\n    $1\n}")]
+macro_rules! foo { () => {} }
+
+fn main() { foo!{
+    $1
+} }
+"#,
+        );
+
+        check_edit(
+            "assert_eq!",
+            r#"
+#[rust_analyzer::macro_style(snippet = "${path}!($1, $2)")]
+macro_rules! assert_eq { ($($t:tt)*) => {} }
+
+fn main() { a$0 }
+"#,
+            r#"
+#[rust_analyzer::macro_style(snippet = "${path}!($1, $2)")]
+macro_rules! assert_eq { ($($t:tt)*) => {} }
+
+fn main() { assert_eq!($1, $2) }
+"#,
+        );
+
+        check_edit(
+            "div!",
+            r#"
+macro_rules! html {
+    (<div>$($t:tt)*) => {
+        /* ... */
+    };
+    ($($t:tt)*) => {{
+        #[rust_analyzer::macro_style(snippet = "<div>\n    $1\n</div>")]
+        macro_rules! div { () => {} }
+        $($t)*
+    }}
+}
+
+fn main() { html!(d$0) }
+"#,
+            r#"
+macro_rules! html {
+    (<div>$($t:tt)*) => {
+        /* ... */
+    };
+    ($($t:tt)*) => {{
+        #[rust_analyzer::macro_style(snippet = "<div>\n    $1\n</div>")]
+        macro_rules! div { () => {} }
+        $($t)*
+    }}
+}
+
+fn main() { html!(<div>
+    $1
+</div>) }
 "#,
         );
     }

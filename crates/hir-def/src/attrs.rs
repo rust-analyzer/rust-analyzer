@@ -98,7 +98,7 @@ fn extract_ra_completions(attr_flags: &mut AttrFlags, tt: ast::TokenTree) {
 
 fn extract_ra_macro_style(attr_flags: &mut AttrFlags, tt: ast::TokenTree) {
     let tt = TokenTreeChildren::new(&tt);
-    if let Ok(NodeOrToken::Token(option)) = Itertools::exactly_one(tt)
+    if let Ok(NodeOrToken::Token(option)) = Itertools::exactly_one(tt.clone())
         && option.kind().is_any_identifier()
     {
         match option.text() {
@@ -107,6 +107,11 @@ fn extract_ra_macro_style(attr_flags: &mut AttrFlags, tt: ast::TokenTree) {
             "parentheses" => attr_flags.insert(AttrFlags::MACRO_STYLE_PARENTHESES),
             _ => {}
         }
+    } else if let Some([NodeOrToken::Token(kind), NodeOrToken::Token(eq), _]) = tt.collect_array()
+        && kind.text() == "snippet"
+        && eq.kind() == T![=]
+    {
+        attr_flags.insert(AttrFlags::HAS_MACRO_STYLE_SNIPPET);
     }
 }
 
@@ -353,6 +358,7 @@ bitflags::bitflags! {
         const DIAGNOSTIC_DO_NOT_RECOMMEND = 1 << 51;
 
         const HAS_RUSTC_MUST_IMPLEMENT_ONE_OF = 1 << 52;
+        const HAS_MACRO_STYLE_SNIPPET = 1 << 53;
     }
 }
 
@@ -1092,6 +1098,33 @@ impl AttrFlags {
             outer_mod_decl,
             inner_attrs_node,
         )
+    }
+
+    pub fn macro_style_snippet(db: &dyn SourceDatabase, owner: MacroId) -> Option<&str> {
+        if !AttrFlags::query(db, owner.into()).contains(AttrFlags::HAS_MACRO_STYLE_SNIPPET) {
+            return None;
+        }
+
+        return macro_style_snippet(db, owner).as_ref().map(SmolStr::as_str);
+
+        #[salsa::tracked(returns(ref))]
+        fn macro_style_snippet(db: &dyn SourceDatabase, owner: MacroId) -> Option<SmolStr> {
+            collect_attrs(db, owner.into(), |attr| {
+                if let ast::Meta::TokenTreeMeta(attr) = attr
+                    && attr.path().is2("rust_analyzer", "macro_style")
+                    && let Some(tt) = attr.token_tree()
+                {
+                    for atom in DocAtom::parse(tt) {
+                        if let DocAtom::KeyValue { key, value } = atom
+                            && key == "snippet"
+                        {
+                            return ControlFlow::Break(value);
+                        }
+                    }
+                }
+                ControlFlow::Continue(())
+            })
+        }
     }
 
     #[inline]

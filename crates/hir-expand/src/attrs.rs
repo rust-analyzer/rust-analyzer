@@ -36,7 +36,13 @@ use crate::{
 };
 
 pub trait AstPathExt {
-    fn is1(&self, segment: &str) -> bool;
+    fn is1(&self, segment: &str) -> bool {
+        self.as_one_segment().is_some_and(|it| it == segment)
+    }
+
+    fn is2(&self, qualifier: &str, segment: &str) -> bool {
+        matches!(self.as_up_to_two_segment(), Some((a, Some(b))) if a == qualifier && b == segment)
+    }
 
     fn as_one_segment(&self) -> Option<SmolStr>;
 
@@ -44,10 +50,6 @@ pub trait AstPathExt {
 }
 
 impl AstPathExt for ast::Path {
-    fn is1(&self, segment: &str) -> bool {
-        self.as_one_segment().is_some_and(|it| it == segment)
-    }
-
     fn as_one_segment(&self) -> Option<SmolStr> {
         Some(self.as_single_name_ref()?.text().into())
     }
@@ -60,10 +62,6 @@ impl AstPathExt for ast::Path {
 }
 
 impl AstPathExt for Option<ast::Path> {
-    fn is1(&self, segment: &str) -> bool {
-        self.as_ref().is_some_and(|it| it.is1(segment))
-    }
-
     fn as_one_segment(&self) -> Option<SmolStr> {
         self.as_ref().and_then(|it| it.as_one_segment())
     }
