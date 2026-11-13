@@ -314,14 +314,18 @@ impl ast::UseTree {
     /// `prefix$0` -> `prefix::{self}`
     ///
     /// `prefix$0::*` -> `prefix::{*}`
-    pub fn split_prefix_with_editor(&self, editor: &SyntaxEditor, prefix: &ast::Path) {
+    pub fn split_prefix_with_editor(
+        &self,
+        editor: &SyntaxEditor,
+        prefix: &ast::Path,
+    ) -> ast::UseTree {
         debug_assert_eq!(self.path(), Some(prefix.top_path()));
 
         let make = editor.make();
         let path = self.path().unwrap();
         let suffix = if path == *prefix {
             if self.use_tree_list().is_some() {
-                return;
+                return self.clone();
             } else if self.star_token().is_some() {
                 make.use_tree_glob()
             } else {
@@ -342,6 +346,7 @@ impl ast::UseTree {
         let new_use_tree = make.use_tree(prefix.clone(), Some(use_tree_list), None, false);
 
         editor.replace(self.syntax(), new_use_tree.syntax());
+        new_use_tree
     }
 }
 

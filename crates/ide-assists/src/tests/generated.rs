@@ -3607,7 +3607,7 @@ fn doctest_split_import() {
 use std::$0collections::HashMap;
 "#####,
         r#####"
-use std::{collections::HashMap};
+use std::{collections::HashMap$0};
 "#####,
     )
 }

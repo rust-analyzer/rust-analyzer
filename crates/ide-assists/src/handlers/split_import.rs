@@ -11,7 +11,7 @@ use crate::{AssistContext, AssistId, Assists};
 // ```
 // ->
 // ```
-// use std::{collections::HashMap};
+// use std::{collections::HashMap$0};
 // ```
 pub(crate) fn split_import(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Option<()> {
     let colon_colon = ctx.find_token_syntax_at_offset(T![::])?;
@@ -31,7 +31,13 @@ pub(crate) fn split_import(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Op
     let target = colon_colon.text_range();
     acc.add(AssistId::refactor_rewrite("split_import"), "Split import", target, |edit| {
         let editor = edit.make_editor(use_tree.syntax());
-        use_tree.split_prefix_with_editor(&editor, &path);
+        let new = use_tree.split_prefix_with_editor(&editor, &path);
+        if let Some(list) = new.use_tree_list()
+            && let Some(r_curly) = list.r_curly_token()
+            && let Some(cap) = ctx.config.snippet_cap
+        {
+            editor.add_annotation(r_curly, edit.make_tabstop_before(cap));
+        }
         edit.add_file_edits(ctx.vfs_file_id(), editor);
     })
 }
@@ -47,7 +53,7 @@ mod tests {
         check_assist(
             split_import,
             "use crate::$0db::RootDatabase;",
-            "use crate::{db::RootDatabase};",
+            "use crate::{db::RootDatabase$0};",
         )
     }
 
@@ -56,7 +62,7 @@ mod tests {
         check_assist(
             split_import,
             "use crate:$0:db::{RootDatabase, FileSymbol}",
-            "use crate::{db::{RootDatabase, FileSymbol}}",
+            "use crate::{db::{RootDatabase, FileSymbol}$0}",
         )
     }
 
