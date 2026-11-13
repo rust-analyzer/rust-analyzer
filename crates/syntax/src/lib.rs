@@ -206,6 +206,29 @@ impl ast::Expr {
     }
 }
 
+impl ast::Type {
+    /// Parses an `ast::Type` from `text`.
+    ///
+    /// Note that if the parsed root node is not a valid expression, [`Parse::tree`] will panic.
+    /// ```rust,should_panic
+    /// # use syntax::{ast, Edition};
+    /// ast::Type::parse("Foo Bar", Edition::CURRENT).tree();
+    /// ```
+    pub fn parse(text: &str, edition: Edition) -> Parse<ast::Type> {
+        let _p = tracing::info_span!("Type::parse").entered();
+        let (green, errors) = parsing::parse_text_at(text, parser::TopEntryPoint::Type, edition);
+        let root = SyntaxNode::new_root(green.clone());
+
+        // Syntax grammar internal logic self-check (reports error, no panic).
+        stdx::never!(
+            !ast::Type::can_cast(root.kind()) && root.kind() != SyntaxKind::ERROR,
+            "{:?} isn't a type",
+            root.kind()
+        );
+        Parse::new(green, errors)
+    }
+}
+
 #[cfg(not(no_salsa_async_drops))]
 impl<T> Drop for Parse<T> {
     fn drop(&mut self) {

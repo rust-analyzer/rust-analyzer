@@ -12,17 +12,16 @@ use hir_def::{
     per_ns::Namespace,
     resolver::{HasResolver, Resolver, TypeNs},
 };
-use hir_expand::{
-    mod_path::{ModPath, PathKind},
-    name::Name,
-};
+use hir_expand::{mod_path::ModPath, name::Name};
 use hir_ide::{
     db::HirDatabase,
     method_resolution::{self, CandidateId, MethodError, MethodResolutionContext},
     next_solver::{DbInterner, TypingMode, infer::DbInternerInferExt},
 };
 use intern::Symbol;
+use span::{Edition, SyntaxContext};
 use stdx::never;
+use syntax::ast::{self, AstNode};
 
 use crate::{
     Adt, AsAssocItem, AssocItem, BuiltinType, Const, ConstParam, DocLinkDef, Enum, EnumVariant,
@@ -348,8 +347,12 @@ fn resolve_doc_path_on_(
         }
     };
 
-    let mut modpath = doc_modpath_from_str(link)?;
-
+    let edition = resolver.krate().data(db).edition;
+    if let Some((qualifier, idx)) = split_tuple_field(link) {
+        let path = mod_path_from_doc_link(db, qualifier, edition)?;
+        return resolve_assoc_or_field(db, resolver, path, Name::new_tuple_field(idx), ns);
+    }
+    let mut modpath = mod_path_from_doc_link(db, link, edition)?;
     let resolved = resolver.resolve_module_path_in_items(db, &modpath);
     if resolved.is_none() {
         let last_name = modpath.pop_segment()?;
@@ -367,6 +370,16 @@ fn resolve_doc_path_on_(
         };
         Some(DocLinkDef::ModuleDef(def?.into()))
     }
+}
+
+// Splits and returns the last tuple field index, if present.
+fn split_tuple_field(link: &str) -> Option<(&str, usize)> {
+    let (qualifier, last) = link.rsplit_once("::")?;
+    // Prevent field indexes like "+0".
+    if last.is_empty() || !last.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some((qualifier, last.parse().ok()?))
 }
 
 fn resolve_assoc_or_field(
@@ -548,37 +561,13 @@ fn as_module_def_if_namespace_matches(
     (ns.unwrap_or(expected_ns) == expected_ns).then_some(DocLinkDef::ModuleDef(def))
 }
 
-fn doc_modpath_from_str(link: &str) -> Option<ModPath> {
-    // FIXME: this is not how we should get a mod path here.
-    let try_get_modpath = |link: &str| {
-        let mut parts = link.split("::");
-        let mut first_segment = None;
-        let kind = match parts.next()? {
-            "" => PathKind::Abs,
-            "crate" => PathKind::Crate,
-            "self" => PathKind::SELF,
-            "super" => {
-                let mut deg = 1;
-                for segment in parts.by_ref() {
-                    if segment == "super" {
-                        deg += 1;
-                    } else {
-                        first_segment = Some(segment);
-                        break;
-                    }
-                }
-                PathKind::Super(deg)
-            }
-            segment => {
-                first_segment = Some(segment);
-                PathKind::Plain
-            }
-        };
-        let parts = first_segment.into_iter().chain(parts).map(|segment| match segment.parse() {
-            Ok(idx) => Name::new_tuple_field(idx),
-            Err(_) => Name::new_root(segment.split_once('<').map_or(segment, |it| it.0)),
-        });
-        Some(ModPath::from_segments(kind, parts))
-    };
-    try_get_modpath(link)
+/// Extracts a module path from a doc link.
+/// The input must be stripped of backticks, disambiguators and trailing brackets.
+fn mod_path_from_doc_link(db: &dyn HirDatabase, link: &str, edition: Edition) -> Option<ModPath> {
+    let parse = ast::Type::parse(link.trim(), edition);
+    if !parse.errors().is_empty() {
+        return None;
+    }
+    let path = ast::PathType::cast(parse.syntax_node())?.path()?;
+    ModPath::from_src(db, path, &mut |_| SyntaxContext::root(edition))
 }

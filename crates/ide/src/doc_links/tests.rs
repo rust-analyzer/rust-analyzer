@@ -608,6 +608,42 @@ struct S$0(i32);
 }
 
 #[test]
+fn doc_links_generic_args() {
+    check_doc_links(
+        r#"
+/// [`S<i32>::f`]
+/// [`S::<i32>::f`]
+/// [`crate::S<i32>::f`]
+/// [`crate::S::<i32>::f`]
+/// [`Tuple<i32>::0`]
+/// [`Tuple::<i32>::0`]
+/// [`S2<i32>::f`]
+/// [`S2::<i32>::f`]
+struct S$0<U> {
+    f: U,
+  //^ S<i32>::f
+  //^ S::<i32>::f
+  //^ crate::S<i32>::f
+  //^ crate::S::<i32>::f
+}
+struct Tuple<U>(U);
+              //^ Tuple<i32>::0
+              //^ Tuple::<i32>::0
+
+trait Trait<T> {
+    fn f() -> T;
+    // ^ S2<i32>::f
+    // ^ S2::<i32>::f
+}
+struct S2;
+impl<T> Trait<T> for S2 {
+    fn f() -> T { loop {} }
+}
+"#,
+    );
+}
+
+#[test]
 fn doc_links_module() {
     check_doc_links(
         r#"
@@ -771,6 +807,29 @@ fn rewrite_intra_doc_link_with_anchor() {
         expect![
             "[PartialEq#derivable](https://doc.rust-lang.org/stable/core/cmp/trait.PartialEq.html#derivable)"
         ],
+    );
+}
+
+#[test]
+fn rewrite_does_not_resolve_malformed_links() {
+    // Trailing tokens are parsed into an `ERROR` root without an accompanying error.
+    check_rewrite(
+        r#"
+//- /main.rs crate:foo
+/// [`S; struct T`]
+pub struct $0S;
+"#,
+        expect!["[`S; struct T`](<`S; struct T`>)"],
+    );
+
+    // A path the parser only recovered from must not resolve as `S`.
+    check_rewrite(
+        r#"
+//- /main.rs crate:foo
+/// [`S<`]
+pub struct $0S;
+"#,
+        expect!["[`S<`](`S<`)"],
     );
 }
 
