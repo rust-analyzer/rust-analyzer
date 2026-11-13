@@ -232,6 +232,142 @@ fn baz() {
     }
 
     #[test]
+    fn literal_enum_completion_edit() {
+        check_edit(
+            "FooDesc::Variant{}",
+            r#"
+enum FooDesc { Variant { bar: bool } }
+
+fn create_foo(foo_desc: &FooDesc) -> () { () }
+
+fn baz() {
+    let foo = create_foo(&$0);
+}
+            "#,
+            r#"
+enum FooDesc { Variant { bar: bool } }
+
+fn create_foo(foo_desc: &FooDesc) -> () { () }
+
+fn baz() {
+    let foo = create_foo(&FooDesc::Variant { bar: ${1:()} }$0);
+}
+            "#,
+        );
+
+        check_edit(
+            "FooDesc::Variant{}",
+            r#"
+mod foo {
+    pub enum FooDesc { Variant { bar: bool } }
+}
+
+fn create_foo(foo_desc: &foo::FooDesc) -> () { () }
+
+fn baz() {
+    let foo = create_foo(&$0);
+}
+            "#,
+            r#"
+mod foo {
+    pub enum FooDesc { Variant { bar: bool } }
+}
+
+fn create_foo(foo_desc: &foo::FooDesc) -> () { () }
+
+fn baz() {
+    let foo = create_foo(&foo::FooDesc::Variant { bar: ${1:()} }$0);
+}
+            "#,
+        );
+
+        check_edit(
+            "FooDesc::Variant{}",
+            r#"
+mod foo {
+    pub enum FooDesc { Variant { bar: bool } }
+}
+
+fn create_foo(foo_desc: &foo::FooDesc) -> () { () }
+
+fn baz() {
+    let foo = create_foo(&foo::$0);
+}
+            "#,
+            r#"
+mod foo {
+    pub enum FooDesc { Variant { bar: bool } }
+}
+
+fn create_foo(foo_desc: &foo::FooDesc) -> () { () }
+
+fn baz() {
+    let foo = create_foo(&foo::FooDesc::Variant { bar: ${1:()} }$0);
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn literal_struct_completion_with_filled_path() {
+        check_edit(
+            "Foo{}",
+            r#"
+struct Foo { pub bar: bool }
+
+fn baz() {
+    let foo = Foo$0;
+}
+            "#,
+            r#"
+struct Foo { pub bar: bool }
+
+fn baz() {
+    let foo = Foo { bar: ${1:()} }$0;
+}
+            "#,
+        );
+        check_edit(
+            "Foo()",
+            r#"
+struct Foo(bool);
+
+fn baz() {
+    let foo = Foo$0;
+}
+            "#,
+            r#"
+struct Foo(bool);
+
+fn baz() {
+    let foo = Foo(${1:()})$0;
+}
+            "#,
+        );
+        check_edit(
+            "Foo{}",
+            r#"
+mod foo {
+    pub struct Foo { pub bar: bool }
+}
+
+fn baz() {
+    let foo = foo::Foo$0;
+}
+            "#,
+            r#"
+mod foo {
+    pub struct Foo { pub bar: bool }
+}
+
+fn baz() {
+    let foo = foo::Foo { bar: ${1:()} }$0;
+}
+            "#,
+        );
+    }
+
+    #[test]
     fn literal_struct_completion_shorthand() {
         check_edit(
             "FooDesc{}",

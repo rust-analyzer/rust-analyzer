@@ -100,6 +100,73 @@ pub(crate) fn complete_expr_path<'db>(
         hir::AssocItem::TypeAlias(ty) => acc.add_type_alias(ctx, ty),
     };
 
+    let add_direct_adt_literal = |acc: &mut Completions, module: &hir::Module| {
+        let adt = if let Some(adt) =
+            ctx.expected.ty.as_ref().and_then(|ty| ty.strip_references().as_adt())
+        {
+            adt
+        } else if let Some(path) = path_ctx.original_path.as_ref()
+            && let Some(hir::PathResolution::Def(hir::ModuleDef::Adt(hir::Adt::Struct(strukt)))) =
+                ctx.sema.resolve_path(path)
+            && strukt.kind(ctx.db) != hir::StructKind::Unit
+        {
+            hir::Adt::Struct(strukt)
+        } else {
+            return;
+        };
+        let self_ty = (|| ctx.sema.to_def(impl_.as_ref()?)?.self_ty(ctx.db).as_adt())();
+        let complete_self = self_ty == Some(adt);
+
+        match adt {
+            hir::Adt::Struct(strukt) => {
+                let path = module.find_path(
+                    ctx.db,
+                    hir::ModuleDef::from(strukt),
+                    ctx.config.find_path_config(ctx.is_nightly),
+                );
+
+                if let Some(path) = path {
+                    acc.add_struct_literal(ctx, path_ctx, strukt, path);
+                }
+
+                if complete_self {
+                    acc.add_struct_literal(
+                        ctx,
+                        path_ctx,
+                        strukt,
+                        Name::new_symbol_root(sym::Self_).into(),
+                    );
+                }
+            }
+            hir::Adt::Union(un) => {
+                let path = module
+                    .find_path(
+                        ctx.db,
+                        hir::ModuleDef::from(un),
+                        ctx.config.find_path_config(ctx.is_nightly),
+                    )
+                    .filter(|it| it.len() > 1);
+
+                acc.add_union_literal(ctx, un, path, None);
+                if complete_self {
+                    acc.add_union_literal(ctx, un, None, Some(Name::new_symbol_root(sym::Self_)));
+                }
+            }
+            hir::Adt::Enum(e) => {
+                super::enum_variants_with_paths(
+                    acc,
+                    ctx,
+                    module,
+                    e,
+                    impl_.as_ref(),
+                    |acc, ctx, variant, path| {
+                        acc.add_qualified_enum_variant(ctx, path_ctx, variant, path)
+                    },
+                );
+            }
+        }
+    };
+
     match qualified {
         // We exclude associated types/consts of excluded traits here together with methods,
         // even though we don't exclude them when completing in type position, because it's easier.
@@ -147,6 +214,7 @@ pub(crate) fn complete_expr_path<'db>(
             });
             match resolution {
                 hir::PathResolution::Def(hir::ModuleDef::Module(module)) => {
+                    add_direct_adt_literal(acc, module);
                     let visible_from = if ctx.config.enable_private_editable {
                         // Set visible_from to None so private items are returned.
                         // They will be possibly filtered out in add_path_resolution()
@@ -244,66 +312,7 @@ pub(crate) fn complete_expr_path<'db>(
         Qualified::Absolute => acc.add_crate_roots(ctx, path_ctx),
         Qualified::No => {
             acc.add_nameref_keywords_with_colon(ctx);
-            if let Some(adt) =
-                ctx.expected.ty.as_ref().and_then(|ty| ty.strip_references().as_adt())
-            {
-                let self_ty = (|| ctx.sema.to_def(impl_.as_ref()?)?.self_ty(ctx.db).as_adt())();
-                let complete_self = self_ty == Some(adt);
-
-                match adt {
-                    hir::Adt::Struct(strukt) => {
-                        let path = ctx.module.find_path(
-                            ctx.db,
-                            hir::ModuleDef::from(strukt),
-                            ctx.config.find_path_config(ctx.is_nightly),
-                        );
-
-                        if let Some(path) = path {
-                            acc.add_struct_literal(ctx, path_ctx, strukt, path);
-                        }
-
-                        if complete_self {
-                            acc.add_struct_literal(
-                                ctx,
-                                path_ctx,
-                                strukt,
-                                Name::new_symbol_root(sym::Self_).into(),
-                            );
-                        }
-                    }
-                    hir::Adt::Union(un) => {
-                        let path = ctx
-                            .module
-                            .find_path(
-                                ctx.db,
-                                hir::ModuleDef::from(un),
-                                ctx.config.find_path_config(ctx.is_nightly),
-                            )
-                            .filter(|it| it.len() > 1);
-
-                        acc.add_union_literal(ctx, un, path, None);
-                        if complete_self {
-                            acc.add_union_literal(
-                                ctx,
-                                un,
-                                None,
-                                Some(Name::new_symbol_root(sym::Self_)),
-                            );
-                        }
-                    }
-                    hir::Adt::Enum(e) => {
-                        super::enum_variants_with_paths(
-                            acc,
-                            ctx,
-                            e,
-                            impl_.as_ref(),
-                            |acc, ctx, variant, path| {
-                                acc.add_qualified_enum_variant(ctx, path_ctx, variant, path)
-                            },
-                        );
-                    }
-                }
-            }
+            add_direct_adt_literal(acc, &ctx.module);
             ctx.process_all_names(&mut |name, def, doc_aliases| match def {
                 ScopeDef::ModuleDef(hir::ModuleDef::Trait(t)) => {
                     let assocs = t.items_with_supertraits(ctx.db);
