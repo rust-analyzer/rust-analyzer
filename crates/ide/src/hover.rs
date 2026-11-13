@@ -76,6 +76,17 @@ pub enum HoverDocFormat {
     PlainText,
 }
 
+enum TyOrConst<'db> {
+    Const(hir::Const),
+    Type(hir::Type<'db>),
+}
+
+impl<'db> TyOrConst<'db> {
+    fn as_type(&self) -> Option<&hir::Type<'db>> {
+        if let Self::Type(ty) = self { Some(ty) } else { None }
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq, UpmapFromRaFixture)]
 pub enum HoverAction {
     Runnable(Runnable),
@@ -546,7 +557,7 @@ fn should_render_private_fields(
 fn notable_traits<'db>(
     db: &'db RootDatabase,
     ty: &hir::Type<'db>,
-) -> Vec<(hir::Trait, Vec<(Option<hir::Type<'db>>, hir::Name)>)> {
+) -> Vec<(hir::Trait, Vec<(Option<TyOrConst<'db>>, hir::Name)>)> {
     if ty.is_unknown() {
         // The trait solver returns "yes" to the question whether the error type
         // impls any trait, and we don't want to show it as having any notable trait.
@@ -558,14 +569,33 @@ fn notable_traits<'db>(
         .filter_map(move |&trait_| {
             let trait_ = trait_.into();
             ty.impls_trait(db, trait_, &[]).then(|| {
+                // FIXME: This may have a better implementation
+                let inst_ty = ty.instantiate_with_errors();
+                let impl_items = hir::Impl::all_for_trait(db, trait_)
+                    .into_iter()
+                    .find(|it| it.self_ty(db).could_unify_with_deeply(db, &inst_ty))
+                    .map_or(Vec::new(), |impl_| impl_.items(db));
                 (
                     trait_,
                     trait_
                         .items(db)
                         .into_iter()
-                        .filter_map(hir::AssocItem::as_type_alias)
-                        .map(|alias| {
-                            (ty.normalize_trait_assoc_type(db, &[], alias), alias.name(db))
+                        .filter_map(|item| match item {
+                            hir::AssocItem::Function(_) => None,
+                            hir::AssocItem::Const(it) => {
+                                let name = Some(it.name(db)?);
+                                let assoc_const = impl_items
+                                    .iter()
+                                    .find_map(|item| {
+                                        item.as_const().filter(|it| it.name(db) == name)
+                                    })
+                                    .map(TyOrConst::Const);
+                                Some((assoc_const, name?))
+                            }
+                            hir::AssocItem::TypeAlias(it) => Some((
+                                ty.normalize_trait_assoc_type(db, &[], it).map(TyOrConst::Type),
+                                it.name(db),
+                            )),
                         })
                         .collect::<Vec<_>>(),
                 )
@@ -638,7 +668,7 @@ fn runnable_action(
 fn goto_type_action_for_def(
     sema: &Semantics<'_, RootDatabase>,
     def: Definition<'_>,
-    notable_traits: &[(hir::Trait, Vec<(Option<hir::Type<'_>>, hir::Name)>)],
+    notable_traits: &[(hir::Trait, Vec<(Option<TyOrConst<'_>>, hir::Name)>)],
     subst_types: Option<Vec<(hir::Symbol, hir::Type<'_>)>>,
     edition: Edition,
 ) -> Option<HoverAction> {
@@ -652,9 +682,11 @@ fn goto_type_action_for_def(
 
     for &(trait_, ref assocs) in notable_traits {
         push_new_def(trait_.into());
-        assocs.iter().filter_map(|(ty, _)| ty.as_ref()).for_each(|ty| {
-            walk_and_push_ty(db, ty, &mut push_new_def);
-        });
+        assocs.iter().filter_map(|(ty, _)| ty.as_ref()).filter_map(TyOrConst::as_type).for_each(
+            |ty| {
+                walk_and_push_ty(db, ty, &mut push_new_def);
+            },
+        );
     }
 
     if let Ok(generic_def) = GenericDef::try_from(def) {
