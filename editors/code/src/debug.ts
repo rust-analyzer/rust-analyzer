@@ -16,9 +16,6 @@ import {
 } from "./util";
 import type { Config } from "./config";
 
-// Here we want to keep track on everything that's currently running
-const activeDebugSessionIds: string[] = [];
-
 export async function makeDebugConfig(ctx: Ctx, runnable: ra.Runnable): Promise<void> {
     const scope = ctx.activeRustEditor?.document.uri;
     if (!scope) return;
@@ -408,47 +405,108 @@ function quote(xs: string[]) {
 }
 
 async function recompileTestFromDebuggingSession(session: vscode.DebugSession, ctx: Ctx) {
-    const { cwd, args: sessionArgs }: vscode.DebugConfiguration = session.configuration;
+    const config: vscode.DebugConfiguration = session.configuration;
+    const { cwd } = config;
 
+    // Rebuild the entire project to ensure all changes are included
     const args: ra.CargoRunnableArgs = {
         cwd: cwd,
-        cargoArgs: ["test", "--no-run", "--test", "lib"],
-
-        // The first element of the debug configuration args is the test path e.g. "test_bar::foo::test_a::test_b"
-        executableArgs: sessionArgs,
+        cargoArgs: ["build", "--all-targets"],
+        executableArgs: [],
     };
     const runnable: ra.Runnable = {
         kind: "cargo",
-        label: "compile-test",
+        label: "recompile-for-debug",
         args,
     };
     const task: vscode.Task = await createTaskFromRunnable(runnable, ctx.config);
 
-    // It is not needed to call the language server, since the test path is already resolved in the
-    // configuration option. We can simply call a debug configuration with the --no-run option to compile
-    await vscode.tasks.executeTask(task);
+    // Execute the build task and wait for it to complete
+    const execution = await vscode.tasks.executeTask(task);
+
+    return new Promise<void>((resolve, reject) => {
+        const disposable = vscode.tasks.onDidEndTask((e) => {
+            if (e.execution === execution) {
+                disposable.dispose();
+                resolve();
+            }
+        });
+
+        // Add a timeout to prevent hanging forever
+        setTimeout(() => {
+            disposable.dispose();
+            reject(new Error("Compilation timed out after 2 minutes"));
+        }, 120000);
+    });
 }
 
 export function initializeDebugSessionTrackingAndRebuild(ctx: Ctx) {
-    vscode.debug.onDidStartDebugSession((session: vscode.DebugSession) => {
-        if (!activeDebugSessionIds.includes(session.id)) {
-            activeDebugSessionIds.push(session.id);
-        }
+    // Track sessions we're manually restarting to avoid loops
+    const manuallyRestartingSessions = new Set<string>();
+
+    // Register a debug adapter tracker factory to intercept restart messages.
+    // When the user clicks the restart button in the debug toolbar, VS Code sends a "restart"
+    // command via the Debug Adapter Protocol (DAP). We intercept this to recompile the code
+    // before restarting, ensuring the debugger uses the latest binary.
+    //
+    // Note: We must stop the session and start fresh (rather than just waiting for compilation)
+    // because debug adapters cache the binary and symbols. A simple restart would use stale data.
+    vscode.debug.registerDebugAdapterTrackerFactory("*", {
+        createDebugAdapterTracker(session: vscode.DebugSession) {
+            return {
+                onWillReceiveMessage: async (message: unknown) => {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const msg = message as any;
+
+                    // Intercept restart command - stop it and do our own restart
+                    if (msg.command === "restart" && !manuallyRestartingSessions.has(session.id)) {
+                        manuallyRestartingSessions.add(session.id);
+
+                        // Stop the session immediately to clear debugger cache
+                        vscode.debug.stopDebugging(session).then(async () => {
+                            try {
+                                // Show progress notification
+                                await vscode.window.withProgress(
+                                    {
+                                        location: vscode.ProgressLocation.Notification,
+                                        title: "Recompiling before debug restart",
+                                        cancellable: false,
+                                    },
+                                    async (progress) => {
+                                        progress.report({ increment: 0 });
+                                        await recompileTestFromDebuggingSession(session, ctx);
+                                        progress.report({ increment: 100 });
+                                    },
+                                );
+
+                                // Start a completely fresh debug session with the same config
+                                const started = await vscode.debug.startDebugging(
+                                    session.workspaceFolder,
+                                    session.configuration,
+                                );
+
+                                if (!started) {
+                                    void vscode.window.showErrorMessage(
+                                        "Failed to restart debug session",
+                                    );
+                                }
+                            } catch (error) {
+                                const errorMsg =
+                                    error instanceof Error ? error.message : String(error);
+                                void vscode.window.showErrorMessage(
+                                    `Failed to recompile before restart: ${errorMsg}`,
+                                );
+                                log.error("Recompile and restart failed:", error);
+                            } finally {
+                                manuallyRestartingSessions.delete(session.id);
+                            }
+                        });
+
+                        // Return false or modify message to cancel the original restart
+                        // (though stopping the session should handle this)
+                    }
+                },
+            };
+        },
     });
-
-    vscode.debug.onDidTerminateDebugSession(async (session: vscode.DebugSession) => {
-        // The id of the session will be the same when pressing restart the restart button
-        if (activeDebugSessionIds.find((s) => s === session.id)) {
-            await recompileTestFromDebuggingSession(session, ctx);
-        }
-        removeActiveSession(session);
-    });
-}
-
-function removeActiveSession(session: vscode.DebugSession) {
-    const activeSessionId = activeDebugSessionIds.findIndex((id) => id === session.id);
-
-    if (activeSessionId !== -1) {
-        activeDebugSessionIds.splice(activeSessionId, 1);
-    }
 }

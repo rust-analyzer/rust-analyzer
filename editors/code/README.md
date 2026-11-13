@@ -43,6 +43,10 @@ This extension provides configurations through VSCode's configuration settings. 
 
 See [the manual](https://rust-analyzer.github.io/book/editor_features.html#vs-code) for more information on VSCode specific configurations.
 
+### Debugging
+
+When debugging Rust tests, the extension automatically recompiles your code when you press the restart button (⟳). This ensures you're always debugging the latest version of your code after making changes. The compilation runs in the background and a notification will appear while it's in progress.
+
 ## Communication
 
 For usage and troubleshooting requests, please use the ["IDEs and Editors" category of the Rust forum](https://users.rust-lang.org/c/ide/14).
