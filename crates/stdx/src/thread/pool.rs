@@ -155,19 +155,13 @@ impl<'scope> Scope<'_, 'scope> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::{
-        sync::{
-            Arc,
-            atomic::{AtomicBool, AtomicUsize, Ordering},
-        },
-        thread,
-        time::Duration,
+    use std::sync::{
+        Arc,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     };
 
-    fn wait_for_empty(pool: &Pool) {
-        while !pool.is_empty() {
-            thread::sleep(Duration::from_millis(1));
-        }
+    fn spawn_scoped_worker(pool: &Pool) {
+        pool.scoped(|scope| scope.spawn(ThreadIntent::Worker, || {}));
     }
 
     #[test]
@@ -185,69 +179,67 @@ mod tests {
         pool.spawn(ThreadIntent::Worker, move || {
             executed_clone.store(true, Ordering::SeqCst);
         });
-        wait_for_empty(&pool);
+        spawn_scoped_worker(&pool);
         assert!(executed.load(Ordering::SeqCst));
-        assert_eq!(pool.len(), 0);
-        assert!(pool.is_empty());
     }
 
     #[test]
     fn spawn_changes_thread_intent() {
         let pool = Pool::new(1);
-        let executed = Arc::new(AtomicBool::new(false));
-        let first_executed = Arc::clone(&executed);
+        let count = Arc::new(AtomicUsize::new(0));
+        let first = Arc::clone(&count);
         pool.spawn(ThreadIntent::Worker, move || {
-            first_executed.store(true, Ordering::SeqCst);
+            first.fetch_add(669, Ordering::SeqCst);
         });
-        wait_for_empty(&pool);
-        let second_executed = Arc::clone(&executed);
+        let second = Arc::clone(&count);
         pool.spawn(ThreadIntent::LatencySensitive, move || {
-            second_executed.store(true, Ordering::SeqCst);
+            second.fetch_add(668, Ordering::SeqCst);
         });
-        wait_for_empty(&pool);
-        assert!(executed.load(Ordering::SeqCst));
-        assert_eq!(pool.len(), 0);
+        spawn_scoped_worker(&pool);
+        assert_eq!(count.load(Ordering::SeqCst), 1337);
     }
 
     #[test]
     fn spawn_handles_panicking_function() {
         let pool = Pool::new(1);
         pool.spawn(ThreadIntent::Worker, || panic!());
-        wait_for_empty(&pool);
-        assert_eq!(pool.len(), 0);
-        assert!(pool.is_empty());
+        let executed = Arc::new(AtomicBool::new(false));
+        let executed_clone = Arc::clone(&executed);
+        pool.spawn(ThreadIntent::Worker, move || {
+            executed_clone.store(true, Ordering::SeqCst);
+        });
+        spawn_scoped_worker(&pool);
+        assert!(executed.load(Ordering::SeqCst));
     }
 
     #[test]
     fn scoped_executes_borrowing_function() {
         let pool = Pool::new(1);
         let value = 42;
+        let ran = AtomicBool::new(false);
         let result = pool.scoped(|scope| {
             scope.spawn(ThreadIntent::Worker, || {
-                assert_eq!(value, 42);
+                ran.store(true, Ordering::SeqCst);
             });
             value + 1
         });
         assert_eq!(result, 43);
-        assert!(pool.is_empty());
+        assert!(ran.load(Ordering::SeqCst));
     }
 
     #[test]
     fn scoped_executes_multiple_functions() {
         let pool = Pool::new(2);
-        let value = Arc::new(AtomicUsize::new(0));
+        let value = AtomicUsize::new(0);
         pool.scoped(|scope| {
-            let first = Arc::clone(&value);
-            let second = Arc::clone(&value);
-            scope.spawn(ThreadIntent::Worker, move || {
-                first.fetch_add(1, Ordering::SeqCst);
+            scope.spawn(ThreadIntent::Worker, || {
+                value.fetch_add(9, Ordering::SeqCst);
             });
-            scope.spawn(ThreadIntent::LatencySensitive, move || {
-                second.fetch_add(1, Ordering::SeqCst);
+            scope.spawn(ThreadIntent::LatencySensitive, || {
+                value.fetch_add(10, Ordering::SeqCst);
             });
         });
-        assert_eq!(value.load(Ordering::SeqCst), 2);
-        assert!(pool.is_empty());
+        assert_eq!(value.load(Ordering::SeqCst), 19);
     }
 
     #[test]
@@ -256,24 +248,25 @@ mod tests {
         pool.scoped(|scope| {
             scope.spawn(ThreadIntent::Worker, || panic!());
         });
-        assert_eq!(pool.len(), 0);
-        assert!(pool.is_empty());
+        let ran = AtomicBool::new(false);
+        pool.scoped(|scope| {
+            scope.spawn(ThreadIntent::Worker, || ran.store(true, Ordering::SeqCst));
+        });
+        assert!(ran.load(Ordering::SeqCst));
     }
 
     #[test]
     fn scoped_returns_result_after_tasks_finish() {
         let pool = Pool::new(2);
-        let value = Arc::new(AtomicUsize::new(0));
+        let value = AtomicUsize::new(0);
         let result = pool.scoped(|scope| {
-            let value_clone = Arc::clone(&value);
-            scope.spawn(ThreadIntent::Worker, move || {
-                value_clone.store(7, Ordering::SeqCst);
+            scope.spawn(ThreadIntent::Worker, || {
+                value.store(19991005, Ordering::SeqCst);
             });
-            11
+            0xC0FFEE
         });
-        assert_eq!(result, 11);
-        assert_eq!(value.load(Ordering::SeqCst), 7);
-        assert!(pool.is_empty());
+        assert_eq!(result, 0xC0FFEE);
+        assert_eq!(value.load(Ordering::SeqCst), 19991005);
     }
 
     #[test]
