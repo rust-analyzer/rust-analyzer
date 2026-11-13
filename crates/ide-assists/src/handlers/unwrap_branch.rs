@@ -124,22 +124,26 @@ pub(crate) fn unwrap_block(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Op
     let l_curly_token = ctx.find_token_syntax_at_offset(T!['{'])?;
     let block = l_curly_token.parent_ancestors().nth(1).and_then(ast::BlockExpr::cast)?;
     let target = block.syntax().text_range();
-    let tail_expr = block.tail_expr()?;
     let stmt_list = block.stmt_list()?;
     let container = Either::<ast::MatchArm, ast::ClosureExpr>::cast(block.syntax().parent()?)?;
 
-    if stmt_list.statements().next().is_some() {
-        return None;
-    }
+    let expr = match (stmt_list.statements().collect::<Vec<_>>().as_slice(), block.tail_expr()) {
+        ([], Some(expr)) => expr,
+        ([ast::Stmt::ExprStmt(stmt)], None)
+            if ctx.sema.type_of_expr(&stmt.expr()?)?.adjusted().is_unit() =>
+        {
+            stmt.expr()?
+        }
+        _ => return None,
+    };
 
     acc.add(AssistId::refactor_rewrite("unwrap_block"), "Unwrap block", target, |builder| {
         let editor = builder.make_editor(block.syntax());
-        let replacement = stmt_list.dedent(tail_expr.indent_level()).indent(block.indent_level());
+        let replacement = stmt_list.dedent(expr.indent_level()).indent(block.indent_level());
         let mut replacement = extract_statements(replacement);
 
-        if container.left().is_some_and(|it| it.comma_token().is_none())
-            && !tail_expr.is_block_like()
-        {
+        remove_expr_stmt_semicolon(&mut replacement);
+        if container.left().is_some_and(|it| it.comma_token().is_none()) && !expr.is_block_like() {
             replacement.push(editor.make().token(T![,]).into());
         }
 
@@ -164,6 +168,20 @@ fn delete_else_before(container: SyntaxNode, editor: &SyntaxEditor) {
     let indent = IndentLevel::from_node(&container);
     let newline = make.whitespace(&format!("\n{indent}"));
     editor.replace(else_token, newline);
+}
+
+fn remove_expr_stmt_semicolon(replacement: &mut Vec<syntax::SyntaxElement>) {
+    let Some(index) = replacement.iter().position(|it| {
+        it.as_node().and_then(|it| it.last_child_or_token()).is_some_and(|it| it.kind() == T![;])
+    }) else {
+        return;
+    };
+    let without_semicolon = replacement[index]
+        .as_node()
+        .unwrap()
+        .children_with_tokens()
+        .filter(|it| it.kind() != T![;]);
+    replacement.splice(index..=index, without_semicolon);
 }
 
 fn wrap_let(assign: &ast::LetStmt, replacement: ast::BlockExpr) -> ast::BlockExpr {
@@ -1305,6 +1323,26 @@ fn main() {
 }
 "#,
             r#"
+fn main() {
+    let f = || foo();
+}
+"#,
+            "Unwrap block",
+        );
+    }
+
+    #[test]
+    fn unwrap_block_with_single_unit_stmt() {
+        check_assist_by_label(
+            unwrap_block,
+            r#"
+fn foo() {}
+fn main() {
+    let f = || {$0 foo(); };
+}
+"#,
+            r#"
+fn foo() {}
 fn main() {
     let f = || foo();
 }
