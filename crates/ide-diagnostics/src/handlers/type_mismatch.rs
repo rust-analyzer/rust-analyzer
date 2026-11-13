@@ -6,7 +6,7 @@ use ide_db::{
     text_edit::TextEdit,
 };
 use syntax::{
-    AstNode, AstPtr, TextSize,
+    AstNode, AstPtr, SyntaxNodePtr, TextSize,
     ast::{
         self, BlockExpr, Expr, ExprStmt, HasArgList, RefExpr,
         edit::{AstNodeEdit, IndentLevel},
@@ -115,7 +115,6 @@ fn add_or_fix_reference(
     acc: &mut Vec<Assist>,
 ) -> Option<()> {
     let range = ctx.sema.diagnostics_display_range((*expr_ptr).map(|it| it.into()));
-
     let (expected_with_ref_removed, expected_mutability) = d.expected.as_reference()?;
 
     if let Some((actual_with_ref_removed, hir::Mutability::Shared)) = d.actual.as_reference()
@@ -166,10 +165,11 @@ fn add_or_fix_reference(
     }
 
     let ampersands = format!("&{}", expected_mutability.as_keyword_for_ref());
+    let target = expr_edit_target(ctx, expr_ptr)?;
 
-    let edit = insert_prefix(&expr, range.range, &ampersands);
-    let source_change = SourceChange::from_text_edit(range.file_id, edit);
-    acc.push(fix("add_reference_here", "Add reference here", source_change, range.range));
+    let edit = insert_prefix(&expr, target.range.range, &ampersands, target.is_macro_call);
+    let source_change = SourceChange::from_text_edit(target.range.file_id.file_id(ctx.db()), edit);
+    acc.push(fix("add_reference_here", "Add reference here", source_change, target.range.range));
     Some(())
 }
 
@@ -481,8 +481,45 @@ fn array_length(
     Some(())
 }
 
-fn insert_prefix(expr: &Expr, range: syntax::TextRange, text: &str) -> TextEdit {
-    if expr.precedence().needs_parentheses_in(ast::prec::ExprPrecedence::Prefix) {
+struct ExprEditTarget {
+    range: hir::FileRange,
+    is_macro_call: bool,
+}
+
+/// Finds a source range that can be edited as one complete expression.
+///
+/// A diagnostic display range may contain only the user-written spans of a mixed-origin macro
+/// expansion. If the expanded expression cannot be mapped strictly, walk up through expression
+/// macro calls until the complete call can be mapped instead.
+fn expr_edit_target(
+    ctx: &DiagnosticsContext<'_, '_>,
+    expr_ptr: &InFile<AstPtr<ast::Expr>>,
+) -> Option<ExprEditTarget> {
+    let mut ptr = (*expr_ptr).map(|it| it.syntax_node_ptr());
+    let mut is_macro_call = false;
+
+    loop {
+        let node = ctx.sema.to_node_syntax(ptr);
+        // try to get the original range
+        if let Some(range) = ctx.sema.original_range_opt(&node) {
+            return Some(ExprEditTarget { range, is_macro_call });
+        }
+
+        // retry with the expression macro call that produced this expansion.
+        let call = ptr.file_id.call_node(ctx.db())?;
+        let macro_expr = call.value.parent().and_then(ast::MacroExpr::cast)?;
+        ptr = call.with_value(SyntaxNodePtr::new(macro_expr.syntax()));
+        is_macro_call = true;
+    }
+}
+
+fn insert_prefix(
+    expr: &Expr,
+    range: syntax::TextRange,
+    text: &str,
+    is_macro_call: bool,
+) -> TextEdit {
+    if !is_macro_call && expr.precedence().needs_parentheses_in(ast::prec::ExprPrecedence::Prefix) {
         let mut builder = TextEdit::builder();
         builder.insert(range.start(), format!("{text}("));
         builder.insert(range.end(), ")".to_owned());
@@ -952,6 +989,174 @@ macro_rules! thousand {
 fn test(_foo: &u64) {}
 fn main() {
     test(&thousand!());
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn fix_issue_23247() {
+        check_fix(
+            r#"
+struct String;
+impl String {
+    fn from(_value: &str) -> String { String }
+    fn push_str(&mut self, _value: &String) {}
+}
+macro_rules! format {
+    ($arg:expr) => { must_use({ make_string($arg) }) };
+}
+fn make_string(_arg: &str) -> String { String }
+fn must_use<T>(value: T) -> T { value }
+fn main() {
+    let mut test = String::from("example");
+    test.push_str($0format!("bug"));
+}
+            "#,
+            r#"
+struct String;
+impl String {
+    fn from(_value: &str) -> String { String }
+    fn push_str(&mut self, _value: &String) {}
+}
+macro_rules! format {
+    ($arg:expr) => { must_use({ make_string($arg) }) };
+}
+fn make_string(_arg: &str) -> String { String }
+fn must_use<T>(value: T) -> T { value }
+fn main() {
+    let mut test = String::from("example");
+    test.push_str(&format!("bug"));
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn fix_issue_19428() {
+        check_fix(
+            r#"
+//- minicore: fmt
+struct Formatter;
+struct DebugList;
+impl Formatter {
+    fn debug_list(&mut self) -> DebugList { DebugList }
+}
+impl DebugList {
+    fn entry(&mut self, _value: &core::fmt::Arguments<'_>) -> &mut Self { self }
+    fn finish(&mut self) {}
+}
+fn foo(f: &mut Formatter) {
+    f.debug_list().entry($0format_args!("")).finish();
+}
+            "#,
+            r#"
+struct Formatter;
+struct DebugList;
+impl Formatter {
+    fn debug_list(&mut self) -> DebugList { DebugList }
+}
+impl DebugList {
+    fn entry(&mut self, _value: &core::fmt::Arguments<'_>) -> &mut Self { self }
+    fn finish(&mut self) {}
+}
+fn foo(f: &mut Formatter) {
+    f.debug_list().entry(&format_args!("")).finish();
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn add_reference_inside_macro_call() {
+        check_fix(
+            r#"
+macro_rules! identity { ($($t:tt)*) => ($($t)*) }
+fn test() -> &'static i32 {
+    identity! {
+        $01000
+    }
+}
+            "#,
+            r#"
+macro_rules! identity { ($($t:tt)*) => ($($t)*) }
+fn test() -> &'static i32 {
+    identity! {
+        &1000
+    }
+}
+            "#,
+        );
+
+        check_fix(
+            r#"
+macro_rules! needs_i32_ref { ($e:expr) => { let _: &'static i32 = ($e); } }
+fn test() {
+    needs_i32_ref!($01000);
+}
+            "#,
+            r#"
+macro_rules! needs_i32_ref { ($e:expr) => { let _: &'static i32 = ($e); } }
+fn test() {
+    needs_i32_ref!(&1000);
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn add_reference_to_partially_mapped_nested_macro_call() {
+        check_fix(
+            r#"
+struct String;
+macro_rules! inner {
+    ($arg:expr) => { make_string($arg) };
+}
+macro_rules! outer {
+    ($arg:expr) => { inner!($arg) };
+}
+fn make_string(_arg: &str) -> String { String }
+fn test(_foo: &String) {}
+fn main() {
+    test($0outer!("bug"));
+}
+            "#,
+            r#"
+struct String;
+macro_rules! inner {
+    ($arg:expr) => { make_string($arg) };
+}
+macro_rules! outer {
+    ($arg:expr) => { inner!($arg) };
+}
+fn make_string(_arg: &str) -> String { String }
+fn test(_foo: &String) {}
+fn main() {
+    test(&outer!("bug"));
+}
+            "#,
+        );
+    }
+
+    #[test]
+    fn add_reference_to_macro_call_ignores_expansion_precedence() {
+        check_fix(
+            r#"
+macro_rules! sum {
+    ($left:expr, $right:expr) => { $left + $right };
+}
+fn test(_foo: &i32) {}
+fn main() {
+    test($0sum!(1, 2));
+}
+            "#,
+            r#"
+macro_rules! sum {
+    ($left:expr, $right:expr) => { $left + $right };
+}
+fn test(_foo: &i32) {}
+fn main() {
+    test(&sum!(1, 2));
 }
             "#,
         );
