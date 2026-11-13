@@ -1,14 +1,20 @@
 //! Defining opaque types via inference.
 
-use rustc_type_ir::{TypeVisitableExt, fold_regions};
+use rustc_hash::FxHashMap;
+use rustc_type_ir::{
+    TypeFoldable, TypeVisitableExt, fold_regions,
+    inherent::{GenericArgs as _, IntoKind as _, Ty as _},
+};
 use tracing::{debug, instrument};
 
 use crate::{
     Span,
     infer::InferenceContext,
     next_solver::{
-        EarlyBinder, OpaqueTypeKey, SolverDefId, TypingMode,
+        Const, ConstKind, EarlyBinder, ErrorGuaranteed, GenericArgs, OpaqueTypeKey, SolverDefId,
+        Ty, TyKind, TypingMode,
         infer::{opaque_types::OpaqueHiddenType, traits::ObligationCause},
+        util::BottomUpFolder,
     },
 };
 
@@ -145,7 +151,45 @@ impl<'db> InferenceContext<'db> {
             Err(_errors) => OpaqueHiddenType { ty: self.types.types.error },
         };
         let hidden_type =
-            fold_regions(self.interner(), hidden_type, |_, _| self.types.regions.erased);
+            self.remap_generic_params_to_declaration_params(opaque_type_key, hidden_type);
         UsageKind::HasDefiningUse(hidden_type)
+    }
+
+    fn remap_generic_params_to_declaration_params(
+        &self,
+        opaque_type_key: OpaqueTypeKey<'db>,
+        hidden_type: OpaqueHiddenType<'db>,
+    ) -> OpaqueHiddenType<'db> {
+        let interner = self.interner();
+        let OpaqueTypeKey { def_id, args } = opaque_type_key;
+
+        // Use args to build up a reverse map from regions to their
+        // identity mappings.
+        let id_args = GenericArgs::identity_for_item(interner, def_id.into());
+
+        let map: FxHashMap<_, _> = args.iter().zip(id_args.iter()).collect();
+
+        // Convert the type from the function into a type valid outside by mapping generic
+        // parameters into the context of the opaque.
+        let ty = fold_regions(interner, hidden_type.ty, |_, _| self.types.regions.erased);
+        let result_ty = ty.fold_with(&mut BottomUpFolder {
+            interner,
+            ty_op: |ty| match ty.kind() {
+                TyKind::Param(_) => map
+                    .get(&ty.into())
+                    .and_then(|arg| arg.ty())
+                    .unwrap_or_else(|| Ty::new_error(interner, ErrorGuaranteed)),
+                _ => ty,
+            },
+            lt_op: |region| region,
+            ct_op: |ct| match ct.kind() {
+                ConstKind::Param(_) => map
+                    .get(&ct.into())
+                    .and_then(|arg| arg.konst())
+                    .unwrap_or_else(|| Const::error(interner)),
+                _ => ct,
+            },
+        });
+        OpaqueHiddenType { ty: result_ty }
     }
 }
