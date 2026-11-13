@@ -149,6 +149,16 @@ pub struct CrateBuilder {
     ws_data: Arc<CrateWorkspaceData>,
 }
 
+impl CrateBuilder {
+    fn same_crate_modulo_out_dir(&self, other: &CrateBuilder) -> bool {
+        self.basic == other.basic
+            && self.extra == other.extra
+            && self.cfg_options == other.cfg_options
+            && self.ws_data == other.ws_data
+            && self.env.eq_ignoring_value("OUT_DIR", &other.env)
+    }
+}
+
 impl fmt::Debug for CrateGraphBuilder {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_map()
@@ -848,7 +858,11 @@ impl CrateGraphBuilder {
                 .for_each(|dep| dep.crate_id = id_map[&dep.crate_id]);
             crate_data.basic.dependencies.sort_by_key(|dep| dep.crate_id);
 
-            let find = self.arena.iter().take(m).find_map(|(k, v)| (v == crate_data).then_some(k));
+            let find = self
+                .arena
+                .iter()
+                .take(m)
+                .find_map(|(k, v)| v.same_crate_modulo_out_dir(crate_data).then_some(k));
             let new_id = find.unwrap_or_else(|| self.arena.alloc(crate_data.clone()));
             id_map.insert(topo, new_id);
         }
@@ -956,6 +970,17 @@ impl Env {
 
     pub fn contains_key(&self, arg: &str) -> bool {
         self.entries.contains_key(arg)
+    }
+
+    fn eq_ignoring_value(&self, key: &str, other: &Env) -> bool {
+        self.entries.len() == other.entries.len()
+            && self.entries.iter().all(|(k, v)| {
+                if k == key {
+                    other.entries.contains_key(k)
+                } else {
+                    other.entries.get(k) == Some(v)
+                }
+            })
     }
 }
 
