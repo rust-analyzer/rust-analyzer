@@ -15,6 +15,12 @@ pub struct ExpandedMacro {
     pub expansion: String,
 }
 
+// Bounds the "Expand macro recursively" display walk (`expand`/`expand_macro_recur`), which
+// re-expands every nested macro-call descendant and is otherwise unbounded, so a
+// deeply-recursive macro (#21824) can overflow the native stack and abort the process.
+// 128 matches the default `recursion_limit`.
+const MACRO_EXPANSION_RECURSION_LIMIT: u32 = 128;
+
 // Feature: Expand Macro Recursively
 //
 // Shows the full macro expansion of the macro at the current caret position.
@@ -103,7 +109,14 @@ pub(crate) fn expand_macro(db: &RootDatabase, position: FilePosition) -> Option<
             {
                 break (
                     def.name(db).display(db, file_id.edition(db)).to_string(),
-                    expand_macro_recur(&sema, &item, &mut error, &mut span_map, TextSize::new(0))?,
+                    expand_macro_recur(
+                        &sema,
+                        &item,
+                        &mut error,
+                        &mut span_map,
+                        TextSize::new(0),
+                        0,
+                    )?,
                     SyntaxKind::MACRO_ITEMS,
                 );
             }
@@ -120,6 +133,7 @@ pub(crate) fn expand_macro(db: &RootDatabase, position: FilePosition) -> Option<
                         &mut error,
                         &mut span_map,
                         TextSize::new(0),
+                        0,
                     )?,
                     syntax_kind,
                 );
@@ -145,7 +159,17 @@ fn expand_macro_recur(
     error: &mut String,
     result_span_map: &mut SpanMap,
     offset_in_original_node: TextSize,
+    depth: u32,
 ) -> Option<SyntaxNode> {
+    if depth > MACRO_EXPANSION_RECURSION_LIMIT {
+        let note = format!(
+            "\nmacro expansion recursion limit ({MACRO_EXPANSION_RECURSION_LIMIT}) exceeded, expansion truncated"
+        );
+        if !error.contains(&note) {
+            error.push_str(&note);
+        }
+        return None;
+    }
     let ExpandResult { value: expanded, err } = match macro_call {
         item @ ast::Item::MacroCall(macro_call) => sema
             .expand_attr_macro(item)
@@ -164,7 +188,14 @@ fn expand_macro_recur(
         expanded.text_range().len(),
         expansion_span_map,
     );
-    Some(expand(sema, expanded, error, result_span_map, u32::from(offset_in_original_node) as i32))
+    Some(expand(
+        sema,
+        expanded,
+        error,
+        result_span_map,
+        u32::from(offset_in_original_node) as i32,
+        depth,
+    ))
 }
 
 fn expand(
@@ -173,6 +204,7 @@ fn expand(
     error: &mut String,
     result_span_map: &mut SpanMap,
     mut offset_in_original_node: i32,
+    depth: u32,
 ) -> SyntaxNode {
     let (editor, expanded) = SyntaxEditor::new(expanded);
     let children = expanded.descendants().filter_map(ast::Item::cast);
@@ -188,6 +220,7 @@ fn expand(
                 (offset_in_original_node + (u32::from(child.syntax().text_range().start()) as i32))
                     as u32,
             ),
+            depth + 1,
         ) {
             offset_in_original_node = offset_in_original_node
                 + (u32::from(new_node.text_range().len()) as i32)
@@ -847,6 +880,36 @@ struct S {
             expect![[r#"
                 foo!
                 u32"#]],
+        );
+    }
+
+    // Regression test for #21824: nests attribute macros past the limit and asserts the guard
+    // truncates with a note instead of overflowing the stack.
+    #[test]
+    fn macro_expand_recursion_limit_is_bounded() {
+        let depth = (super::MACRO_EXPANSION_RECURSION_LIMIT + 12) as usize;
+        let mut src = String::new();
+        src.push_str("//- proc_macros: identity\n");
+        src.push_str("#[proc_macros::ident$0ity]\n");
+        for _ in 1..depth {
+            src.push_str("#[proc_macros::identity]\n");
+        }
+        src.push_str("fn f() {}\n");
+
+        let (analysis, pos) = fixture::position(&src);
+        // Must not overflow / abort, and must produce a result.
+        let expanded = analysis.expand_macro(pos).unwrap().expect("expected an expansion");
+        // The guard tripped: the truncation note is present, and attribute macros past the limit are
+        // left unexpanded.
+        assert!(
+            expanded.expansion.contains("recursion limit"),
+            "expected a recursion-limit note, got:\n{}",
+            expanded.expansion
+        );
+        assert!(
+            expanded.expansion.contains("identity"),
+            "expected unexpanded attribute macros past the limit, got:\n{}",
+            expanded.expansion
         );
     }
 
