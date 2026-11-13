@@ -37,6 +37,7 @@ pub struct Pool {
 struct Job {
     requested_intent: ThreadIntent,
     f: Box<dyn FnOnce() + Send + UnwindSafe + 'static>,
+    wg: Option<WaitGroup>,
 }
 
 impl Pool {
@@ -67,6 +68,7 @@ impl Pool {
                             // discard the panic, we should've logged the backtrace already
                             drop(panic::catch_unwind(job.f));
                             extant_tasks.fetch_sub(1, Ordering::SeqCst);
+                            drop(job.wg);
                         }
                     }
                 })
@@ -89,7 +91,7 @@ impl Pool {
             f();
         });
 
-        let job = Job { requested_intent: intent, f };
+        let job = Job { requested_intent: intent, f, wg: None };
         self.extant_tasks.fetch_add(1, Ordering::SeqCst);
         self.job_sender.send(job).unwrap();
     }
@@ -127,15 +129,14 @@ impl<'scope> Scope<'_, 'scope> {
     where
         F: 'scope + FnOnce() + Send + UnwindSafe,
     {
-        let wg = self.wg.clone();
         let f = Box::new(move || {
             if cfg!(debug_assertions) {
                 intent.assert_is_used_on_current_thread();
             }
             f();
-            drop(wg);
         });
 
+        let wg = self.wg.clone();
         let job = Job {
             requested_intent: intent,
             f: unsafe {
@@ -144,6 +145,7 @@ impl<'scope> Scope<'_, 'scope> {
                     Box<dyn 'static + FnOnce() + Send + UnwindSafe>,
                 >(f)
             },
+            wg: Some(wg),
         };
         self.pool.extant_tasks.fetch_add(1, Ordering::SeqCst);
         self.pool.job_sender.send(job).unwrap();
