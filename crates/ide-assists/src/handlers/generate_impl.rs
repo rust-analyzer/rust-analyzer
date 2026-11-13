@@ -1,5 +1,10 @@
+use hir::HasSource;
 use syntax::{
-    ast::{self, AstNode, HasGenericParams, HasName, edit::AstNodeEdit},
+    SyntaxNode,
+    ast::{
+        self, AstNode, HasGenericParams, HasName,
+        edit::{AstNodeEdit, IndentLevel},
+    },
     syntax_editor::{Position, SyntaxEditor},
 };
 
@@ -11,21 +16,38 @@ use crate::{
     },
 };
 
-fn insert_impl(editor: &SyntaxEditor, impl_: &ast::Impl, nominal: &impl AstNodeEdit) -> ast::Impl {
-    let make = editor.make();
-    let indent = nominal.indent_level();
+enum Place {
+    After(SyntaxNode),
+    Replace(SyntaxNode),
+}
 
-    let impl_ = impl_.indent(indent);
-    editor.insert_all(
-        Position::after(nominal.syntax()),
-        vec![
-            // Add a blank line after the ADT, and indentation for the impl to match the ADT
-            make.whitespace(&format!("\n\n{indent}")).into(),
-            impl_.syntax().clone().into(),
-        ],
-    );
+impl Place {
+    fn syntax(&self) -> &SyntaxNode {
+        match self {
+            Place::After(it) => it,
+            Place::Replace(it) => it,
+        }
+    }
 
-    impl_
+    fn finish_impl(&self, impl_: &ast::Impl, editor: &SyntaxEditor) -> ast::Impl {
+        let make = editor.make();
+        let indent = IndentLevel::from_node(self.syntax());
+
+        let impl_ = impl_.indent(indent);
+        match self {
+            Place::After(it) => editor.insert_all(
+                Position::after(it),
+                vec![
+                    // Add a blank line after the ADT, and indentation for the impl to match the ADT
+                    make.whitespace(&format!("\n\n{indent}")).into(),
+                    impl_.syntax().clone().into(),
+                ],
+            ),
+            Place::Replace(it) => editor.replace(it, impl_.syntax()),
+        }
+
+        impl_
+    }
 }
 
 // Assist: generate_impl
@@ -46,24 +68,18 @@ fn insert_impl(editor: &SyntaxEditor, impl_: &ast::Impl, nominal: &impl AstNodeE
 // impl<T: Clone> Ctx<T> {$0}
 // ```
 pub(crate) fn generate_impl(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Option<()> {
-    let nominal = ctx.find_node_at_offset::<ast::Adt>()?;
-    let name = nominal.name()?;
-    let target = nominal.syntax().text_range();
-
-    if ctx.find_node_at_offset::<ast::RecordFieldList>().is_some() {
-        return None;
-    }
+    let (nominal, name, place, None) = trigger_for_adt(ctx)? else { return None };
 
     acc.add(
         AssistId::generate("generate_impl"),
         format!("Generate impl for `{name}`"),
-        target,
+        place.syntax().text_range(),
         |edit| {
-            let editor = edit.make_editor(nominal.syntax());
+            let editor = edit.make_editor(place.syntax());
             let make = editor.make();
             let impl_ = utils::generate_impl(make, &nominal);
 
-            let impl_ = insert_impl(&editor, &impl_, &nominal);
+            let impl_ = place.finish_impl(&impl_, &editor);
             // Add a tabstop after the left curly brace
             if let Some(cap) = ctx.config.snippet_cap
                 && let Some(l_curly) = impl_.assoc_item_list().and_then(|it| it.l_curly_token())
@@ -94,26 +110,23 @@ pub(crate) fn generate_impl(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> O
 // impl<T: Clone> ${1:_} for Ctx<T> {$0}
 // ```
 pub(crate) fn generate_trait_impl(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Option<()> {
-    let nominal = ctx.find_node_at_offset::<ast::Adt>()?;
-    let name = nominal.name()?;
-    let target = nominal.syntax().text_range();
-
-    if ctx.find_node_at_offset::<ast::RecordFieldList>().is_some() {
-        return None;
-    }
+    let (nominal, name, place, trait_) = trigger_for_adt(ctx)?;
 
     acc.add(
         AssistId::generate("generate_trait_impl"),
         format!("Generate trait impl for `{name}`"),
-        target,
+        place.syntax().text_range(),
         |edit| {
-            let editor = edit.make_editor(nominal.syntax());
+            let editor = edit.make_editor(place.syntax());
             let make = editor.make();
-            let impl_ = generate_trait_impl_intransitive(make, &nominal, make.ty_placeholder());
-            let impl_ = insert_impl(&editor, &impl_, &nominal);
+            let trait_ = trait_.unwrap_or_else(|| make.ty_placeholder());
+            let impl_ = generate_trait_impl_intransitive(make, &nominal, trait_);
+            let impl_ = place.finish_impl(&impl_, &editor);
             // Make the trait type a placeholder snippet
             if let Some(cap) = ctx.config.snippet_cap {
-                if let Some(trait_) = impl_.trait_() {
+                if let Some(trait_) = impl_.trait_()
+                    && matches!(trait_, ast::Type::InferType(_))
+                {
                     let placeholder = edit.make_placeholder_snippet(cap);
                     editor.add_annotation(trait_.syntax(), placeholder);
                 }
@@ -126,6 +139,41 @@ pub(crate) fn generate_trait_impl(acc: &mut Assists, ctx: &AssistContext<'_, '_>
             edit.add_file_edits(ctx.vfs_file_id(), editor);
         },
     )
+}
+
+fn trigger_for_adt(
+    ctx: &AssistContext<'_, '_>,
+) -> Option<(ast::Adt, String, Place, Option<ast::Type>)> {
+    if let Some(nominal) = ctx.find_node_at_offset::<ast::Adt>() {
+        let name = nominal.name()?.to_string();
+        let target = Place::After(nominal.syntax().clone());
+
+        if ctx.find_node_at_offset::<ast::RecordFieldList>().is_some() {
+            return None;
+        }
+
+        return Some((nominal, name, target, None));
+    }
+
+    let impl_ = ctx.find_node_at_offset::<ast::Impl>()?;
+    let is_empty_impl =
+        impl_.assoc_item_list().is_none_or(|it| it.syntax().children().next().is_none())
+            && impl_.generic_param_list().is_none();
+    if !is_empty_impl {
+        return None;
+    }
+    let ast::Type::PathType(path_type) = impl_.self_ty()? else { return None };
+    match ctx.sema.resolve_path(&path_type.path()?)? {
+        hir::PathResolution::Def(hir::ModuleDef::Adt(adt)) => {
+            // FIXME: use path_type instead Adt::name in utils::generate_impl
+            let nominal = adt.source(ctx.db())?.value;
+            let name = nominal.name()?.to_string();
+            let target = Place::Replace(impl_.syntax().clone());
+
+            Some((nominal, name, target, impl_.trait_()))
+        }
+        _ => None,
+    }
 }
 
 // Assist: generate_impl_trait
@@ -212,7 +260,7 @@ pub(crate) fn generate_impl_trait(acc: &mut Assists, ctx: &AssistContext<'_, '_>
                 make_impl_(Some(assoc_item_list))
             };
 
-            let impl_ = insert_impl(&editor, &impl_, &trait_);
+            let impl_ = Place::After(trait_.syntax().clone()).finish_impl(&impl_, &editor);
 
             if let Some(cap) = ctx.config.snippet_cap {
                 if let Some(generics) = impl_.trait_().and_then(|it| it.generic_arg_list()) {
@@ -398,6 +446,32 @@ mod tests {
     }
 
     #[test]
+    fn test_add_impl_on_simple_impl() {
+        check_assist(
+            generate_impl,
+            r#"
+                struct Foo<T> {}
+                impl Foo$0 { }
+            "#,
+            r#"
+                struct Foo<T> {}
+                impl<T> Foo<T> {$0}
+            "#,
+        );
+        check_assist(
+            generate_impl,
+            r#"
+                struct Foo<T> {}
+                impl Foo$0
+            "#,
+            r#"
+                struct Foo<T> {}
+                impl<T> Foo<T> {$0}
+            "#,
+        );
+    }
+
+    #[test]
     fn add_impl_target() {
         check_assist_target(
             generate_impl,
@@ -561,6 +635,43 @@ mod tests {
                 struct EvenMoreIrrelevant;
             "#,
             "/// Has a lifetime parameter\nstruct Foo<'a, T: Foo<'a>> {}",
+        );
+    }
+
+    #[test]
+    fn test_add_trait_impl_on_simple_impl() {
+        check_assist(
+            generate_trait_impl,
+            r#"
+                struct Foo<T> {}
+                impl Foo$0 { }
+            "#,
+            r#"
+                struct Foo<T> {}
+                impl<T> ${1:_} for Foo<T> {$0}
+            "#,
+        );
+        check_assist(
+            generate_trait_impl,
+            r#"
+                struct Foo<T> {}
+                impl Foo$0
+            "#,
+            r#"
+                struct Foo<T> {}
+                impl<T> ${1:_} for Foo<T> {$0}
+            "#,
+        );
+        check_assist(
+            generate_trait_impl,
+            r#"
+                struct Foo<T> {}
+                impl Trait for Foo$0
+            "#,
+            r#"
+                struct Foo<T> {}
+                impl<T> Trait for Foo<T> {$0}
+            "#,
         );
     }
 
