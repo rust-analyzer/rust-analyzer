@@ -50,6 +50,8 @@ pub(crate) fn replace_if_let_with_match(
     acc: &mut Assists,
     ctx: &AssistContext<'_, '_>,
 ) -> Option<()> {
+    let (editor, _) = SyntaxEditor::new(ctx.source_file().syntax().clone());
+    let make = editor.make();
     let if_expr: ast::IfExpr = ctx.find_node_at_offset()?;
     let available_range = TextRange::new(
         if_expr.syntax().text_range().start(),
@@ -81,13 +83,21 @@ pub(crate) fn replace_if_let_with_match(
         let cond = if_expr.condition()?;
         let (cond, guard) = match let_and_guard(&cond, ctx)? {
             (None, guard) => (None, Some(guard?)),
-            (Some((pat, expr)), guard) => {
-                if scrutinee_to_be_expr.syntax().text() != expr.syntax().text() {
-                    // Only if all condition expressions are equal we can merge them into a match
-                    return None;
-                }
+            (Some((pat, expr)), guard)
+                if scrutinee_to_be_expr.syntax().text() == expr.syntax().text() =>
+            {
                 pat_seen = true;
                 (Some(pat), guard)
+            }
+            (Some((pat, expr)), guard) => {
+                let mut guard_chain = make.expr_let(pat, expr).into();
+                if let Some(guard) = guard {
+                    let guard = wrap_paren(guard, make, ast::prec::ExprPrecedence::LAnd);
+                    guard_chain = make
+                        .expr_bin(guard_chain, ast::BinaryOp::LogicOp(ast::LogicOp::And), guard)
+                        .into()
+                }
+                (None, Some(guard_chain))
             }
         };
         let guard = if let Some(guard) = &guard {
@@ -113,7 +123,6 @@ pub(crate) fn replace_if_let_with_match(
         format!("Replace if{let_} with match"),
         available_range,
         move |builder| {
-            let editor = builder.make_editor(if_expr.syntax());
             let make = editor.make();
             let match_expr: ast::Expr = {
                 let else_arm = make_else_arm(ctx, make, else_block, &cond_bodies);
@@ -864,6 +873,8 @@ impl VariantData {
             false
         } else if cond() {
             true
+        } else if let Some(rewrite) = other {
+            rewrite
         } else {
             bar(
                 123
@@ -879,6 +890,7 @@ impl VariantData {
             VariantData::Struct(..) => true,
             VariantData::Tuple(..) => false,
             _ if cond() => true,
+            _ if let Some(rewrite) = other => rewrite,
             _ => {
                 bar(
                     123
