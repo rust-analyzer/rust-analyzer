@@ -149,6 +149,7 @@ impl<'db> HirDisplay<'db> for Function {
                 container_params,
                 ExpressionStoreOwnerId::Signature(owner),
                 container_params_store,
+                true,
                 f,
             )?;
         }
@@ -280,7 +281,7 @@ fn write_function<'db>(f: &mut HirFormatter<'_, 'db>, func_id: FunctionId) -> Re
     }
 
     // Write where clauses
-    let has_written_where = write_where_clause(GenericDefId::FunctionId(func_id), f)?;
+    let has_written_where = write_where_clause(GenericDefId::FunctionId(func_id), true, f)?;
     Ok(has_written_where)
 }
 
@@ -384,20 +385,20 @@ impl<'db> HirDisplay<'db> for Struct {
                 }
 
                 f.write_char(')')?;
-                write_where_clause(def_id, f)?;
+                write_where_clause(def_id, false, f)?;
                 if f.entity_limit.is_some() {
                     f.write_char(';')?;
                 }
             }
             StructKind::Record => {
-                let has_where_clause = write_where_clause(def_id, f)?;
+                let has_where_clause = write_where_clause(def_id, true, f)?;
                 if let Some(limit) = f.entity_limit {
                     let (fields, hidden_fields) = visible_fields(self.fields(f.db), f);
                     write_fields(&fields, hidden_fields, has_where_clause, limit, false, f)?;
                 }
             }
             StructKind::Unit => {
-                write_where_clause(def_id, f)?;
+                write_where_clause(def_id, false, f)?;
                 if f.entity_limit.is_some() {
                     f.write_char(';')?;
                 }
@@ -416,7 +417,7 @@ impl<'db> HirDisplay<'db> for Enum {
         let def_id = GenericDefId::AdtId(AdtId::EnumId(self.id));
         write_generic_params(def_id, f)?;
 
-        let has_where_clause = write_where_clause(def_id, f)?;
+        let has_where_clause = write_where_clause(def_id, true, f)?;
         if let Some(limit) = f.entity_limit {
             write_variants(&self.variants(f.db), has_where_clause, limit, f)?;
         }
@@ -433,7 +434,7 @@ impl<'db> HirDisplay<'db> for Union {
         let def_id = GenericDefId::AdtId(AdtId::UnionId(self.id));
         write_generic_params(def_id, f)?;
 
-        let has_where_clause = write_where_clause(def_id, f)?;
+        let has_where_clause = write_where_clause(def_id, true, f)?;
         if let Some(limit) = f.entity_limit {
             let (fields, hidden_fields) = visible_fields(self.fields(f.db), f);
             write_fields(&fields, hidden_fields, has_where_clause, limit, false, f)?;
@@ -770,14 +771,18 @@ fn write_generic_params_or_args<'db>(
     Ok(())
 }
 
-fn write_where_clause<'db>(def: GenericDefId, f: &mut HirFormatter<'_, 'db>) -> Result<bool> {
+fn write_where_clause<'db>(
+    def: GenericDefId,
+    tail_comma: bool,
+    f: &mut HirFormatter<'_, 'db>,
+) -> Result<bool> {
     let (params, store) = GenericParams::with_store(f.db, def);
     if !has_disaplayable_predicates(f.db, params, store) {
         return Ok(false);
     }
 
     f.write_str("\nwhere")?;
-    write_where_predicates(params, def.into(), store, f)?;
+    write_where_predicates(params, def.into(), store, tail_comma, f)?;
 
     Ok(true)
 }
@@ -802,6 +807,7 @@ fn write_where_predicates<'db>(
     params: &GenericParams,
     owner: ExpressionStoreOwnerId,
     store: &ExpressionStore,
+    tail_comma: bool,
     f: &mut HirFormatter<'_, 'db>,
 ) -> Result {
     use WherePredicate::*;
@@ -851,7 +857,9 @@ fn write_where_predicates<'db>(
                 Lifetime { bound, .. } => bound.hir_fmt(f, owner, store)?,
             }
         }
-        f.write_str(",")?;
+        if iter.peek().is_some() || tail_comma {
+            f.write_str(",")?;
+        }
     }
 
     Ok(())
@@ -909,7 +917,7 @@ impl<'db> HirDisplay<'db> for Trait {
         // FIXME(trait-alias) needs special handling to print the equal sign
         write_trait_header(*self, f)?;
         let def_id = GenericDefId::TraitId(self.id);
-        let has_where_clause = write_where_clause(def_id, f)?;
+        let has_where_clause = write_where_clause(def_id, true, f)?;
 
         if let Some(limit) = f.entity_limit {
             let assoc_items = self.items(f.db);
@@ -982,7 +990,7 @@ impl<'db> HirDisplay<'db> for TypeAlias {
             f.write_str(" = ")?;
             ty.hir_fmt(f, ExpressionStoreOwnerId::Signature(self.id.into()), &data.store)?;
         }
-        write_where_clause(def_id, f)?;
+        write_where_clause(def_id, true, f)?;
         Ok(())
     }
 }

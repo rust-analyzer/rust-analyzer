@@ -857,7 +857,7 @@ struct Foo$0(pub u32) where u32: Copy;
             ```rust
             struct Foo(pub u32)
             where
-                u32: Copy,;
+                u32: Copy;
             ```
 
             ---
@@ -1547,7 +1547,30 @@ struct Foo$0 where u32: Copy;
             ```rust
             struct Foo
             where
-                u32: Copy,;
+                u32: Copy;
+            ```
+
+            ---
+
+            size = 0, align = 1, no Drop
+        "#]],
+    );
+    check(
+        r#"
+struct Foo$0 where u32: Copy + Send, u64: Send;
+"#,
+        expect![[r#"
+            *Foo*
+
+            ```rust
+            ra_test_fixture
+            ```
+
+            ```rust
+            struct Foo
+            where
+                u32: Copy + Send,
+                u64: Send;
             ```
 
             ---
@@ -11342,7 +11365,7 @@ struct Foo$0<T: Copy>(T);
             ```rust
             struct Foo<T>(T)
             where
-                T: Copy,;
+                T: Copy;
             ```
 
             ---
@@ -11368,7 +11391,7 @@ struct Foo$0<T: Trait>(T::Assoc);
             ```rust
             struct Foo<T>(<T as Trait>::Assoc)
             where
-                T: Trait,;
+                T: Trait;
             ```
 
             ---
