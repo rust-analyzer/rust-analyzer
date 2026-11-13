@@ -2118,3 +2118,19 @@ fn baz() {
     "#,
     );
 }
+
+#[test]
+fn qualified_builtin_type_trait_assoc_fn() {
+    check(
+        r#"
+//- minicore: fmt, builtin_impls
+fn main() {
+    bool::fmt$0
+}
+"#,
+        expect![[r#"
+            me fmt(…) (use core::fmt::Debug)   fn(&self, &mut Formatter<'_>) -> Result<(), Error>
+            me fmt(…) (use core::fmt::Display) fn(&self, &mut Formatter<'_>) -> Result<(), Error>
+        "#]],
+    );
+}

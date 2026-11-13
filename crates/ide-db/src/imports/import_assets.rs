@@ -521,28 +521,49 @@ fn path_applicable_imports(
         // The key here is that whatever we import must form a resolved path for the remainder of
         // what follows
         // FIXME: This doesn't handle visibility
-        [first_qsegment, qualifier_rest @ ..] => items_locator::items_with_name(
-            db,
-            current_crate,
-            NameToImport::Exact(first_qsegment.as_str().to_owned(), true),
-            AssocSearchMode::Exclude,
-        )
-        .flat_map(|(item, do_not_complete)| {
-            // we found imports for `first_qsegment`, now we need to filter these imports by whether
-            // they result in resolving the rest of the path successfully
-            validate_resolvable(
+        [first_qsegment, qualifier_rest @ ..] => {
+            let mut candidates: FxIndexSet<LocatedImport> = items_locator::items_with_name(
                 db,
-                scope,
-                mod_path,
-                scope_filter,
-                &path_candidate.name,
-                item,
-                qualifier_rest,
-                CompleteInFlyimport(do_not_complete != Complete::IgnoreFlyimport),
+                current_crate,
+                NameToImport::Exact(first_qsegment.as_str().to_owned(), true),
+                AssocSearchMode::Exclude,
             )
-        })
-        .take(DEFAULT_QUERY_SEARCH_LIMIT)
-        .collect(),
+            .flat_map(|(item, do_not_complete)| {
+                validate_resolvable(
+                    db,
+                    scope,
+                    mod_path,
+                    scope_filter,
+                    &path_candidate.name,
+                    item,
+                    qualifier_rest,
+                    CompleteInFlyimport(do_not_complete != Complete::IgnoreFlyimport),
+                )
+            })
+            .take(DEFAULT_QUERY_SEARCH_LIMIT)
+            .collect();
+
+            let qualifier_path = path_candidate.qualifier.iter().map(|name| name.as_str());
+            if let Some(path) = ast::make::ext::path_from_idents(qualifier_path)
+                && let Some(hir::PathResolution::Def(def @ hir::ModuleDef::BuiltinType(_))) =
+                    scope.speculative_resolve(&path)
+            {
+                let item = ItemInNs::from(def);
+                candidates.extend(validate_resolvable(
+                    db,
+                    scope,
+                    mod_path,
+                    scope_filter,
+                    &path_candidate.name,
+                    item,
+                    &[],
+                    CompleteInFlyimport(true),
+                ));
+            }
+
+            candidates.truncate(DEFAULT_QUERY_SEARCH_LIMIT);
+            candidates
+        }
     };
 
     filter_candidates_by_after_path(db, scope, path_candidate, &mut result);
@@ -689,10 +710,11 @@ fn validate_resolvable(
         }
     })();
     let Some(qualifier) = qualifier else { return SmallVec::new() };
-    let Some(import_path_candidate) = mod_path(resolved_qualifier) else { return SmallVec::new() };
+    let import_path_candidate = mod_path(resolved_qualifier);
     let mut result = SmallVec::new();
     let ty = match qualifier {
         ModuleDef::Module(module) => {
+            let Some(import_path_candidate) = import_path_candidate else { return SmallVec::new() };
             items_locator::items_with_name_in_module::<Infallible>(
                 db,
                 module,
@@ -719,11 +741,19 @@ fn validate_resolvable(
         ModuleDef::Adt(adt) => adt.ty(db),
         _ => return SmallVec::new(),
     };
-    ty.iterate_path_candidates::<Infallible>(db, scope, &FxHashSet::default(), None, |assoc| {
-        // FIXME: Support extra trait imports
-        if assoc.container_or_implemented_trait(db).is_some() {
-            return None;
-        }
+
+    let trait_candidates: FxHashSet<hir::TraitId> = items_locator::items_with_name(
+        db,
+        scope.krate(),
+        candidate.clone(),
+        AssocSearchMode::AssocItemsOnly,
+    )
+    .filter_map(|(input, _)| item_as_assoc(db, input))
+    .filter_map(|assoc| assoc.container_trait(db))
+    .map(Into::into)
+    .collect();
+
+    ty.iterate_path_candidates::<Infallible>(db, scope, &trait_candidates, None, |assoc| {
         let name = assoc.name(db)?;
         let is_match = match candidate {
             NameToImport::Prefix(text, true) => name.as_str().starts_with(text),
@@ -742,10 +772,27 @@ fn validate_resolvable(
         if !is_match {
             return None;
         }
+
+        let (item_to_import, original_item) = if let Some(trait_) = assoc.container_trait(db) {
+            let trait_item = ItemInNs::from(ModuleDef::from(trait_));
+            if !scope_filter(trait_item) && !scope.can_use_trait_methods(trait_) {
+                return None;
+            }
+            (trait_item, assoc_to_item(assoc))
+        } else {
+            (resolved_qualifier, assoc_to_item(assoc))
+        };
+
+        let import_path = if item_to_import == resolved_qualifier {
+            import_path_candidate.clone()?
+        } else {
+            mod_path(item_to_import)?
+        };
+
         result.push(LocatedImport::new(
-            import_path_candidate.clone(),
-            resolved_qualifier,
-            assoc_to_item(assoc),
+            import_path,
+            item_to_import,
+            original_item,
             complete_in_flyimport,
         ));
         None
