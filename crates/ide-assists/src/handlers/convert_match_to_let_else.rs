@@ -111,14 +111,25 @@ fn find_arms(
 
 // Given an extracting arm, find the extracted variable.
 fn find_extracted_variable(ctx: &AssistContext<'_, '_>, arm: &ast::MatchArm) -> Option<Vec<Name>> {
+    let inside_pat = |it: &Name| {
+        let Some(pat) = arm.pat() else { return false };
+        pat.syntax().text_range().contains_range(it.syntax().text_range())
+    };
     match arm.expr()? {
         ast::Expr::PathExpr(path) => {
             let name_ref = path.syntax().descendants().find_map(ast::NameRef::cast)?;
             match NameRefClass::classify(&ctx.sema, &name_ref)? {
                 NameRefClass::Definition(Definition::Local(local), _) => {
-                    let source =
-                        local.sources(ctx.db()).into_iter().map(|x| x.into_ident_pat()?.name());
-                    source.collect()
+                    let sources = local
+                        .sources(ctx.db())
+                        .into_iter()
+                        .map(|x| x.into_ident_pat()?.name())
+                        .collect::<Option<Vec<_>>>()?;
+                    if !sources.iter().all(inside_pat) {
+                        cov_mark::hit!(extracting_arm_expr_is_unrelated);
+                        return None;
+                    }
+                    Some(sources)
                 }
                 _ => None,
             }
@@ -180,6 +191,24 @@ fn foo(opt: Option<()>) {
     let val$0 = match opt {
         Some(it) => it,
         None => (),
+    };
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn should_not_be_applicable_for_unrelated_arm_expr() {
+        cov_mark::check!(extracting_arm_expr_is_unrelated);
+        check_assist_not_applicable(
+            convert_match_to_let_else,
+            r#"
+//- minicore: option
+fn foo(opt: Option<()>) {
+    let n = 2;
+    let val$0 = match opt {
+        Some(it) => n,
+        None => return,
     };
 }
 "#,
