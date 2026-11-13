@@ -1084,6 +1084,20 @@ impl ast::TokenTree {
         })
     }
 
+    pub fn token_trees_and_tokens_non_delim(
+        &self,
+    ) -> impl Iterator<Item = NodeOrToken<ast::TokenTree, SyntaxToken>> {
+        let l_delim = self.left_delimiter_token();
+        let r_delim = self.right_delimiter_token();
+        self.token_trees_and_tokens()
+            .skip_while(move |it| {
+                matches!((&l_delim, it), (Some(l_delim), NodeOrToken::Token(it)) if it == l_delim)
+            })
+            .take_while(move |it| {
+                matches!((&r_delim, it), (Some(r_delim), NodeOrToken::Token(it)) if it != r_delim)
+            })
+    }
+
     pub fn left_delimiter_token(&self) -> Option<SyntaxToken> {
         self.syntax()
             .first_child_or_token()?

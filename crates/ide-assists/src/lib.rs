@@ -178,6 +178,7 @@ mod handlers {
     mod generate_new;
     mod generate_single_field_struct_from;
     mod generate_trait_from_impl;
+    mod generate_try_from_repr_for_enum;
     mod inline_call;
     mod inline_const_as_literal;
     mod inline_local_variable;
@@ -315,6 +316,7 @@ mod handlers {
             generate_mut_trait_impl::generate_mut_trait_impl,
             generate_new::generate_new,
             generate_trait_from_impl::generate_trait_from_impl,
+            generate_try_from_repr_for_enum::generate_try_from_repr_for_enum,
             generate_single_field_struct_from::generate_single_field_struct_from,
             generate_blanket_trait_impl::generate_blanket_trait_impl,
             inline_call::inline_call,

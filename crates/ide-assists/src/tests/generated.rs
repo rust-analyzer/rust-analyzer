@@ -2325,6 +2325,39 @@ impl<T: Clone> ${1:_} for Ctx<T> {$0}
 }
 
 #[test]
+fn doctest_generate_try_from_repr_for_enum() {
+    check_doc_test(
+        "generate_try_from_repr_for_enum",
+        r#####"
+#[repr(u32)]
+enum Foo {
+    A = 1$0,
+    B = 1 << 1,
+}
+"#####,
+        r#####"
+#[repr(u32)]
+enum Foo {
+    A = 1,
+    B = 1 << 1,
+}
+
+impl TryFrom<u32> for Foo {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            1 => Ok(Self::A),
+            2 => Ok(Self::B),
+            _ => Err(()),
+        }
+    }
+}
+"#####,
+    )
+}
+
+#[test]
 fn doctest_inline_call() {
     check_doc_test(
         "inline_call",
