@@ -6,8 +6,8 @@ use crate::{AssistContext, AssistId, Assists};
 
 // Assist: add_return_type
 //
-// Adds the return type to a function or closure inferred from its tail expression if it doesn't have a return
-// type specified. This assists is useable in a functions or closures tail expression or return type position.
+// Adds the return type to a function or closure inferred from its expression inside return position if it doesn't have a return type specified.
+// This assists is useable in a expression inside return position or return type position.
 //
 // ```
 // fn foo() { 4$02i32 }
@@ -134,8 +134,11 @@ fn peel_blocks(mut expr: ast::Expr) -> ast::Expr {
 }
 
 fn extract_tail(ctx: &AssistContext<'_, '_>) -> Option<(FnType, ast::Expr, InsertOrReplace)> {
-    let node = ctx.find_node_at_offset::<Either<ast::ClosureExpr, ast::Fn>>()?;
-    let (fn_type, tail_expr, return_type_range, action) = match node {
+    let container = ctx.find_node_at_offset::<Either<ast::ClosureExpr, ast::Fn>>()?;
+    let ret_node =
+        ctx.find_node_at_offset::<Either<ast::ReturnExpr, Either<ast::ClosureExpr, ast::Fn>>>()?;
+
+    let (fn_type, mut tail_expr, return_type_range, action) = match container {
         Either::Left(closure) => {
             let rpipe = closure.param_list()?.syntax().last_token()?;
             let rpipe_pos = rpipe.text_range().end();
@@ -145,8 +148,8 @@ fn extract_tail(ctx: &AssistContext<'_, '_>) -> Option<(FnType, ast::Expr, Inser
             let body = closure.body()?;
             let body_start = body.syntax().first_token()?.text_range().start();
             let (tail_expr, wrap_expr) = match body {
-                ast::Expr::BlockExpr(block) => (block.tail_expr()?, false),
-                body => (body, true),
+                ast::Expr::BlockExpr(block) => (block.tail_expr(), false),
+                body => (Some(body), true),
             };
 
             let ret_range = TextRange::new(rpipe_pos, body_start);
@@ -159,7 +162,7 @@ fn extract_tail(ctx: &AssistContext<'_, '_>) -> Option<(FnType, ast::Expr, Inser
 
             let body = func.body()?;
             let stmt_list = body.stmt_list()?;
-            let tail_expr = stmt_list.tail_expr()?;
+            let tail_expr = stmt_list.tail_expr();
 
             let ret_range_end = stmt_list.l_curly_token()?.text_range().end();
             let ret_range = TextRange::new(rparen_pos, ret_range_end);
@@ -170,13 +173,16 @@ fn extract_tail(ctx: &AssistContext<'_, '_>) -> Option<(FnType, ast::Expr, Inser
     if return_type_range.contains_range(range) {
         cov_mark::hit!(cursor_in_ret_position);
         cov_mark::hit!(cursor_in_ret_position_closure);
-    } else if tail_expr.syntax().text_range().contains_range(range) {
+    } else if let Either::Left(ret_expr) = ret_node {
+        cov_mark::hit!(cursor_on_ret_expr);
+        tail_expr = ret_expr.expr();
+    } else if tail_expr.as_ref()?.syntax().text_range().contains_range(range) {
         cov_mark::hit!(cursor_on_tail);
         cov_mark::hit!(cursor_on_tail_closure);
     } else {
         return None;
     }
-    Some((fn_type, tail_expr, action))
+    Some((fn_type, tail_expr?, action))
 }
 
 #[cfg(test)]
@@ -305,6 +311,42 @@ mod tests {
     }
 
     #[test]
+    fn infer_return_type_return_expr() {
+        cov_mark::check!(cursor_on_ret_expr);
+        check_assist(
+            add_return_type,
+            r#"fn foo() {
+    return 45$0
+}"#,
+            r#"fn foo() -> i32 {
+    return 45
+}"#,
+        );
+
+        check_assist(
+            add_return_type,
+            r#"fn foo() {
+    return 45$0;
+}"#,
+            r#"fn foo() -> i32 {
+    return 45;
+}"#,
+        );
+
+        check_assist(
+            add_return_type,
+            r#"fn foo() {
+    return 45$0;
+    todo!()
+}"#,
+            r#"fn foo() -> i32 {
+    return 45;
+    todo!()
+}"#,
+        );
+    }
+
+    #[test]
     fn infer_return_type_nested() {
         check_assist(
             add_return_type,
@@ -403,6 +445,39 @@ mod tests {
 }"#,
             r#"fn foo() {
     |x: i32| -> i32 { x };
+}"#,
+        );
+    }
+
+    #[test]
+    fn infer_return_type_closure_return_expr() {
+        check_assist(
+            add_return_type,
+            r#"fn foo() {
+    |x: i32| { return x$0 };
+}"#,
+            r#"fn foo() {
+    |x: i32| -> i32 { return x };
+}"#,
+        );
+
+        check_assist(
+            add_return_type,
+            r#"fn foo() {
+    |x: i32| { return x$0; };
+}"#,
+            r#"fn foo() {
+    |x: i32| -> i32 { return x; };
+}"#,
+        );
+
+        check_assist(
+            add_return_type,
+            r#"fn foo() {
+    |x: i32| { return x$0; todo!() };
+}"#,
+            r#"fn foo() {
+    |x: i32| -> i32 { return x; todo!() };
 }"#,
         );
     }
