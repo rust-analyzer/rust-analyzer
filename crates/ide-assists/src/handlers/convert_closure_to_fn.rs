@@ -575,7 +575,8 @@ fn handle_calls(
                     let name = match usage.name {
                         FileReferenceNode::Name(name) => name.syntax().clone(),
                         FileReferenceNode::NameRef(name_ref) => name_ref.syntax().clone(),
-                        FileReferenceNode::FormatStringEntry(..) => continue,
+                        FileReferenceNode::FormatStringEntry(..)
+                        | FileReferenceNode::IntraDocLink(..) => continue,
                         FileReferenceNode::Lifetime(_) => {
                             unreachable!("impossible usage")
                         }

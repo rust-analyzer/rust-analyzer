@@ -1,7 +1,15 @@
 //! Documentation attribute related utilities.
+mod intra_doc_links;
+
 use std::borrow::Cow;
 
 use hir::{HasAttrs, db::HirDatabase, resolve_doc_path_on};
+
+pub(crate) use intra_doc_links::intra_doc_links;
+pub use intra_doc_links::{
+    doc_attributes, extract_intra_doc_link_occurrences, parse_intra_doc_link,
+    resolve_doc_path_for_def, strip_intra_doc_link_disambiguators,
+};
 
 /// Holds documentation
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

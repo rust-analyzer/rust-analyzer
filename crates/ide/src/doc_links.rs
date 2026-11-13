@@ -3,8 +3,6 @@
 #[cfg(test)]
 mod tests;
 
-mod intra_doc_links;
-
 use std::ops::Range;
 
 use pulldown_cmark::{BrokenLink, CowStr, Event, InlineStr, LinkType, Options, Parser, Tag};
@@ -12,14 +10,12 @@ use pulldown_cmark_to_cmark::{Options as CMarkOptions, cmark_with_options};
 use stdx::format_to;
 use url::Url;
 
-use hir::{
-    Adt, AsAssocItem, AssocItem, AssocItemContainer, AttrsWithOwner, HasAttrs, db::HirDatabase,
-};
+use hir::{Adt, AsAssocItem, AssocItem, AssocItemContainer, AttrsWithOwner, db::HirDatabase};
 use ide_db::{
     RootDatabase,
     base_db::{CrateOrigin, LangCrateOrigin, ReleaseChannel, toolchain_channel},
     defs::{Definition, NameClass, NameRefClass},
-    documentation::{Documentation, HasDocs},
+    documentation::{Documentation, parse_intra_doc_link, strip_intra_doc_link_disambiguators},
     helpers::pick_best_token,
 };
 use syntax::{
@@ -30,9 +26,10 @@ use syntax::{
     match_ast,
 };
 
-use crate::{
-    FilePosition, Semantics,
-    doc_links::intra_doc_links::{parse_intra_doc_link, strip_prefixes_suffixes},
+use crate::{FilePosition, Semantics};
+
+pub(crate) use ide_db::documentation::{
+    doc_attributes, extract_intra_doc_link_occurrences, resolve_doc_path_for_def,
 };
 
 /// Web and local links to an item's documentation.
@@ -182,95 +179,6 @@ pub(crate) fn external_docs(
     Some(get_doc_links(db, definition, target_dir, sysroot))
 }
 
-/// Extracts all links from a given markdown text returning the definition text range, link-text
-/// and the namespace if known.
-pub(crate) fn extract_definitions_from_docs(
-    docs: &Documentation<'_>,
-) -> Vec<(TextRange, String, Option<hir::Namespace>)> {
-    Parser::new_with_broken_link_callback(
-        docs.as_str(),
-        MARKDOWN_OPTIONS,
-        Some(&mut broken_link_clone_cb),
-    )
-    .into_offset_iter()
-    .filter_map(|(event, range)| match event {
-        Event::Start(Tag::Link(_, target, _)) => {
-            let (link, ns) = parse_intra_doc_link(&target);
-            Some((
-                TextRange::new(range.start.try_into().ok()?, range.end.try_into().ok()?),
-                link.to_owned(),
-                ns,
-            ))
-        }
-        _ => None,
-    })
-    .collect()
-}
-
-pub(crate) fn resolve_doc_path_for_def<'db>(
-    db: &dyn HirDatabase,
-    def: Definition<'db>,
-    link: &str,
-    ns: Option<hir::Namespace>,
-    is_inner_doc: hir::IsInnerDoc,
-) -> Option<Definition<'db>> {
-    match def {
-        Definition::Module(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Crate(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Function(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Adt(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::EnumVariant(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Const(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Static(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Trait(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::TypeAlias(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Macro(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::Field(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::SelfType(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::ExternCrateDecl(it) => it.resolve_doc_path(db, link, ns, is_inner_doc),
-        Definition::BuiltinAttr(_)
-        | Definition::BuiltinType(_)
-        | Definition::BuiltinLifetime(_)
-        | Definition::ToolModule(_)
-        | Definition::TupleField(_)
-        | Definition::Local(_)
-        | Definition::GenericParam(_)
-        | Definition::Label(_)
-        | Definition::DeriveHelper(_)
-        | Definition::InlineAsmRegOrRegClass(_)
-        | Definition::InlineAsmOperand(_) => None,
-    }
-    .map(Definition::from)
-}
-
-pub(crate) fn doc_attributes<'db>(
-    sema: &Semantics<'db, RootDatabase>,
-    node: &SyntaxNode,
-) -> Option<(hir::AttrsWithOwner, Definition<'db>)> {
-    match_ast! {
-        match node {
-            ast::SourceFile(it)  => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Module(it)      => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Fn(it)          => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Struct(it)      => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(hir::Adt::Struct(def)))),
-            ast::Union(it)       => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(hir::Adt::Union(def)))),
-            ast::Enum(it)        => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(hir::Adt::Enum(def)))),
-            ast::Variant(it)     => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Trait(it)       => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Static(it)      => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Const(it)       => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::TypeAlias(it)   => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Impl(it)        => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::RecordField(it) => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::TupleField(it)  => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::Macro(it)       => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            ast::ExternCrate(it) => sema.to_def(&it).map(|def| (def.attrs(sema.db), Definition::from(def))),
-            // ast::Use(it) => sema.to_def(&it).map(|def| (Box::new(it) as _, def.attrs(sema.db))),
-            _ => None
-        }
-    }
-}
-
 pub(crate) struct DocCommentToken {
     doc_token: SyntaxToken,
     prefix_len: TextSize,
@@ -336,7 +244,7 @@ impl DocCommentToken {
             let (attributes, def) = Self::doc_attributes(sema, &node, is_inner)?;
             let doc_mapping = attributes.hir_docs(sema.db)?;
             let (in_expansion_range, link, ns, is_inner) =
-                extract_definitions_from_docs(&Documentation::new_borrowed(doc_mapping.docs())).into_iter().find_map(|(range, link, ns)| {
+                extract_intra_doc_link_occurrences(&Documentation::new_borrowed(doc_mapping.docs())).into_iter().find_map(|(range, link, ns)| {
                     let (mapped, is_inner) = doc_mapping.find_ast_range(range)?;
                     (mapped.value.contains(abs_in_expansion_offset)).then_some((mapped.value, link, ns, is_inner))
                 })?;
@@ -459,7 +367,7 @@ fn rewrite_intra_doc_link(
         | LinkType::Reference
         | LinkType::Inline => title.to_owned(),
         LinkType::ShortcutUnknown | LinkType::CollapsedUnknown | LinkType::ReferenceUnknown => {
-            strip_prefixes_suffixes(title).to_owned()
+            strip_intra_doc_link_disambiguators(title).to_owned()
         }
     };
 

@@ -175,7 +175,7 @@ pub(crate) fn rename(
                             bail!("Cannot rename alias reference to `self`")
                         }
                     };
-                    let mut usages = def.usages(&sema).all();
+                    let mut usages = def.usages(&sema).include_intra_doc_links().all();
 
                     // FIXME: hack - removes the usage that triggered this rename operation.
                     match usages.references.get_mut(&file_id).and_then(|refs| {
@@ -1207,6 +1207,58 @@ fn main() {
             "new_name",
             r#"fn main() { let _ = unresolved_ref$0; }"#,
             "error: No references found at position",
+        );
+    }
+
+    #[test]
+    fn test_rename_intra_doc_links() {
+        check(
+            "NewName",
+            r#"
+//! [`OldName`], [the type](struct@OldName), [with a fragment](OldName#OldName), and [the reference][old]
+//! `OldName` in ordinary prose
+//!
+//! [old]: OldName
+
+struct Old$0Name;
+"#,
+            r#"
+//! [`NewName`], [the type](struct@NewName), [with a fragment](NewName#OldName), and [the reference][old]
+//! `OldName` in ordinary prose
+//!
+//! [old]: NewName
+
+struct NewName;
+"#,
+        );
+    }
+
+    #[test]
+    fn test_rename_intra_doc_link_path_segment() {
+        check(
+            "renamed",
+            r#"
+mod fir$0st {
+    pub struct Target;
+}
+mod second {
+    pub struct Target;
+}
+
+/// See [`first::Target`] and [`second::Target`].
+struct Docs;
+"#,
+            r#"
+mod renamed {
+    pub struct Target;
+}
+mod second {
+    pub struct Target;
+}
+
+/// See [`renamed::Target`] and [`second::Target`].
+struct Docs;
+"#,
         );
     }
 

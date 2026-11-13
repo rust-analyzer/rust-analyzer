@@ -1156,6 +1156,7 @@ dependencies = [
  "nohash-hasher",
  "parser",
  "profile",
+ "pulldown-cmark",
  "rayon",
  "rustc-hash 2.1.2",
  "salsa",

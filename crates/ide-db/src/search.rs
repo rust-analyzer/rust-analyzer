@@ -19,7 +19,8 @@ use parser::SyntaxKind;
 use rustc_hash::{FxHashMap, FxHashSet};
 use salsa::Database;
 use syntax::{
-    AstNode, AstToken, SmolStr, SyntaxElement, SyntaxNode, TextRange, TextSize, ToSmolStr,
+    AstNode, AstToken, SmolStr, SyntaxElement, SyntaxNode, SyntaxToken, TextRange, TextSize,
+    ToSmolStr,
     ast::{self, HasName, Rename},
     match_ast,
 };
@@ -28,6 +29,7 @@ use triomphe::Arc;
 use crate::{
     RootDatabase,
     defs::{Definition, NameClass, NameRefClass},
+    documentation::intra_doc_links,
     traits::{as_trait_assoc_def, convert_to_def_in_trait},
 };
 
@@ -80,6 +82,7 @@ pub enum FileReferenceNode {
     NameRef(ast::NameRef),
     Lifetime(ast::Lifetime),
     FormatStringEntry(ast::String, TextRange),
+    IntraDocLink(SyntaxToken, TextRange),
 }
 
 impl FileReferenceNode {
@@ -89,6 +92,7 @@ impl FileReferenceNode {
             FileReferenceNode::NameRef(it) => it.syntax().text_range(),
             FileReferenceNode::Lifetime(it) => it.syntax().text_range(),
             FileReferenceNode::FormatStringEntry(_, range) => *range,
+            FileReferenceNode::IntraDocLink(_, range) => *range,
         }
     }
     pub fn syntax(&self) -> SyntaxElement {
@@ -97,6 +101,7 @@ impl FileReferenceNode {
             FileReferenceNode::NameRef(it) => it.syntax().clone().into(),
             FileReferenceNode::Lifetime(it) => it.syntax().clone().into(),
             FileReferenceNode::FormatStringEntry(it, _) => it.syntax().clone().into(),
+            FileReferenceNode::IntraDocLink(it, _) => it.clone().into(),
         }
     }
     pub fn into_name_like(self) -> Option<ast::NameLike> {
@@ -104,7 +109,9 @@ impl FileReferenceNode {
             FileReferenceNode::Name(it) => Some(ast::NameLike::Name(it)),
             FileReferenceNode::NameRef(it) => Some(ast::NameLike::NameRef(it)),
             FileReferenceNode::Lifetime(it) => Some(ast::NameLike::Lifetime(it)),
-            FileReferenceNode::FormatStringEntry(_, _) => None,
+            FileReferenceNode::FormatStringEntry(_, _) | FileReferenceNode::IntraDocLink(_, _) => {
+                None
+            }
         }
     }
     pub fn as_name_ref(&self) -> Option<&ast::NameRef> {
@@ -126,6 +133,9 @@ impl FileReferenceNode {
             FileReferenceNode::Lifetime(lifetime) => lifetime.text(),
             FileReferenceNode::FormatStringEntry(it, range) => {
                 &it.text()[*range - it.syntax().text_range().start()]
+            }
+            FileReferenceNode::IntraDocLink(it, range) => {
+                &it.text()[*range - it.text_range().start()]
             }
         }
     }
@@ -430,6 +440,7 @@ impl<'db> Definition<'db> {
             sema,
             scope: None,
             include_self_kw_refs: None,
+            include_intra_doc_links: false,
             search_self_mod: false,
             included_categories: ReferenceCategory::all(),
             exclude_library_files: false,
@@ -447,6 +458,8 @@ pub struct FindUsages<'a, 'db> {
     assoc_item_container: Option<hir::AssocItemContainer>,
     /// whether to search for the `Self` type of the definition
     include_self_kw_refs: Option<hir::Type<'a>>,
+    /// whether to search for references in intra-doc links
+    include_intra_doc_links: bool,
     /// whether to search for the `self` module
     search_self_mod: bool,
     /// categories to include while collecting usages
@@ -460,6 +473,15 @@ impl<'a, 'db> FindUsages<'a, 'db> {
     pub fn include_self_refs(mut self) -> Self {
         self.include_self_kw_refs = def_to_ty(self.sema, &self.def);
         self.search_self_mod = true;
+        self
+    }
+
+    /// Include references in intra-doc links.
+    ///
+    /// These are excluded by default because not all usage consumers can handle references
+    /// embedded in documentation.
+    pub fn include_intra_doc_links(mut self) -> Self {
+        self.include_intra_doc_links = true;
         self
     }
 
@@ -926,6 +948,43 @@ impl<'a, 'db> FindUsages<'a, 'db> {
         true
     }
 
+    fn search_intra_doc_links(
+        &self,
+        search_scope: &SearchScope,
+        name: &str,
+        sink: &mut dyn FnMut(EditionedFileId, FileReference) -> bool,
+    ) -> bool {
+        for (_, file_id, search_range) in
+            Self::scope_files(self.sema.db, search_scope, self.exclude_library_files)
+        {
+            let tree = self.sema.parse(file_id).syntax().clone();
+            for node in tree.descendants() {
+                for (range, def) in intra_doc_links(self.sema, file_id, &node, name) {
+                    if !search_range.contains_range(range) || !self.is_reference_to(def) {
+                        continue;
+                    }
+                    let Some(token) = tree
+                        .token_at_offset(range.start())
+                        .find(|token| token.text_range().contains_range(range))
+                    else {
+                        continue;
+                    };
+                    if sink(
+                        file_id,
+                        FileReference {
+                            range,
+                            name: FileReferenceNode::IntraDocLink(token, range),
+                            category: ReferenceCategory::empty(),
+                        },
+                    ) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
+    }
+
     pub fn search(&self, sink: &mut dyn FnMut(EditionedFileId, FileReference) -> bool) {
         let _p = tracing::info_span!("FindUsages:search").entered();
         let sema = self.sema;
@@ -983,6 +1042,10 @@ impl<'a, 'db> FindUsages<'a, 'db> {
             Some(s) => s.as_str(),
             None => return,
         };
+
+        if self.include_intra_doc_links && self.search_intra_doc_links(&search_scope, name, sink) {
+            return;
+        }
 
         // FIXME: This should probably depend on the number of the results (specifically, the number of false results).
         if name.len() <= 7 && self.short_associated_function_fast_search(sink, &search_scope, name)
@@ -1238,28 +1301,7 @@ impl<'a, 'db> FindUsages<'a, 'db> {
         }
 
         match NameRefClass::classify(self.sema, name_ref) {
-            Some(NameRefClass::Definition(def, _))
-                if self.def == def
-                    // is our def a trait assoc item? then we want to find all assoc items from trait impls of our trait
-                    || matches!(self.assoc_item_container, Some(hir::AssocItemContainer::Trait(_)))
-                        && convert_to_def_in_trait(self.sema.db, def) == self.def =>
-            {
-                let FileRange { file_id, range } = self.sema.original_range(name_ref.syntax());
-                let reference = FileReference {
-                    range,
-                    name: FileReferenceNode::NameRef(name_ref.clone()),
-                    category: ReferenceCategory::new(self.sema, &def, name_ref),
-                };
-                sink(file_id, reference)
-            }
-            // FIXME: special case type aliases, we can't filter between impl and trait defs here as we lack the substitutions
-            // so we always resolve all assoc type aliases to both their trait def and impl defs
-            Some(NameRefClass::Definition(def, _))
-                if self.assoc_item_container.is_some()
-                    && matches!(self.def, Definition::TypeAlias(_))
-                    && convert_to_def_in_trait(self.sema.db, def)
-                        == convert_to_def_in_trait(self.sema.db, self.def) =>
-            {
+            Some(NameRefClass::Definition(def, _)) if self.is_reference_to(def) => {
                 let FileRange { file_id, range } = self.sema.original_range(name_ref.syntax());
                 let reference = FileReference {
                     range,
@@ -1307,6 +1349,19 @@ impl<'a, 'db> FindUsages<'a, 'db> {
             }
             _ => false,
         }
+    }
+
+    fn is_reference_to(&self, def: Definition<'db>) -> bool {
+        self.def == def
+            // A trait associated item also refers to its counterparts in trait impls.
+            || matches!(self.assoc_item_container, Some(hir::AssocItemContainer::Trait(_)))
+                && convert_to_def_in_trait(self.sema.db, def) == self.def
+            // FIXME: Without substitutions, associated type aliases cannot be narrowed down to a
+            // particular trait definition or implementation.
+            || self.assoc_item_container.is_some()
+                && matches!(self.def, Definition::TypeAlias(_))
+                && convert_to_def_in_trait(self.sema.db, def)
+                    == convert_to_def_in_trait(self.sema.db, self.def)
     }
 
     fn is_excluded_name_ref(&self, name_ref: &ast::NameRef) -> bool {

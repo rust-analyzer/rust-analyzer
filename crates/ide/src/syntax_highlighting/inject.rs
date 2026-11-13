@@ -13,7 +13,7 @@ use triomphe::Arc;
 
 use crate::{
     Analysis, HlMod, HlRange, HlTag, RootDatabase,
-    doc_links::{doc_attributes, extract_definitions_from_docs, resolve_doc_path_for_def},
+    doc_links::{doc_attributes, extract_intra_doc_link_occurrences, resolve_doc_path_for_def},
     syntax_highlighting::{HighlightConfig, highlights::Highlights},
 };
 
@@ -98,7 +98,7 @@ pub(super) fn doc_comment(
     let Some(docs) = attributes.hir_docs(sema.db) else { return };
 
     // Extract intra-doc links and emit highlights for them.
-    extract_definitions_from_docs(&Documentation::new_borrowed(docs.docs()))
+    extract_intra_doc_link_occurrences(&Documentation::new_borrowed(docs.docs()))
         .into_iter()
         .filter_map(|(range, link, ns)| {
             docs.find_ast_range(range)

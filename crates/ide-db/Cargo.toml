@@ -28,6 +28,7 @@ triomphe.workspace = true
 nohash-hasher.workspace = true
 bitflags.workspace = true
 smallvec.workspace = true
+pulldown-cmark.workspace = true
 
 # local deps
 base-db.workspace = true

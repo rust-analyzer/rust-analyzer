@@ -12,7 +12,7 @@ use syntax::{AstNode, SyntaxNode, ast, match_ast};
 
 use crate::{
     TryToNav,
-    doc_links::{extract_definitions_from_docs, resolve_doc_path_for_def, rewrite_links},
+    doc_links::{extract_intra_doc_link_occurrences, resolve_doc_path_for_def, rewrite_links},
     fixture,
 };
 
@@ -59,7 +59,7 @@ fn check_doc_links(#[rust_analyzer::rust_fixture] ra_fixture: &str) {
     let sema = &Semantics::new(&analysis.db);
     hir::attach_db(sema.db, || {
         let (cursor_def, docs) = def_under_cursor(sema, &position);
-        let defs = extract_definitions_from_docs(&Documentation::new_borrowed(docs.docs()));
+        let defs = extract_intra_doc_link_occurrences(&Documentation::new_borrowed(docs.docs()));
         let actual: Vec<_> = defs
             .into_iter()
             .flat_map(|(text_range, link, ns)| {
