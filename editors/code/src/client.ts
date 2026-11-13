@@ -267,6 +267,12 @@ export async function createClient(
                     }
                     result.push(primary);
                 }
+
+                result.sort((a, b) => {
+                    const priorityA = getActionPriority(a);
+                    const priorityB = getActionPriority(b);
+                    return priorityA - priorityB;
+                });
                 return result;
             };
             return client
@@ -420,3 +426,17 @@ function renderHoverActions(actions: ra.CommandLinkGroup[]): vscode.MarkdownStri
     result.isTrusted = true;
     return result;
 }
+
+const getActionPriority = (action: vscode.CodeAction | vscode.Command): number => {
+    // rust-analyzer diagnostic > rust-analyzer assist > rustc diagnostic > other
+    if (!(action instanceof vscode.CodeAction)) {
+        return 3;
+    }
+
+    if (action.edit && action.edit.size > 0) return 2;
+    const command = action.command?.command;
+    if (command === "rust-analyzer.resolveCodeAction") return 0;
+    if (command === "rust-analyzer.applyActionGroup") return 1;
+
+    return 3;
+};
