@@ -118,7 +118,6 @@ impl<'db> ExprValidator<'db> {
     }
 
     fn validate_body(&mut self) {
-        let db = self.db();
         let mut filter_map_next_checker = None;
         // we'll pass &mut self while iterating over body.exprs, so they need to be disjoint
         let body = self.body;
@@ -128,16 +127,6 @@ impl<'db> ExprValidator<'db> {
         }
 
         for (id, expr) in body.exprs() {
-            if let Some((variant, missed_fields)) =
-                record_literal_missing_fields(db, self.infer, id, expr)
-            {
-                self.diagnostics.push(BodyValidationDiagnostic::RecordMissingFields {
-                    record: Either::Left(id),
-                    variant,
-                    missed_fields,
-                });
-            }
-
             match expr {
                 Expr::Match { expr, arms } => {
                     self.validate_match(id, *expr, arms);

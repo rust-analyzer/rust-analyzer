@@ -5,7 +5,7 @@ mod overly_long_real_world_cases;
 use hir::setup_tracing;
 use ide_db::{
     RootDatabase,
-    assists::{AssistResolveStrategy, ExprFillDefaultMode},
+    assists::{Assist, AssistResolveStrategy, ExprFillDefaultMode},
     base_db::SourceDatabase,
     line_index,
 };
@@ -19,38 +19,29 @@ use crate::{DiagnosticsConfig, Severity};
 /// Takes a multi-file input fixture with annotated cursor positions,
 /// and checks that:
 ///  * a diagnostic is produced
-///  * the first diagnostic fix trigger range touches the input cursor position
+///  * the selected diagnostic fix trigger range touches the input cursor position
 ///  * that the contents of the file containing the cursor match `after` after the diagnostic fix is applied
 #[track_caller]
 pub(crate) fn check_fix(
     #[rust_analyzer::rust_fixture] ra_fixture_before: &str,
     #[rust_analyzer::rust_fixture] ra_fixture_after: &str,
 ) {
-    check_nth_fix(0, ra_fixture_before, ra_fixture_after);
+    let mut config = DiagnosticsConfig::test_sample();
+    config.expr_fill_default = ExprFillDefaultMode::Default;
+    check_fix_with_config(config, ra_fixture_before, ra_fixture_after);
 }
 /// Takes a multi-file input fixture with annotated cursor positions,
 /// and checks that:
 ///  * a diagnostic is produced
-///  * every diagnostic fixes trigger range touches the input cursor position
+///  * every selected diagnostic fix trigger range touches the input cursor position
 ///  * that the contents of the file containing the cursor match `after` after each diagnostic fix is applied
 pub(crate) fn check_fixes(
     #[rust_analyzer::rust_fixture] ra_fixture_before: &str,
     ra_fixtures_after: Vec<&str>,
 ) {
-    for (i, ra_fixture_after) in ra_fixtures_after.iter().enumerate() {
-        check_nth_fix(i, ra_fixture_before, ra_fixture_after)
+    for ra_fixture_after in ra_fixtures_after {
+        check_has_fix(ra_fixture_before, ra_fixture_after)
     }
-}
-
-#[track_caller]
-fn check_nth_fix(
-    nth: usize,
-    #[rust_analyzer::rust_fixture] ra_fixture_before: &str,
-    #[rust_analyzer::rust_fixture] ra_fixture_after: &str,
-) {
-    let mut config = DiagnosticsConfig::test_sample();
-    config.expr_fill_default = ExprFillDefaultMode::Default;
-    check_nth_fix_with_config(config, nth, ra_fixture_before, ra_fixture_after)
 }
 
 #[track_caller]
@@ -62,53 +53,43 @@ pub(crate) fn check_fix_with_disabled(
     let mut config = DiagnosticsConfig::test_sample();
     config.expr_fill_default = ExprFillDefaultMode::Default;
     config.disabled.extend(disabled.iter().map(|&disabled| disabled.to_owned()));
-    check_nth_fix_with_config(config, 0, ra_fixture_before, ra_fixture_after)
+    check_fix_with_config(config, ra_fixture_before, ra_fixture_after)
 }
 
 #[track_caller]
-fn check_nth_fix_with_config(
+fn check_fix_with_config(
     config: DiagnosticsConfig,
-    nth: usize,
     #[rust_analyzer::rust_fixture] ra_fixture_before: &str,
     #[rust_analyzer::rust_fixture] ra_fixture_after: &str,
 ) {
     let after = trim_indent(ra_fixture_after);
 
     let (db, file_position) = RootDatabase::with_position(ra_fixture_before);
-    let diagnostic = hir::attach_db(&db, || {
+    let diagnostics = hir::attach_db(&db, || {
         super::full_diagnostics(
             &db,
             &config,
             &AssistResolveStrategy::All,
             file_position.file_id.file_id(&db),
         )
-        .pop()
-        .expect("no diagnostics")
     });
-    let fix = &diagnostic
-        .fixes
-        .unwrap_or_else(|| panic!("{:?} diagnostic misses fixes", diagnostic.code))[nth];
-    let actual = {
-        let source_change = fix.source_change.as_ref().unwrap();
-        let file_id = *source_change.source_file_edits.keys().next().unwrap();
-        let mut actual = db.file_text(file_id).text(&db).to_string();
+    let fixes = diagnostics
+        .iter()
+        .filter_map(|diagnostic| diagnostic.fixes.as_ref().map(|fixes| (diagnostic, fixes)))
+        .flat_map(|(diagnostic, fixes)| fixes.iter().map(move |fix| (diagnostic, fix)))
+        .filter(|(_, fix)| fix.target.contains_inclusive(file_position.offset))
+        .collect::<Vec<_>>();
+    let (diagnostic, actual) = fixes
+        .iter()
+        .find_map(|(diagnostic, fix)| {
+            let actual = apply_assist(&db, fix);
+            (actual == after).then_some((*diagnostic, actual))
+        })
+        .unwrap_or_else(|| {
+            panic!("no diagnostic fix produced the expected result: {diagnostics:?}")
+        });
 
-        for (edit, snippet_edit) in source_change.source_file_edits.values() {
-            edit.apply(&mut actual);
-            if let Some(snippet_edit) = snippet_edit {
-                snippet_edit.apply(&mut actual);
-            }
-        }
-        actual
-    };
-
-    assert!(
-        fix.target.contains_inclusive(file_position.offset),
-        "diagnostic fix range {:?} does not touch cursor position {:?}",
-        fix.target,
-        file_position.offset
-    );
-    assert_eq_text!(&after, &actual);
+    assert_eq_text!(&after, &actual, "unexpected fix from {:?}", diagnostic.code);
 }
 
 pub(crate) fn check_fixes_unordered(
@@ -147,25 +128,27 @@ pub(crate) fn check_has_fix(
                     if !fix.target.contains_inclusive(file_position.offset) {
                         return false;
                     }
-                    let actual = {
-                        let source_change = fix.source_change.as_ref().unwrap();
-                        let file_id = *source_change.source_file_edits.keys().next().unwrap();
-                        let mut actual = db.file_text(file_id).text(&db).to_string();
-
-                        for (edit, snippet_edit) in source_change.source_file_edits.values() {
-                            edit.apply(&mut actual);
-                            if let Some(snippet_edit) = snippet_edit {
-                                snippet_edit.apply(&mut actual);
-                            }
-                        }
-                        actual
-                    };
+                    let actual = apply_assist(&db, fix);
                     after == actual
                 })
             })
             .is_some()
     });
     assert!(fix.is_some(), "no diagnostic with desired fix");
+}
+
+fn apply_assist(db: &RootDatabase, assist: &Assist) -> String {
+    let source_change = assist.source_change.as_ref().unwrap();
+    let file_id = *source_change.source_file_edits.keys().next().unwrap();
+    let mut actual = db.file_text(file_id).text(db).to_string();
+
+    for (edit, snippet_edit) in source_change.source_file_edits.values() {
+        edit.apply(&mut actual);
+        if let Some(snippet_edit) = snippet_edit {
+            snippet_edit.apply(&mut actual);
+        }
+    }
+    actual
 }
 
 /// Checks that there's a diagnostic *without* fix at `$0`.
