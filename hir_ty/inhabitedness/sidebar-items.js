@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["BREAK_VISIBLY_UNINHABITED","CONTINUE_OPAQUELY_INHABITED"],"fn":["is_enum_variant_uninhabited_from","is_ty_uninhabited_from"],"struct":["UninhabitedFrom","VisiblyUninhabited"]};

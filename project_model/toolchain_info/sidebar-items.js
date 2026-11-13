@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["QueryConfig"],"mod":["rustc_cfg","target_data","target_tuple","version"]};

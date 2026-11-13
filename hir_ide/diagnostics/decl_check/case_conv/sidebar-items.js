@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_camel_case","is_lower_snake_case","is_snake_case","is_upper_snake_case","to_camel_case","to_lower_snake_case","to_upper_snake_case"]};

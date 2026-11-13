@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["combine_ty_args","super_combine_consts","super_combine_tys"],"trait":["PredicateEmittingRelation"]};

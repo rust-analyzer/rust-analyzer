@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_macro_call","macro_semicolon","needs_semicolon","toggle_macro_delimiter"]};

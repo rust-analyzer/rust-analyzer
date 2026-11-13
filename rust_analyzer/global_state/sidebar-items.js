@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["file_id_to_url","url_to_file_id","vfs_path_to_file_id"],"struct":["FetchBuildDataResponse","FetchWorkspaceRequest","FetchWorkspaceResponse","GlobalState","GlobalStateSnapshot","Handle","MiniCoreRustAnalyzerInternalOnly"],"type":["ReqHandler","ReqQueue"]};

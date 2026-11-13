@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_let_else_to_match","remove_mut_and_collect_idents"]};

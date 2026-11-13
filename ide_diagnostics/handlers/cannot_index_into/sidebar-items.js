@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cannot_index_into"]};

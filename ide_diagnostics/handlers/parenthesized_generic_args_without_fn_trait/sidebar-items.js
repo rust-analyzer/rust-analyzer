@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["parenthesized_generic_args_without_fn_trait"]};

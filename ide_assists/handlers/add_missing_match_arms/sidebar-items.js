@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExtendedEnum","ExtendedVariant"],"fn":["add_missing_match_arms","build_pat","cursor_at_trivial_match_arm_list","does_pat_match_variant","is_empty_expr","is_variant_missing","resolve_array_of_enum_def","resolve_enum_def","resolve_tuple_of_enum_def"],"struct":["ArmsEdit"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["_format","expand","expand_macro","expand_macro_recur","format"],"struct":["ExpandedMacro"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["invalid_range_pat_type"]};

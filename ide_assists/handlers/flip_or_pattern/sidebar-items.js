@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["flip_or_pattern"]};

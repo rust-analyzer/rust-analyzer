@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fixes","replace_filter_map_next_with_find_map"]};

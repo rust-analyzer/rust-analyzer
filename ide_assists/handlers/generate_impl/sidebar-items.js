@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["extract_expr","generate_impl","generate_impl_trait","generate_trait_impl","insert_impl"]};

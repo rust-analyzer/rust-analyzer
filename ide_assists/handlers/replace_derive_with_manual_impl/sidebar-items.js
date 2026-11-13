@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_assist","impl_def_from_trait","replace_derive_with_manual_impl","update_attribute"]};

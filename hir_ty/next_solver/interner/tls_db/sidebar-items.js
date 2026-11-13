@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GLOBAL_DB"],"fn":["attach_db","attach_db_allow_change","with_attached_db"],"struct":["Attached"]};

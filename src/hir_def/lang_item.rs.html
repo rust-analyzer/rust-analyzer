@@ -1,0 +1,1056 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/hir-def/src/lang_item.rs`."><title>lang_item.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hir_def" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../../static.files/src-script-813739b1.js"></script><script defer src="../../src-files.js"></script><script defer src="../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">hir_def/</div>lang_item.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-4"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Collects lang items: items marked with `#[lang = "..."]` attribute.
+<a href=#2 id=2 data-nosnippet>2</a>//!
+<a href=#3 id=3 data-nosnippet>3</a>//! This attribute to tell the compiler about semi built-in std library
+<a href=#4 id=4 data-nosnippet>4</a>//! features, such as Fn family of traits.
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span>base_db::SourceDatabase;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>hir_expand::name::Name;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>intern::{Symbol, sym};
+<a href=#8 id=8 data-nosnippet>8</a><span class="kw">use </span>rustc_hash::FxHashMap;
+<a href=#9 id=9 data-nosnippet>9</a><span class="kw">use </span>rustc_type_ir::lang_items::{SolverAdtLangItem, SolverProjectionLangItem, SolverTraitLangItem};
+<a href=#10 id=10 data-nosnippet>10</a><span class="kw">use </span>stdx::impl_from;
+<a href=#11 id=11 data-nosnippet>11</a>
+<a href=#12 id=12 data-nosnippet>12</a><span class="kw">use crate</span>::{
+<a href=#13 id=13 data-nosnippet>13</a>    AdtId, AssocItemId, AttrDefId, ConstId, Crate, EnumId, EnumVariantId, FunctionId, ImplId,
+<a href=#14 id=14 data-nosnippet>14</a>    ItemContainerId, MacroId, ModuleDefId, StaticId, StructId, TraitId, TypeAliasId, UnionId,
+<a href=#15 id=15 data-nosnippet>15</a>    attrs::AttrFlags,
+<a href=#16 id=16 data-nosnippet>16</a>    nameres::{DefMap, assoc::TraitItems, crate_def_map, crate_local_def_map},
+<a href=#17 id=17 data-nosnippet>17</a>    unstable_features::UnstableFeatures,
+<a href=#18 id=18 data-nosnippet>18</a>};
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a><span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+<a href=#21 id=21 data-nosnippet>21</a></span><span class="kw">pub enum </span>LangItemTarget {
+<a href=#22 id=22 data-nosnippet>22</a>    EnumId(EnumId),
+<a href=#23 id=23 data-nosnippet>23</a>    FunctionId(FunctionId),
+<a href=#24 id=24 data-nosnippet>24</a>    ImplId(ImplId),
+<a href=#25 id=25 data-nosnippet>25</a>    StaticId(StaticId),
+<a href=#26 id=26 data-nosnippet>26</a>    StructId(StructId),
+<a href=#27 id=27 data-nosnippet>27</a>    UnionId(UnionId),
+<a href=#28 id=28 data-nosnippet>28</a>    TypeAliasId(TypeAliasId),
+<a href=#29 id=29 data-nosnippet>29</a>    TraitId(TraitId),
+<a href=#30 id=30 data-nosnippet>30</a>    EnumVariantId(EnumVariantId),
+<a href=#31 id=31 data-nosnippet>31</a>    ConstId(ConstId),
+<a href=#32 id=32 data-nosnippet>32</a>    MacroId(MacroId),
+<a href=#33 id=33 data-nosnippet>33</a>}
+<a href=#34 id=34 data-nosnippet>34</a>
+<a href=#35 id=35 data-nosnippet>35</a><span class="macro">impl_from!</span>(
+<a href=#36 id=36 data-nosnippet>36</a>    EnumId, FunctionId, ImplId, StaticId, StructId, UnionId, TypeAliasId, TraitId, EnumVariantId, ConstId, MacroId <span class="kw">for </span>LangItemTarget
+<a href=#37 id=37 data-nosnippet>37</a>);
+<a href=#38 id=38 data-nosnippet>38</a>
+<a href=#39 id=39 data-nosnippet>39</a><span class="doccomment">/// Salsa query. This will look for lang items in a specific crate.
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="attr">#[salsa::tracked(returns(as_deref))]
+<a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">pub fn </span>crate_lang_items(db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase, krate: Crate) -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;LangItems&gt;&gt; {
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">if </span>!UnstableFeatures::query(db, krate).lang_items {
+<a href=#43 id=43 data-nosnippet>43</a>        <span class="comment">// First query this, *before* querying the def map, to not create a dependency edge.
+<a href=#44 id=44 data-nosnippet>44</a>        </span><span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#45 id=45 data-nosnippet>45</a>    }
+<a href=#46 id=46 data-nosnippet>46</a>
+<a href=#47 id=47 data-nosnippet>47</a>    <span class="kw">let </span><span class="kw-2">mut </span>lang_items = LangItems::default();
+<a href=#48 id=48 data-nosnippet>48</a>
+<a href=#49 id=49 data-nosnippet>49</a>    <span class="kw">let </span>_p = <span class="macro">tracing::info_span!</span>(<span class="string">"crate_lang_items_query"</span>, <span class="question-mark">?</span>krate).entered();
+<a href=#50 id=50 data-nosnippet>50</a>
+<a href=#51 id=51 data-nosnippet>51</a>    <span class="kw">let </span>crate_def_map = crate_def_map(db, krate);
+<a href=#52 id=52 data-nosnippet>52</a>    <span class="kw">for </span>(<span class="kw">_</span>, module_data) <span class="kw">in </span>crate_def_map.modules() {
+<a href=#53 id=53 data-nosnippet>53</a>        <span class="kw">for </span>impl_def <span class="kw">in </span>module_data.scope.inherent_impls() {
+<a href=#54 id=54 data-nosnippet>54</a>            lang_items.collect_lang_item(db, impl_def);
+<a href=#55 id=55 data-nosnippet>55</a>            <span class="kw">for </span><span class="kw-2">&amp;</span>(<span class="kw">_</span>, assoc) <span class="kw">in </span>impl_def.impl_items(db).items.iter() {
+<a href=#56 id=56 data-nosnippet>56</a>                <span class="kw">match </span>assoc {
+<a href=#57 id=57 data-nosnippet>57</a>                    AssocItemId::FunctionId(f) =&gt; lang_items.collect_lang_item(db, f),
+<a href=#58 id=58 data-nosnippet>58</a>                    AssocItemId::TypeAliasId(t) =&gt; lang_items.collect_lang_item(db, t),
+<a href=#59 id=59 data-nosnippet>59</a>                    AssocItemId::ConstId(c) =&gt; lang_items.collect_lang_item(db, c),
+<a href=#60 id=60 data-nosnippet>60</a>                }
+<a href=#61 id=61 data-nosnippet>61</a>            }
+<a href=#62 id=62 data-nosnippet>62</a>        }
+<a href=#63 id=63 data-nosnippet>63</a>
+<a href=#64 id=64 data-nosnippet>64</a>        <span class="kw">for </span>def <span class="kw">in </span>module_data.scope.declarations() {
+<a href=#65 id=65 data-nosnippet>65</a>            <span class="kw">match </span>def {
+<a href=#66 id=66 data-nosnippet>66</a>                ModuleDefId::TraitId(trait_) =&gt; {
+<a href=#67 id=67 data-nosnippet>67</a>                    lang_items.collect_lang_item(db, trait_);
+<a href=#68 id=68 data-nosnippet>68</a>                    TraitItems::query(db, trait_).items.iter().for_each(|<span class="kw-2">&amp;</span>(<span class="kw">_</span>, assoc_id)| {
+<a href=#69 id=69 data-nosnippet>69</a>                        <span class="kw">match </span>assoc_id {
+<a href=#70 id=70 data-nosnippet>70</a>                            AssocItemId::FunctionId(f) =&gt; {
+<a href=#71 id=71 data-nosnippet>71</a>                                lang_items.collect_lang_item(db, f);
+<a href=#72 id=72 data-nosnippet>72</a>                            }
+<a href=#73 id=73 data-nosnippet>73</a>                            AssocItemId::TypeAliasId(alias) =&gt; {
+<a href=#74 id=74 data-nosnippet>74</a>                                lang_items.collect_lang_item(db, alias)
+<a href=#75 id=75 data-nosnippet>75</a>                            }
+<a href=#76 id=76 data-nosnippet>76</a>                            AssocItemId::ConstId(c) =&gt; lang_items.collect_lang_item(db, c),
+<a href=#77 id=77 data-nosnippet>77</a>                        }
+<a href=#78 id=78 data-nosnippet>78</a>                    });
+<a href=#79 id=79 data-nosnippet>79</a>                }
+<a href=#80 id=80 data-nosnippet>80</a>                ModuleDefId::AdtId(AdtId::EnumId(e)) =&gt; {
+<a href=#81 id=81 data-nosnippet>81</a>                    lang_items.collect_lang_item(db, e);
+<a href=#82 id=82 data-nosnippet>82</a>                    e.enum_variants(db).variants.values().for_each(|<span class="kw-2">&amp;</span>(id, <span class="kw">_</span>)| {
+<a href=#83 id=83 data-nosnippet>83</a>                        lang_items.collect_lang_item(db, id);
+<a href=#84 id=84 data-nosnippet>84</a>                    });
+<a href=#85 id=85 data-nosnippet>85</a>                }
+<a href=#86 id=86 data-nosnippet>86</a>                ModuleDefId::AdtId(AdtId::StructId(s)) =&gt; {
+<a href=#87 id=87 data-nosnippet>87</a>                    lang_items.collect_lang_item(db, s);
+<a href=#88 id=88 data-nosnippet>88</a>                }
+<a href=#89 id=89 data-nosnippet>89</a>                ModuleDefId::AdtId(AdtId::UnionId(u)) =&gt; {
+<a href=#90 id=90 data-nosnippet>90</a>                    lang_items.collect_lang_item(db, u);
+<a href=#91 id=91 data-nosnippet>91</a>                }
+<a href=#92 id=92 data-nosnippet>92</a>                ModuleDefId::FunctionId(f) =&gt; {
+<a href=#93 id=93 data-nosnippet>93</a>                    lang_items.collect_lang_item(db, f);
+<a href=#94 id=94 data-nosnippet>94</a>                }
+<a href=#95 id=95 data-nosnippet>95</a>                ModuleDefId::StaticId(s) =&gt; {
+<a href=#96 id=96 data-nosnippet>96</a>                    lang_items.collect_lang_item(db, s);
+<a href=#97 id=97 data-nosnippet>97</a>                }
+<a href=#98 id=98 data-nosnippet>98</a>                ModuleDefId::TypeAliasId(t) =&gt; {
+<a href=#99 id=99 data-nosnippet>99</a>                    lang_items.collect_lang_item(db, t);
+<a href=#100 id=100 data-nosnippet>100</a>                }
+<a href=#101 id=101 data-nosnippet>101</a>                ModuleDefId::ConstId(c) =&gt; lang_items.collect_lang_item(db, c),
+<a href=#102 id=102 data-nosnippet>102</a>                <span class="kw">_ </span>=&gt; {}
+<a href=#103 id=103 data-nosnippet>103</a>            }
+<a href=#104 id=104 data-nosnippet>104</a>        }
+<a href=#105 id=105 data-nosnippet>105</a>    }
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">if </span><span class="macro">matches!</span>(krate.data(db).origin, base_db::CrateOrigin::Lang(base_db::LangCrateOrigin::Core)) {
+<a href=#108 id=108 data-nosnippet>108</a>        lang_items.fill_non_lang_core_items(db, crate_def_map);
+<a href=#109 id=109 data-nosnippet>109</a>    }
+<a href=#110 id=110 data-nosnippet>110</a>
+<a href=#111 id=111 data-nosnippet>111</a>    lang_items.resolve_manually(db);
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">if </span>lang_items.is_empty() {
+<a href=#114 id=114 data-nosnippet>114</a>        <span class="prelude-val">None
+<a href=#115 id=115 data-nosnippet>115</a>    </span>} <span class="kw">else </span>{
+<a href=#116 id=116 data-nosnippet>116</a>        lang_items.shrink_to_fit();
+<a href=#117 id=117 data-nosnippet>117</a>        <span class="prelude-val">Some</span>(Box::new(lang_items))
+<a href=#118 id=118 data-nosnippet>118</a>    }
+<a href=#119 id=119 data-nosnippet>119</a>}
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a><span class="comment">// A firewall query, so that changing crate code for non-`feature(lang_items)` crate will not require recomputing
+<a href=#122 id=122 data-nosnippet>122</a>// the more expensive `lang_items()` query.
+<a href=#123 id=123 data-nosnippet>123</a></span><span class="attr">#[salsa::tracked(returns(deref))]
+<a href=#124 id=124 data-nosnippet>124</a></span><span class="kw">fn </span>crate_extern_prelude(db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase, start_crate: Crate) -&gt; Box&lt;[Crate]&gt; {
+<a href=#125 id=125 data-nosnippet>125</a>    crate_local_def_map(db, start_crate)
+<a href=#126 id=126 data-nosnippet>126</a>        .local(db)
+<a href=#127 id=127 data-nosnippet>127</a>        .extern_prelude()
+<a href=#128 id=128 data-nosnippet>128</a>        .map(|(<span class="kw">_</span>, (module, <span class="kw">_</span>))| module.krate(db))
+<a href=#129 id=129 data-nosnippet>129</a>        .filter(|<span class="kw-2">&amp;</span>krate| {
+<a href=#130 id=130 data-nosnippet>130</a>            <span class="comment">// Some crates declares themselves as extern crate like `extern crate self as core`.
+<a href=#131 id=131 data-nosnippet>131</a>            // Ignore these to prevent cycles.
+<a href=#132 id=132 data-nosnippet>132</a>            </span>krate != start_crate
+<a href=#133 id=133 data-nosnippet>133</a>        })
+<a href=#134 id=134 data-nosnippet>134</a>        .collect()
+<a href=#135 id=135 data-nosnippet>135</a>}
+<a href=#136 id=136 data-nosnippet>136</a>
+<a href=#137 id=137 data-nosnippet>137</a><span class="doccomment">/// Salsa query. Look for a lang items, starting from the specified crate and recursively
+<a href=#138 id=138 data-nosnippet>138</a>/// traversing its dependencies.
+<a href=#139 id=139 data-nosnippet>139</a></span><span class="attr">#[salsa::tracked(returns(<span class="kw-2">ref</span>))]
+<a href=#140 id=140 data-nosnippet>140</a></span><span class="kw">pub fn </span>lang_items(db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase, start_crate: Crate) -&gt; LangItems {
+<a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">let </span>_p = <span class="macro">tracing::debug_span!</span>(<span class="string">"lang_items_query"</span>, <span class="question-mark">?</span>start_crate).entered();
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">let </span><span class="kw-2">mut </span>result = crate_lang_items(db, start_crate).cloned().unwrap_or_default();
+<a href=#144 id=144 data-nosnippet>144</a>
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="comment">// Our `CrateGraph` eagerly inserts sysroot dependencies like `core` or `std` into dependencies
+<a href=#146 id=146 data-nosnippet>146</a>    // even if the target crate has `#![no_std]`, `#![no_core]` or shadowed sysroot dependencies
+<a href=#147 id=147 data-nosnippet>147</a>    // like `dependencies.std.path = ".."`. So we use `extern_prelude()` instead of
+<a href=#148 id=148 data-nosnippet>148</a>    // `CrateData.dependencies` here, which has already come through such sysroot complexities
+<a href=#149 id=149 data-nosnippet>149</a>    // while nameres.
+<a href=#150 id=150 data-nosnippet>150</a>    //
+<a href=#151 id=151 data-nosnippet>151</a>    // See https://github.com/rust-lang/rust-analyzer/pull/20475 for details.
+<a href=#152 id=152 data-nosnippet>152</a>    </span><span class="kw">for </span><span class="kw-2">&amp;</span>krate <span class="kw">in </span>crate_extern_prelude(db, start_crate) {
+<a href=#153 id=153 data-nosnippet>153</a>        result.merge_prefer_other(lang_items(db, krate));
+<a href=#154 id=154 data-nosnippet>154</a>    }
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>    result
+<a href=#157 id=157 data-nosnippet>157</a>}
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a><span class="kw">impl </span>LangItems {
+<a href=#160 id=160 data-nosnippet>160</a>    <span class="kw">fn </span>collect_lang_item&lt;T&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase, item: T)
+<a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">where
+<a href=#162 id=162 data-nosnippet>162</a>        </span>T: Into&lt;AttrDefId&gt; + Into&lt;LangItemTarget&gt; + Copy,
+<a href=#163 id=163 data-nosnippet>163</a>    {
+<a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(lang_item) = AttrFlags::lang_item(db, item.into()) {
+<a href=#165 id=165 data-nosnippet>165</a>            <span class="macro">tracing::trace!</span>(<span class="string">"found lang item `{lang_item}`"</span>);
+<a href=#166 id=166 data-nosnippet>166</a>            <span class="self">self</span>.assign_lang_item(lang_item, item.into());
+<a href=#167 id=167 data-nosnippet>167</a>        }
+<a href=#168 id=168 data-nosnippet>168</a>    }
+<a href=#169 id=169 data-nosnippet>169</a>}
+<a href=#170 id=170 data-nosnippet>170</a>
+<a href=#171 id=171 data-nosnippet>171</a><span class="kw">fn </span>resolve_core_trait(
+<a href=#172 id=172 data-nosnippet>172</a>    db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase,
+<a href=#173 id=173 data-nosnippet>173</a>    core_def_map: <span class="kw-2">&amp;</span>DefMap,
+<a href=#174 id=174 data-nosnippet>174</a>    modules: <span class="kw-2">&amp;</span>[Symbol],
+<a href=#175 id=175 data-nosnippet>175</a>    name: Symbol,
+<a href=#176 id=176 data-nosnippet>176</a>) -&gt; <span class="prelude-ty">Option</span>&lt;TraitId&gt; {
+<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="kw-2">&amp;</span>core_def_map[core_def_map.root];
+<a href=#178 id=178 data-nosnippet>178</a>    <span class="kw">for </span>module <span class="kw">in </span>modules {
+<a href=#179 id=179 data-nosnippet>179</a>        <span class="kw">let </span><span class="prelude-val">Some</span>((ModuleDefId::ModuleId(cur), <span class="kw">_</span>)) =
+<a href=#180 id=180 data-nosnippet>180</a>            current.scope.type_(<span class="kw-2">&amp;</span>Name::new_symbol_root(module.clone()))
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw">else </span>{
+<a href=#182 id=182 data-nosnippet>182</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#183 id=183 data-nosnippet>183</a>        };
+<a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">if </span>cur.krate(db) != core_def_map.krate() || cur.block(db) != core_def_map.block_id() {
+<a href=#185 id=185 data-nosnippet>185</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#186 id=186 data-nosnippet>186</a>        }
+<a href=#187 id=187 data-nosnippet>187</a>        current = <span class="kw-2">&amp;</span>core_def_map[cur];
+<a href=#188 id=188 data-nosnippet>188</a>    }
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">let </span><span class="prelude-val">Some</span>((ModuleDefId::TraitId(trait_), <span class="kw">_</span>)) = current.scope.type_(<span class="kw-2">&amp;</span>Name::new_symbol_root(name))
+<a href=#190 id=190 data-nosnippet>190</a>    <span class="kw">else </span>{
+<a href=#191 id=191 data-nosnippet>191</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#192 id=192 data-nosnippet>192</a>    };
+<a href=#193 id=193 data-nosnippet>193</a>    <span class="prelude-val">Some</span>(trait_)
+<a href=#194 id=194 data-nosnippet>194</a>}
+<a href=#195 id=195 data-nosnippet>195</a>
+<a href=#196 id=196 data-nosnippet>196</a><span class="kw">fn </span>resolve_core_macro(
+<a href=#197 id=197 data-nosnippet>197</a>    db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase,
+<a href=#198 id=198 data-nosnippet>198</a>    core_def_map: <span class="kw-2">&amp;</span>DefMap,
+<a href=#199 id=199 data-nosnippet>199</a>    modules: <span class="kw-2">&amp;</span>[Symbol],
+<a href=#200 id=200 data-nosnippet>200</a>    name: Symbol,
+<a href=#201 id=201 data-nosnippet>201</a>) -&gt; <span class="prelude-ty">Option</span>&lt;MacroId&gt; {
+<a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">let </span><span class="kw-2">mut </span>current = <span class="kw-2">&amp;</span>core_def_map[core_def_map.root];
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">for </span>module <span class="kw">in </span>modules {
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">let </span><span class="prelude-val">Some</span>((ModuleDefId::ModuleId(cur), <span class="kw">_</span>)) =
+<a href=#205 id=205 data-nosnippet>205</a>            current.scope.type_(<span class="kw-2">&amp;</span>Name::new_symbol_root(module.clone()))
+<a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">else </span>{
+<a href=#207 id=207 data-nosnippet>207</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#208 id=208 data-nosnippet>208</a>        };
+<a href=#209 id=209 data-nosnippet>209</a>        <span class="kw">if </span>cur.krate(db) != core_def_map.krate() || cur.block(db) != core_def_map.block_id() {
+<a href=#210 id=210 data-nosnippet>210</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#211 id=211 data-nosnippet>211</a>        }
+<a href=#212 id=212 data-nosnippet>212</a>        current = <span class="kw-2">&amp;</span>core_def_map[cur];
+<a href=#213 id=213 data-nosnippet>213</a>    }
+<a href=#214 id=214 data-nosnippet>214</a>    current.scope.makro(<span class="kw-2">&amp;</span>Name::new_symbol_root(name))
+<a href=#215 id=215 data-nosnippet>215</a>}
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a><span class="kw">impl </span>LangItems {
+<a href=#218 id=218 data-nosnippet>218</a>    <span class="kw">fn </span>resolve_manually(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase) {
+<a href=#219 id=219 data-nosnippet>219</a>        <span class="kw">let </span>parent_trait =
+<a href=#220 id=220 data-nosnippet>220</a>            |lang_item: <span class="kw-2">&amp;mut </span><span class="prelude-ty">Option</span>&lt;TraitId&gt;, def: <span class="prelude-ty">Option</span>&lt;FunctionId&gt;| <span class="kw">match </span>def<span class="question-mark">?</span>.loc(db).container
+<a href=#221 id=221 data-nosnippet>221</a>            {
+<a href=#222 id=222 data-nosnippet>222</a>                ItemContainerId::TraitId(trait_) =&gt; {
+<a href=#223 id=223 data-nosnippet>223</a>                    <span class="kw-2">*</span>lang_item = <span class="prelude-val">Some</span>(trait_);
+<a href=#224 id=224 data-nosnippet>224</a>                    <span class="prelude-val">Some</span>(trait_)
+<a href=#225 id=225 data-nosnippet>225</a>                }
+<a href=#226 id=226 data-nosnippet>226</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#227 id=227 data-nosnippet>227</a>            };
+<a href=#228 id=228 data-nosnippet>228</a>        <span class="kw">let </span>assoc_types =
+<a href=#229 id=229 data-nosnippet>229</a>            |trait_: TraitId, assoc_types: <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="prelude-ty">Option</span>&lt;TypeAliasId&gt;, Symbol)]| {
+<a href=#230 id=230 data-nosnippet>230</a>                <span class="kw">let </span>trait_items = trait_.trait_items(db);
+<a href=#231 id=231 data-nosnippet>231</a>                <span class="kw">for </span>(assoc_type, name) <span class="kw">in </span>assoc_types {
+<a href=#232 id=232 data-nosnippet>232</a>                    <span class="kw-2">**</span>assoc_type =
+<a href=#233 id=233 data-nosnippet>233</a>                        trait_items.associated_type_by_name(<span class="kw-2">&amp;</span>Name::new_symbol_root(name.clone()));
+<a href=#234 id=234 data-nosnippet>234</a>                }
+<a href=#235 id=235 data-nosnippet>235</a>            };
+<a href=#236 id=236 data-nosnippet>236</a>        <span class="kw">let </span>methods = |trait_: TraitId, assoc_types: <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="prelude-ty">Option</span>&lt;FunctionId&gt;, Symbol)]| {
+<a href=#237 id=237 data-nosnippet>237</a>            <span class="kw">let </span>trait_items = trait_.trait_items(db);
+<a href=#238 id=238 data-nosnippet>238</a>            <span class="kw">for </span>(assoc_type, name) <span class="kw">in </span>assoc_types {
+<a href=#239 id=239 data-nosnippet>239</a>                <span class="kw-2">**</span>assoc_type = trait_items.method_by_name(<span class="kw-2">&amp;</span>Name::new_symbol_root(name.clone()));
+<a href=#240 id=240 data-nosnippet>240</a>            }
+<a href=#241 id=241 data-nosnippet>241</a>        };
+<a href=#242 id=242 data-nosnippet>242</a>        (|| {
+<a href=#243 id=243 data-nosnippet>243</a>            <span class="kw">let </span>into_future = parent_trait(<span class="kw-2">&amp;mut </span><span class="self">self</span>.IntoFuture, <span class="self">self</span>.IntoFutureIntoFuture)<span class="question-mark">?</span>;
+<a href=#244 id=244 data-nosnippet>244</a>            assoc_types(into_future, <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="self">self</span>.IntoFutureOutput, sym::Output)]);
+<a href=#245 id=245 data-nosnippet>245</a>            <span class="prelude-val">Some</span>(())
+<a href=#246 id=246 data-nosnippet>246</a>        })();
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>        (|| {
+<a href=#249 id=249 data-nosnippet>249</a>            <span class="kw">let </span>into_iterator = parent_trait(<span class="kw-2">&amp;mut </span><span class="self">self</span>.IntoIterator, <span class="self">self</span>.IntoIterIntoIter)<span class="question-mark">?</span>;
+<a href=#250 id=250 data-nosnippet>250</a>            assoc_types(
+<a href=#251 id=251 data-nosnippet>251</a>                into_iterator,
+<a href=#252 id=252 data-nosnippet>252</a>                <span class="kw-2">&amp;mut </span>[
+<a href=#253 id=253 data-nosnippet>253</a>                    (<span class="kw-2">&amp;mut </span><span class="self">self</span>.IntoIteratorItem, sym::Item),
+<a href=#254 id=254 data-nosnippet>254</a>                    (<span class="kw-2">&amp;mut </span><span class="self">self</span>.IntoIterIntoIterType, sym::IntoIter),
+<a href=#255 id=255 data-nosnippet>255</a>                ],
+<a href=#256 id=256 data-nosnippet>256</a>            );
+<a href=#257 id=257 data-nosnippet>257</a>            <span class="prelude-val">Some</span>(())
+<a href=#258 id=258 data-nosnippet>258</a>        })();
+<a href=#259 id=259 data-nosnippet>259</a>
+<a href=#260 id=260 data-nosnippet>260</a>        (|| {
+<a href=#261 id=261 data-nosnippet>261</a>            assoc_types(<span class="self">self</span>.Iterator<span class="question-mark">?</span>, <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="self">self</span>.IteratorItem, sym::Item)]);
+<a href=#262 id=262 data-nosnippet>262</a>            <span class="prelude-val">Some</span>(())
+<a href=#263 id=263 data-nosnippet>263</a>        })();
+<a href=#264 id=264 data-nosnippet>264</a>
+<a href=#265 id=265 data-nosnippet>265</a>        (|| {
+<a href=#266 id=266 data-nosnippet>266</a>            assoc_types(<span class="self">self</span>.AsyncIterator<span class="question-mark">?</span>, <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="self">self</span>.AsyncIteratorItem, sym::Item)]);
+<a href=#267 id=267 data-nosnippet>267</a>            <span class="prelude-val">Some</span>(())
+<a href=#268 id=268 data-nosnippet>268</a>        })();
+<a href=#269 id=269 data-nosnippet>269</a>
+<a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">for </span>(op_trait, op_method, op_method_name) <span class="kw">in </span>[
+<a href=#271 id=271 data-nosnippet>271</a>            (<span class="self">self</span>.Fn, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Fn_call, sym::call),
+<a href=#272 id=272 data-nosnippet>272</a>            (<span class="self">self</span>.FnMut, <span class="kw-2">&amp;mut </span><span class="self">self</span>.FnMut_call_mut, sym::call_mut),
+<a href=#273 id=273 data-nosnippet>273</a>            (<span class="self">self</span>.FnOnce, <span class="kw-2">&amp;mut </span><span class="self">self</span>.FnOnce_call_once, sym::call_once),
+<a href=#274 id=274 data-nosnippet>274</a>            (<span class="self">self</span>.AsyncFn, <span class="kw-2">&amp;mut </span><span class="self">self</span>.AsyncFn_async_call, sym::async_call),
+<a href=#275 id=275 data-nosnippet>275</a>            (<span class="self">self</span>.AsyncFnMut, <span class="kw-2">&amp;mut </span><span class="self">self</span>.AsyncFnMut_async_call_mut, sym::async_call_mut),
+<a href=#276 id=276 data-nosnippet>276</a>            (<span class="self">self</span>.AsyncFnOnce, <span class="kw-2">&amp;mut </span><span class="self">self</span>.AsyncFnOnce_async_call_once, sym::async_call_once),
+<a href=#277 id=277 data-nosnippet>277</a>            (<span class="self">self</span>.Not, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Not_not, sym::not),
+<a href=#278 id=278 data-nosnippet>278</a>            (<span class="self">self</span>.Neg, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Neg_neg, sym::neg),
+<a href=#279 id=279 data-nosnippet>279</a>            (<span class="self">self</span>.Add, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Add_add, sym::add),
+<a href=#280 id=280 data-nosnippet>280</a>            (<span class="self">self</span>.Mul, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Mul_mul, sym::mul),
+<a href=#281 id=281 data-nosnippet>281</a>            (<span class="self">self</span>.Sub, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Sub_sub, sym::sub),
+<a href=#282 id=282 data-nosnippet>282</a>            (<span class="self">self</span>.Div, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Div_div, sym::div),
+<a href=#283 id=283 data-nosnippet>283</a>            (<span class="self">self</span>.Rem, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Rem_rem, sym::rem),
+<a href=#284 id=284 data-nosnippet>284</a>            (<span class="self">self</span>.Shl, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Shl_shl, sym::shl),
+<a href=#285 id=285 data-nosnippet>285</a>            (<span class="self">self</span>.Shr, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Shr_shr, sym::shr),
+<a href=#286 id=286 data-nosnippet>286</a>            (<span class="self">self</span>.BitXor, <span class="kw-2">&amp;mut </span><span class="self">self</span>.BitXor_bitxor, sym::bitxor),
+<a href=#287 id=287 data-nosnippet>287</a>            (<span class="self">self</span>.BitOr, <span class="kw-2">&amp;mut </span><span class="self">self</span>.BitOr_bitor, sym::bitor),
+<a href=#288 id=288 data-nosnippet>288</a>            (<span class="self">self</span>.BitAnd, <span class="kw-2">&amp;mut </span><span class="self">self</span>.BitAnd_bitand, sym::bitand),
+<a href=#289 id=289 data-nosnippet>289</a>            (<span class="self">self</span>.AddAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.AddAssign_add_assign, sym::add_assign),
+<a href=#290 id=290 data-nosnippet>290</a>            (<span class="self">self</span>.MulAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.MulAssign_mul_assign, sym::mul_assign),
+<a href=#291 id=291 data-nosnippet>291</a>            (<span class="self">self</span>.SubAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.SubAssign_sub_assign, sym::sub_assign),
+<a href=#292 id=292 data-nosnippet>292</a>            (<span class="self">self</span>.DivAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.DivAssign_div_assign, sym::div_assign),
+<a href=#293 id=293 data-nosnippet>293</a>            (<span class="self">self</span>.RemAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.RemAssign_rem_assign, sym::rem_assign),
+<a href=#294 id=294 data-nosnippet>294</a>            (<span class="self">self</span>.ShlAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.ShlAssign_shl_assign, sym::shl_assign),
+<a href=#295 id=295 data-nosnippet>295</a>            (<span class="self">self</span>.ShrAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.ShrAssign_shr_assign, sym::shr_assign),
+<a href=#296 id=296 data-nosnippet>296</a>            (<span class="self">self</span>.BitXorAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.BitXorAssign_bitxor_assign, sym::bitxor_assign),
+<a href=#297 id=297 data-nosnippet>297</a>            (<span class="self">self</span>.BitOrAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.BitOrAssign_bitor_assign, sym::bitor_assign),
+<a href=#298 id=298 data-nosnippet>298</a>            (<span class="self">self</span>.BitAndAssign, <span class="kw-2">&amp;mut </span><span class="self">self</span>.BitAndAssign_bitand_assign, sym::bitand_assign),
+<a href=#299 id=299 data-nosnippet>299</a>            (<span class="self">self</span>.Debug, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Debug_fmt, sym::fmt),
+<a href=#300 id=300 data-nosnippet>300</a>            (<span class="self">self</span>.Deref, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Deref_deref, sym::deref),
+<a href=#301 id=301 data-nosnippet>301</a>            (<span class="self">self</span>.DerefMut, <span class="kw-2">&amp;mut </span><span class="self">self</span>.DerefMut_deref_mut, sym::deref_mut),
+<a href=#302 id=302 data-nosnippet>302</a>            (<span class="self">self</span>.Index, <span class="kw-2">&amp;mut </span><span class="self">self</span>.Index_index, sym::index),
+<a href=#303 id=303 data-nosnippet>303</a>            (<span class="self">self</span>.IndexMut, <span class="kw-2">&amp;mut </span><span class="self">self</span>.IndexMut_index_mut, sym::index_mut),
+<a href=#304 id=304 data-nosnippet>304</a>        ] {
+<a href=#305 id=305 data-nosnippet>305</a>            (|| {
+<a href=#306 id=306 data-nosnippet>306</a>                methods(op_trait<span class="question-mark">?</span>, <span class="kw-2">&amp;mut </span>[(op_method, op_method_name)]);
+<a href=#307 id=307 data-nosnippet>307</a>                <span class="prelude-val">Some</span>(())
+<a href=#308 id=308 data-nosnippet>308</a>            })();
+<a href=#309 id=309 data-nosnippet>309</a>        }
+<a href=#310 id=310 data-nosnippet>310</a>        (|| {
+<a href=#311 id=311 data-nosnippet>311</a>            methods(
+<a href=#312 id=312 data-nosnippet>312</a>                <span class="self">self</span>.PartialEq<span class="question-mark">?</span>,
+<a href=#313 id=313 data-nosnippet>313</a>                <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="self">self</span>.PartialEq_eq, sym::eq), (<span class="kw-2">&amp;mut </span><span class="self">self</span>.PartialEq_ne, sym::ne)],
+<a href=#314 id=314 data-nosnippet>314</a>            );
+<a href=#315 id=315 data-nosnippet>315</a>            <span class="prelude-val">Some</span>(())
+<a href=#316 id=316 data-nosnippet>316</a>        })();
+<a href=#317 id=317 data-nosnippet>317</a>        (|| {
+<a href=#318 id=318 data-nosnippet>318</a>            methods(
+<a href=#319 id=319 data-nosnippet>319</a>                <span class="self">self</span>.PartialOrd<span class="question-mark">?</span>,
+<a href=#320 id=320 data-nosnippet>320</a>                <span class="kw-2">&amp;mut </span>[
+<a href=#321 id=321 data-nosnippet>321</a>                    (<span class="kw-2">&amp;mut </span><span class="self">self</span>.PartialOrd_le, sym::le),
+<a href=#322 id=322 data-nosnippet>322</a>                    (<span class="kw-2">&amp;mut </span><span class="self">self</span>.PartialOrd_lt, sym::lt),
+<a href=#323 id=323 data-nosnippet>323</a>                    (<span class="kw-2">&amp;mut </span><span class="self">self</span>.PartialOrd_ge, sym::ge),
+<a href=#324 id=324 data-nosnippet>324</a>                    (<span class="kw-2">&amp;mut </span><span class="self">self</span>.PartialOrd_gt, sym::gt),
+<a href=#325 id=325 data-nosnippet>325</a>                ],
+<a href=#326 id=326 data-nosnippet>326</a>            );
+<a href=#327 id=327 data-nosnippet>327</a>            <span class="prelude-val">Some</span>(())
+<a href=#328 id=328 data-nosnippet>328</a>        })();
+<a href=#329 id=329 data-nosnippet>329</a>        (|| {
+<a href=#330 id=330 data-nosnippet>330</a>            methods(
+<a href=#331 id=331 data-nosnippet>331</a>                <span class="self">self</span>.Drop<span class="question-mark">?</span>,
+<a href=#332 id=332 data-nosnippet>332</a>                <span class="kw-2">&amp;mut </span>[(<span class="kw-2">&amp;mut </span><span class="self">self</span>.Drop_drop, sym::drop), (<span class="kw-2">&amp;mut </span><span class="self">self</span>.Drop_pin_drop, sym::pin_drop)],
+<a href=#333 id=333 data-nosnippet>333</a>            );
+<a href=#334 id=334 data-nosnippet>334</a>            <span class="prelude-val">Some</span>(())
+<a href=#335 id=335 data-nosnippet>335</a>        })();
+<a href=#336 id=336 data-nosnippet>336</a>    }
+<a href=#337 id=337 data-nosnippet>337</a>
+<a href=#338 id=338 data-nosnippet>338</a>    <span class="attr">#[inline]
+<a href=#339 id=339 data-nosnippet>339</a>    </span><span class="kw">pub fn </span>get_solver_trait(<span class="kw-2">&amp;</span><span class="self">self</span>, lang_item: SolverTraitLangItem) -&gt; <span class="prelude-ty">Option</span>&lt;TraitId&gt; {
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="self">self</span>.solver_trait[lang_item <span class="kw">as </span>usize]
+<a href=#341 id=341 data-nosnippet>341</a>    }
+<a href=#342 id=342 data-nosnippet>342</a>
+<a href=#343 id=343 data-nosnippet>343</a>    <span class="attr">#[inline]
+<a href=#344 id=344 data-nosnippet>344</a>    </span><span class="kw">pub fn </span>get_solver_projection(
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#346 id=346 data-nosnippet>346</a>        lang_item: SolverProjectionLangItem,
+<a href=#347 id=347 data-nosnippet>347</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;TypeAliasId&gt; {
+<a href=#348 id=348 data-nosnippet>348</a>        <span class="self">self</span>.solver_projection[lang_item <span class="kw">as </span>usize]
+<a href=#349 id=349 data-nosnippet>349</a>    }
+<a href=#350 id=350 data-nosnippet>350</a>
+<a href=#351 id=351 data-nosnippet>351</a>    <span class="attr">#[inline]
+<a href=#352 id=352 data-nosnippet>352</a>    </span><span class="kw">pub fn </span>get_solver_adt(<span class="kw-2">&amp;</span><span class="self">self</span>, lang_item: SolverAdtLangItem) -&gt; <span class="prelude-ty">Option</span>&lt;AdtId&gt; {
+<a href=#353 id=353 data-nosnippet>353</a>        <span class="self">self</span>.solver_adt[lang_item <span class="kw">as </span>usize]
+<a href=#354 id=354 data-nosnippet>354</a>    }
+<a href=#355 id=355 data-nosnippet>355</a>
+<a href=#356 id=356 data-nosnippet>356</a>    <span class="attr">#[inline]
+<a href=#357 id=357 data-nosnippet>357</a>    </span><span class="kw">pub fn </span>get_reverse_solver_trait(<span class="kw-2">&amp;</span><span class="self">self</span>, trait_: TraitId) -&gt; <span class="prelude-ty">Option</span>&lt;SolverTraitLangItem&gt; {
+<a href=#358 id=358 data-nosnippet>358</a>        <span class="self">self</span>.reverse_solver_trait.get(<span class="kw-2">&amp;</span>trait_).copied()
+<a href=#359 id=359 data-nosnippet>359</a>    }
+<a href=#360 id=360 data-nosnippet>360</a>
+<a href=#361 id=361 data-nosnippet>361</a>    <span class="attr">#[inline]
+<a href=#362 id=362 data-nosnippet>362</a>    </span><span class="kw">pub fn </span>get_reverse_solver_adt(<span class="kw-2">&amp;</span><span class="self">self</span>, adt: AdtId) -&gt; <span class="prelude-ty">Option</span>&lt;SolverAdtLangItem&gt; {
+<a href=#363 id=363 data-nosnippet>363</a>        <span class="self">self</span>.reverse_solver_adt.get(<span class="kw-2">&amp;</span>adt).copied()
+<a href=#364 id=364 data-nosnippet>364</a>    }
+<a href=#365 id=365 data-nosnippet>365</a>
+<a href=#366 id=366 data-nosnippet>366</a>    <span class="attr">#[inline]
+<a href=#367 id=367 data-nosnippet>367</a>    </span><span class="kw">pub fn </span>get_reverse_solver_projection(
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#369 id=369 data-nosnippet>369</a>        projection: TypeAliasId,
+<a href=#370 id=370 data-nosnippet>370</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;SolverProjectionLangItem&gt; {
+<a href=#371 id=371 data-nosnippet>371</a>        <span class="self">self</span>.reverse_solver_projection.get(<span class="kw-2">&amp;</span>projection).copied()
+<a href=#372 id=372 data-nosnippet>372</a>    }
+<a href=#373 id=373 data-nosnippet>373</a>
+<a href=#374 id=374 data-nosnippet>374</a>    <span class="kw">fn </span>shrink_to_fit(<span class="kw-2">&amp;mut </span><span class="self">self</span>) {
+<a href=#375 id=375 data-nosnippet>375</a>        <span class="kw">let </span><span class="self">Self </span>{ reverse_solver_adt, reverse_solver_projection, reverse_solver_trait, .. } = <span class="self">self</span>;
+<a href=#376 id=376 data-nosnippet>376</a>        reverse_solver_adt.shrink_to_fit();
+<a href=#377 id=377 data-nosnippet>377</a>        reverse_solver_projection.shrink_to_fit();
+<a href=#378 id=378 data-nosnippet>378</a>        reverse_solver_trait.shrink_to_fit();
+<a href=#379 id=379 data-nosnippet>379</a>    }
+<a href=#380 id=380 data-nosnippet>380</a>
+<a href=#381 id=381 data-nosnippet>381</a>    <span class="kw">fn </span>assign_solver_trait(<span class="kw-2">&amp;mut </span><span class="self">self</span>, lang_item: SolverTraitLangItem, def: TraitId) {
+<a href=#382 id=382 data-nosnippet>382</a>        <span class="self">self</span>.solver_trait[lang_item <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(def);
+<a href=#383 id=383 data-nosnippet>383</a>        <span class="self">self</span>.reverse_solver_trait.insert(def, lang_item);
+<a href=#384 id=384 data-nosnippet>384</a>    }
+<a href=#385 id=385 data-nosnippet>385</a>
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="kw">fn </span>assign_solver_projection(<span class="kw-2">&amp;mut </span><span class="self">self</span>, lang_item: SolverProjectionLangItem, def: TypeAliasId) {
+<a href=#387 id=387 data-nosnippet>387</a>        <span class="self">self</span>.solver_projection[lang_item <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(def);
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="self">self</span>.reverse_solver_projection.insert(def, lang_item);
+<a href=#389 id=389 data-nosnippet>389</a>    }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="kw">fn </span>assign_solver_adt(<span class="kw-2">&amp;mut </span><span class="self">self</span>, lang_item: SolverAdtLangItem, def: <span class="kw">impl </span>Into&lt;AdtId&gt;) {
+<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">let </span>def = def.into();
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="self">self</span>.solver_adt[lang_item <span class="kw">as </span>usize] = <span class="prelude-val">Some</span>(def);
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="self">self</span>.reverse_solver_adt.insert(def, lang_item);
+<a href=#395 id=395 data-nosnippet>395</a>    }
+<a href=#396 id=396 data-nosnippet>396</a>}
+<a href=#397 id=397 data-nosnippet>397</a>
+<a href=#398 id=398 data-nosnippet>398</a><span class="attr">#[salsa::tracked(returns(as_deref))]
+<a href=#399 id=399 data-nosnippet>399</a></span><span class="kw">pub fn </span>crate_notable_traits(db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase, krate: Crate) -&gt; <span class="prelude-ty">Option</span>&lt;Box&lt;[TraitId]&gt;&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">let </span><span class="kw-2">mut </span>traits = Vec::new();
+<a href=#401 id=401 data-nosnippet>401</a>
+<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">let </span>crate_def_map = crate_def_map(db, krate);
+<a href=#403 id=403 data-nosnippet>403</a>
+<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">for </span>(<span class="kw">_</span>, module_data) <span class="kw">in </span>crate_def_map.modules() {
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">for </span>def <span class="kw">in </span>module_data.scope.declarations() {
+<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw">if let </span>ModuleDefId::TraitId(trait_) = def
+<a href=#407 id=407 data-nosnippet>407</a>                &amp;&amp; AttrFlags::query(db, trait_.into()).contains(AttrFlags::IS_DOC_NOTABLE_TRAIT)
+<a href=#408 id=408 data-nosnippet>408</a>            {
+<a href=#409 id=409 data-nosnippet>409</a>                traits.push(trait_);
+<a href=#410 id=410 data-nosnippet>410</a>            }
+<a href=#411 id=411 data-nosnippet>411</a>        }
+<a href=#412 id=412 data-nosnippet>412</a>    }
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>    <span class="kw">if </span>traits.is_empty() { <span class="prelude-val">None </span>} <span class="kw">else </span>{ <span class="prelude-val">Some</span>(traits.into_iter().collect()) }
+<a href=#415 id=415 data-nosnippet>415</a>}
+<a href=#416 id=416 data-nosnippet>416</a>
+<a href=#417 id=417 data-nosnippet>417</a><span class="macro">macro_rules!</span> assign_solver {
+<a href=#418 id=418 data-nosnippet>418</a>    ( <span class="macro-nonterminal">$self</span>:ident, <span class="macro-nonterminal">$def</span>:ident, <span class="macro-nonterminal">$lang_item</span>:ident, TraitId, solver ) =&gt; {
+<a href=#419 id=419 data-nosnippet>419</a>        <span class="macro-nonterminal">$self</span>.assign_solver_trait(SolverTraitLangItem::<span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$def</span>);
+<a href=#420 id=420 data-nosnippet>420</a>    };
+<a href=#421 id=421 data-nosnippet>421</a>    ( <span class="macro-nonterminal">$self</span>:ident, <span class="macro-nonterminal">$def</span>:ident, <span class="macro-nonterminal">$lang_item</span>:ident, TypeAliasId, solver ) =&gt; {
+<a href=#422 id=422 data-nosnippet>422</a>        <span class="macro-nonterminal">$self</span>.assign_solver_projection(SolverProjectionLangItem::<span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$def</span>);
+<a href=#423 id=423 data-nosnippet>423</a>    };
+<a href=#424 id=424 data-nosnippet>424</a>    ( <span class="macro-nonterminal">$self</span>:ident, <span class="macro-nonterminal">$def</span>:ident, <span class="macro-nonterminal">$lang_item</span>:ident, StructId, solver ) =&gt; {
+<a href=#425 id=425 data-nosnippet>425</a>        <span class="macro-nonterminal">$self</span>.assign_solver_adt(SolverAdtLangItem::<span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$def</span>);
+<a href=#426 id=426 data-nosnippet>426</a>    };
+<a href=#427 id=427 data-nosnippet>427</a>    ( <span class="macro-nonterminal">$self</span>:ident, <span class="macro-nonterminal">$def</span>:ident, <span class="macro-nonterminal">$lang_item</span>:ident, EnumId, solver ) =&gt; {
+<a href=#428 id=428 data-nosnippet>428</a>        <span class="macro-nonterminal">$self</span>.assign_solver_adt(SolverAdtLangItem::<span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$def</span>);
+<a href=#429 id=429 data-nosnippet>429</a>    };
+<a href=#430 id=430 data-nosnippet>430</a>    ( <span class="macro-nonterminal">$self</span>:ident, <span class="macro-nonterminal">$def</span>:ident, <span class="macro-nonterminal">$lang_item</span>:ident, UnionId, solver ) =&gt; {
+<a href=#431 id=431 data-nosnippet>431</a>        <span class="macro-nonterminal">$self</span>.assign_solver_adt(SolverAdtLangItem::<span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$def</span>);
+<a href=#432 id=432 data-nosnippet>432</a>    };
+<a href=#433 id=433 data-nosnippet>433</a>    ( <span class="macro-nonterminal">$self</span>:ident, <span class="macro-nonterminal">$def</span>:ident, <span class="macro-nonterminal">$lang_item</span>:ident, <span class="macro-nonterminal">$ty</span>:ident ) =&gt; {};
+<a href=#434 id=434 data-nosnippet>434</a>}
+<a href=#435 id=435 data-nosnippet>435</a>
+<a href=#436 id=436 data-nosnippet>436</a><span class="macro">macro_rules!</span> solver_exhaustiveness_check {
+<a href=#437 id=437 data-nosnippet>437</a>    (
+<a href=#438 id=438 data-nosnippet>438</a>        <span class="macro-nonterminal">$dollar</span>:tt, <span class="macro-nonterminal">$solver_ty</span>:ident, <span class="macro-nonterminal">$id_ty</span>:ident,
+<a href=#439 id=439 data-nosnippet>439</a>        [ $(<span class="macro-nonterminal">$id_tys</span>:ident),* ]
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a>        $( <span class="macro-nonterminal">$lang_item</span>:ident, <span class="macro-nonterminal">$target</span>:ident $(, <span class="macro-nonterminal">$solver</span>:ident)<span class="question-mark">?</span>; )*
+<a href=#442 id=442 data-nosnippet>442</a>    ) =&gt; {
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw">const _</span>: () = {
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="attr">#[expect(unreachable_patterns, dead_code)]
+<a href=#445 id=445 data-nosnippet>445</a>            </span><span class="kw">fn </span>exhaustiveness_check(lang_item: <span class="macro-nonterminal">$solver_ty</span>) {
+<a href=#446 id=446 data-nosnippet>446</a>                <span class="macro">macro_rules!</span> one_variant {
+<a href=#447 id=447 data-nosnippet>447</a>                    $(
+<a href=#448 id=448 data-nosnippet>448</a>                        (
+<a href=#449 id=449 data-nosnippet>449</a>                            <span class="macro-nonterminal">$dollar </span>lang_item:ident, <span class="macro-nonterminal">$id_tys</span>, solver
+<a href=#450 id=450 data-nosnippet>450</a>                        ) =&gt; {
+<a href=#451 id=451 data-nosnippet>451</a>                            (<span class="macro-nonterminal">$solver_ty</span>::<span class="macro-nonterminal">$dollar </span>lang_item, <span class="bool-val">true</span>)
+<a href=#452 id=452 data-nosnippet>452</a>                        };
+<a href=#453 id=453 data-nosnippet>453</a>                    )*
+<a href=#454 id=454 data-nosnippet>454</a>                    ( <span class="macro-nonterminal">$dollar</span>(<span class="macro-nonterminal">$t</span>:tt)* ) =&gt; {
+<a href=#455 id=455 data-nosnippet>455</a>                        (<span class="kw">_</span>, <span class="bool-val">false</span>)
+<a href=#456 id=456 data-nosnippet>456</a>                    };
+<a href=#457 id=457 data-nosnippet>457</a>                }
+<a href=#458 id=458 data-nosnippet>458</a>
+<a href=#459 id=459 data-nosnippet>459</a>                <span class="kw">match </span>(lang_item, <span class="bool-val">true</span>) {
+<a href=#460 id=460 data-nosnippet>460</a>                    $(
+<a href=#461 id=461 data-nosnippet>461</a>                        <span class="macro">one_variant!</span>( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver </span>)<span class="question-mark">? </span>) =&gt; {}
+<a href=#462 id=462 data-nosnippet>462</a>                    )*
+<a href=#463 id=463 data-nosnippet>463</a>                }
+<a href=#464 id=464 data-nosnippet>464</a>            }
+<a href=#465 id=465 data-nosnippet>465</a>        };
+<a href=#466 id=466 data-nosnippet>466</a>    };
+<a href=#467 id=467 data-nosnippet>467</a>}
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a><span class="macro">macro_rules!</span> get_solver_count {
+<a href=#470 id=470 data-nosnippet>470</a>    (
+<a href=#471 id=471 data-nosnippet>471</a>        <span class="macro-nonterminal">$dollar</span>:tt, <span class="macro-nonterminal">$solver_ty</span>:ident,
+<a href=#472 id=472 data-nosnippet>472</a>        [ $(<span class="macro-nonterminal">$id_tys</span>:ident),* ]
+<a href=#473 id=473 data-nosnippet>473</a>
+<a href=#474 id=474 data-nosnippet>474</a>        $( <span class="macro-nonterminal">$lang_item</span>:ident, <span class="macro-nonterminal">$target</span>:ident $(, <span class="macro-nonterminal">$solver</span>:ident)<span class="question-mark">?</span>; )*
+<a href=#475 id=475 data-nosnippet>475</a>    ) =&gt; {{
+<a href=#476 id=476 data-nosnippet>476</a>        <span class="kw">let </span><span class="kw-2">mut </span>max_discriminant = <span class="number">0</span>;
+<a href=#477 id=477 data-nosnippet>477</a>        <span class="macro">macro_rules!</span> one_variant {
+<a href=#478 id=478 data-nosnippet>478</a>            $(
+<a href=#479 id=479 data-nosnippet>479</a>                (
+<a href=#480 id=480 data-nosnippet>480</a>                    <span class="macro-nonterminal">$dollar </span>lang_item:ident, <span class="macro-nonterminal">$id_tys</span>, solver
+<a href=#481 id=481 data-nosnippet>481</a>                ) =&gt; {
+<a href=#482 id=482 data-nosnippet>482</a>                    <span class="kw">if </span><span class="macro-nonterminal">$solver_ty</span>::<span class="macro-nonterminal">$dollar </span>lang_item <span class="kw">as </span>usize &gt; max_discriminant {
+<a href=#483 id=483 data-nosnippet>483</a>                        max_discriminant = <span class="macro-nonterminal">$solver_ty</span>::<span class="macro-nonterminal">$dollar </span>lang_item <span class="kw">as </span>usize;
+<a href=#484 id=484 data-nosnippet>484</a>                    }
+<a href=#485 id=485 data-nosnippet>485</a>                };
+<a href=#486 id=486 data-nosnippet>486</a>            )*
+<a href=#487 id=487 data-nosnippet>487</a>            ( <span class="macro-nonterminal">$dollar</span>(<span class="macro-nonterminal">$t</span>:tt)* ) =&gt; {};
+<a href=#488 id=488 data-nosnippet>488</a>        }
+<a href=#489 id=489 data-nosnippet>489</a>        $(
+<a href=#490 id=490 data-nosnippet>490</a>            <span class="macro">one_variant!</span>(<span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>);
+<a href=#491 id=491 data-nosnippet>491</a>        )*
+<a href=#492 id=492 data-nosnippet>492</a>        max_discriminant + <span class="number">1
+<a href=#493 id=493 data-nosnippet>493</a>    </span>}};
+<a href=#494 id=494 data-nosnippet>494</a>}
+<a href=#495 id=495 data-nosnippet>495</a>
+<a href=#496 id=496 data-nosnippet>496</a><span class="kw">fn </span>merge_array_prefer_other&lt;T: Copy, <span class="kw">const </span>N: usize&gt;(
+<a href=#497 id=497 data-nosnippet>497</a>    this: <span class="kw-2">&amp;mut </span>[<span class="prelude-ty">Option</span>&lt;T&gt;; N],
+<a href=#498 id=498 data-nosnippet>498</a>    other: <span class="kw-2">&amp;</span>[<span class="prelude-ty">Option</span>&lt;T&gt;; N],
+<a href=#499 id=499 data-nosnippet>499</a>) {
+<a href=#500 id=500 data-nosnippet>500</a>    <span class="kw">for </span>(this, other) <span class="kw">in </span>std::iter::zip(this, other) {
+<a href=#501 id=501 data-nosnippet>501</a>        <span class="kw-2">*</span>this = other.or(<span class="kw-2">*</span>this);
+<a href=#502 id=502 data-nosnippet>502</a>    }
+<a href=#503 id=503 data-nosnippet>503</a>}
+<a href=#504 id=504 data-nosnippet>504</a>
+<a href=#505 id=505 data-nosnippet>505</a><span class="macro">macro_rules!</span> language_item_table {
+<a href=#506 id=506 data-nosnippet>506</a>    (
+<a href=#507 id=507 data-nosnippet>507</a>        <span class="macro-nonterminal">$dollar</span>:tt
+<a href=#508 id=508 data-nosnippet>508</a>        <span class="macro-nonterminal">$LangItems</span>:ident =&gt;
+<a href=#509 id=509 data-nosnippet>509</a>        $( <span class="macro-nonterminal">$lang_item</span>:ident, <span class="macro-nonterminal">$module</span>:ident :: <span class="macro-nonterminal">$name</span>:ident, <span class="macro-nonterminal">$target</span>:ident $(, <span class="macro-nonterminal">$solver</span>:ident)<span class="question-mark">?</span>; )*
+<a href=#510 id=510 data-nosnippet>510</a>
+<a href=#511 id=511 data-nosnippet>511</a>        @non_lang_core_traits:
+<a href=#512 id=512 data-nosnippet>512</a>
+<a href=#513 id=513 data-nosnippet>513</a>        $( core::$(<span class="macro-nonterminal">$non_lang_trait_module</span>:ident)::<span class="kw-2">*</span>, <span class="macro-nonterminal">$non_lang_trait</span>:ident; )*
+<a href=#514 id=514 data-nosnippet>514</a>
+<a href=#515 id=515 data-nosnippet>515</a>        @non_lang_core_macros:
+<a href=#516 id=516 data-nosnippet>516</a>
+<a href=#517 id=517 data-nosnippet>517</a>        $( core::$(<span class="macro-nonterminal">$non_lang_macro_module</span>:ident)::<span class="kw-2">*</span>, <span class="macro-nonterminal">$non_lang_macro</span>:ident, <span class="macro-nonterminal">$non_lang_macro_field</span>:ident; )*
+<a href=#518 id=518 data-nosnippet>518</a>
+<a href=#519 id=519 data-nosnippet>519</a>        @resolve_manually:
+<a href=#520 id=520 data-nosnippet>520</a>
+<a href=#521 id=521 data-nosnippet>521</a>        $( <span class="macro-nonterminal">$resolve_manually</span>:ident, <span class="macro-nonterminal">$resolve_manually_type</span>:ident; )*
+<a href=#522 id=522 data-nosnippet>522</a>    ) =&gt; {
+<a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">const </span>SOLVER_TRAITS_LEN: usize = <span class="macro">get_solver_count!</span> {
+<a href=#524 id=524 data-nosnippet>524</a>            <span class="macro-nonterminal">$dollar</span>, SolverTraitLangItem,
+<a href=#525 id=525 data-nosnippet>525</a>            [ TraitId ]
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a>            $( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>; )*
+<a href=#528 id=528 data-nosnippet>528</a>        };
+<a href=#529 id=529 data-nosnippet>529</a>        <span class="kw">const </span>SOLVER_PROJECTIONS_LEN: usize = <span class="macro">get_solver_count!</span> {
+<a href=#530 id=530 data-nosnippet>530</a>            <span class="macro-nonterminal">$dollar</span>, SolverProjectionLangItem,
+<a href=#531 id=531 data-nosnippet>531</a>            [ TypeAliasId ]
+<a href=#532 id=532 data-nosnippet>532</a>
+<a href=#533 id=533 data-nosnippet>533</a>            $( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>; )*
+<a href=#534 id=534 data-nosnippet>534</a>        };
+<a href=#535 id=535 data-nosnippet>535</a>        <span class="kw">const </span>SOLVER_ADTS_LEN: usize = <span class="macro">get_solver_count!</span> {
+<a href=#536 id=536 data-nosnippet>536</a>            <span class="macro-nonterminal">$dollar</span>, SolverAdtLangItem,
+<a href=#537 id=537 data-nosnippet>537</a>            [ StructId, EnumId, UnionId ]
+<a href=#538 id=538 data-nosnippet>538</a>
+<a href=#539 id=539 data-nosnippet>539</a>            $( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>; )*
+<a href=#540 id=540 data-nosnippet>540</a>        };
+<a href=#541 id=541 data-nosnippet>541</a>
+<a href=#542 id=542 data-nosnippet>542</a>        <span class="attr">#[allow(non_snake_case)] </span><span class="comment">// FIXME: Should we remove this?
+<a href=#543 id=543 data-nosnippet>543</a>        </span><span class="attr">#[derive(Default, Clone)]
+<a href=#544 id=544 data-nosnippet>544</a>        </span><span class="kw">pub struct </span><span class="macro-nonterminal">$LangItems </span>{
+<a href=#545 id=545 data-nosnippet>545</a>            $(
+<a href=#546 id=546 data-nosnippet>546</a>                <span class="kw">pub </span><span class="macro-nonterminal">$lang_item</span>: <span class="prelude-ty">Option</span>&lt;<span class="macro-nonterminal">$target</span>&gt;,
+<a href=#547 id=547 data-nosnippet>547</a>            )*
+<a href=#548 id=548 data-nosnippet>548</a>            $(
+<a href=#549 id=549 data-nosnippet>549</a>                <span class="kw">pub </span><span class="macro-nonterminal">$non_lang_trait</span>: <span class="prelude-ty">Option</span>&lt;TraitId&gt;,
+<a href=#550 id=550 data-nosnippet>550</a>            )*
+<a href=#551 id=551 data-nosnippet>551</a>            $(
+<a href=#552 id=552 data-nosnippet>552</a>                <span class="kw">pub </span><span class="macro-nonterminal">$non_lang_macro_field</span>: <span class="prelude-ty">Option</span>&lt;MacroId&gt;,
+<a href=#553 id=553 data-nosnippet>553</a>            )*
+<a href=#554 id=554 data-nosnippet>554</a>            $(
+<a href=#555 id=555 data-nosnippet>555</a>                <span class="kw">pub </span><span class="macro-nonterminal">$resolve_manually</span>: <span class="prelude-ty">Option</span>&lt;<span class="macro-nonterminal">$resolve_manually_type</span>&gt;,
+<a href=#556 id=556 data-nosnippet>556</a>            )*
+<a href=#557 id=557 data-nosnippet>557</a>
+<a href=#558 id=558 data-nosnippet>558</a>            solver_trait: [<span class="prelude-ty">Option</span>&lt;TraitId&gt;; SOLVER_TRAITS_LEN],
+<a href=#559 id=559 data-nosnippet>559</a>            solver_adt: [<span class="prelude-ty">Option</span>&lt;AdtId&gt;; SOLVER_ADTS_LEN],
+<a href=#560 id=560 data-nosnippet>560</a>            solver_projection: [<span class="prelude-ty">Option</span>&lt;TypeAliasId&gt;; SOLVER_PROJECTIONS_LEN],
+<a href=#561 id=561 data-nosnippet>561</a>
+<a href=#562 id=562 data-nosnippet>562</a>            reverse_solver_trait: FxHashMap&lt;TraitId, SolverTraitLangItem&gt;,
+<a href=#563 id=563 data-nosnippet>563</a>            reverse_solver_adt: FxHashMap&lt;AdtId, SolverAdtLangItem&gt;,
+<a href=#564 id=564 data-nosnippet>564</a>            reverse_solver_projection: FxHashMap&lt;TypeAliasId, SolverProjectionLangItem&gt;,
+<a href=#565 id=565 data-nosnippet>565</a>        }
+<a href=#566 id=566 data-nosnippet>566</a>
+<a href=#567 id=567 data-nosnippet>567</a>        <span class="kw">impl </span>std::fmt::Debug <span class="kw">for </span><span class="macro-nonterminal">$LangItems </span>{
+<a href=#568 id=568 data-nosnippet>568</a>            <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>std::fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; std::fmt::Result {
+<a href=#569 id=569 data-nosnippet>569</a>                <span class="kw">let </span><span class="kw-2">mut </span>debug = f.debug_struct(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$LangItems</span>));
+<a href=#570 id=570 data-nosnippet>570</a>                <span class="kw">let </span><span class="self">Self </span>{
+<a href=#571 id=571 data-nosnippet>571</a>                    $( <span class="macro-nonterminal">$lang_item</span>, )*
+<a href=#572 id=572 data-nosnippet>572</a>                    $( <span class="macro-nonterminal">$non_lang_trait</span>, )*
+<a href=#573 id=573 data-nosnippet>573</a>                    $( <span class="macro-nonterminal">$non_lang_macro_field</span>, )*
+<a href=#574 id=574 data-nosnippet>574</a>                    $( <span class="macro-nonterminal">$resolve_manually</span>, )*
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a>                    solver_trait: <span class="kw">_</span>,
+<a href=#577 id=577 data-nosnippet>577</a>                    solver_adt: <span class="kw">_</span>,
+<a href=#578 id=578 data-nosnippet>578</a>                    solver_projection: <span class="kw">_</span>,
+<a href=#579 id=579 data-nosnippet>579</a>                    reverse_solver_trait: <span class="kw">_</span>,
+<a href=#580 id=580 data-nosnippet>580</a>                    reverse_solver_adt: <span class="kw">_</span>,
+<a href=#581 id=581 data-nosnippet>581</a>                    reverse_solver_projection: <span class="kw">_</span>,
+<a href=#582 id=582 data-nosnippet>582</a>                } = <span class="self">self</span>;
+<a href=#583 id=583 data-nosnippet>583</a>                $(
+<a href=#584 id=584 data-nosnippet>584</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(it) = <span class="macro-nonterminal">$lang_item </span>{
+<a href=#585 id=585 data-nosnippet>585</a>                        debug.field(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$lang_item</span>), it);
+<a href=#586 id=586 data-nosnippet>586</a>                    }
+<a href=#587 id=587 data-nosnippet>587</a>                )*
+<a href=#588 id=588 data-nosnippet>588</a>                $(
+<a href=#589 id=589 data-nosnippet>589</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(it) = <span class="macro-nonterminal">$non_lang_trait </span>{
+<a href=#590 id=590 data-nosnippet>590</a>                        debug.field(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$non_lang_trait</span>), it);
+<a href=#591 id=591 data-nosnippet>591</a>                    }
+<a href=#592 id=592 data-nosnippet>592</a>                )*
+<a href=#593 id=593 data-nosnippet>593</a>                $(
+<a href=#594 id=594 data-nosnippet>594</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(it) = <span class="macro-nonterminal">$non_lang_macro_field </span>{
+<a href=#595 id=595 data-nosnippet>595</a>                        debug.field(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$non_lang_macro_field</span>), it);
+<a href=#596 id=596 data-nosnippet>596</a>                    }
+<a href=#597 id=597 data-nosnippet>597</a>                )*
+<a href=#598 id=598 data-nosnippet>598</a>                $(
+<a href=#599 id=599 data-nosnippet>599</a>                    <span class="kw">if let </span><span class="prelude-val">Some</span>(it) = <span class="macro-nonterminal">$resolve_manually </span>{
+<a href=#600 id=600 data-nosnippet>600</a>                        debug.field(<span class="macro">stringify!</span>(<span class="macro-nonterminal">$resolve_manually</span>), it);
+<a href=#601 id=601 data-nosnippet>601</a>                    }
+<a href=#602 id=602 data-nosnippet>602</a>                )*
+<a href=#603 id=603 data-nosnippet>603</a>                debug.finish()
+<a href=#604 id=604 data-nosnippet>604</a>            }
+<a href=#605 id=605 data-nosnippet>605</a>        }
+<a href=#606 id=606 data-nosnippet>606</a>
+<a href=#607 id=607 data-nosnippet>607</a>        <span class="kw">impl </span>PartialEq <span class="kw">for </span><span class="macro-nonterminal">$LangItems </span>{
+<a href=#608 id=608 data-nosnippet>608</a>            <span class="kw">fn </span>eq(<span class="kw-2">&amp;</span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) -&gt; bool {
+<a href=#609 id=609 data-nosnippet>609</a>                <span class="kw">let </span><span class="self">Self </span>{
+<a href=#610 id=610 data-nosnippet>610</a>                    $( <span class="macro-nonterminal">$lang_item</span>, )*
+<a href=#611 id=611 data-nosnippet>611</a>                    $( <span class="macro-nonterminal">$non_lang_trait</span>, )*
+<a href=#612 id=612 data-nosnippet>612</a>                    $( <span class="macro-nonterminal">$non_lang_macro_field</span>, )*
+<a href=#613 id=613 data-nosnippet>613</a>                    $( <span class="macro-nonterminal">$resolve_manually</span>, )*
+<a href=#614 id=614 data-nosnippet>614</a>
+<a href=#615 id=615 data-nosnippet>615</a>                    solver_trait: <span class="kw">_</span>,
+<a href=#616 id=616 data-nosnippet>616</a>                    solver_adt: <span class="kw">_</span>,
+<a href=#617 id=617 data-nosnippet>617</a>                    solver_projection: <span class="kw">_</span>,
+<a href=#618 id=618 data-nosnippet>618</a>                    reverse_solver_trait: <span class="kw">_</span>,
+<a href=#619 id=619 data-nosnippet>619</a>                    reverse_solver_adt: <span class="kw">_</span>,
+<a href=#620 id=620 data-nosnippet>620</a>                    reverse_solver_projection: <span class="kw">_</span>,
+<a href=#621 id=621 data-nosnippet>621</a>                } = <span class="kw-2">*</span><span class="self">self</span>;
+<a href=#622 id=622 data-nosnippet>622</a>
+<a href=#623 id=623 data-nosnippet>623</a>                <span class="bool-val">true
+<a href=#624 id=624 data-nosnippet>624</a>                    </span>$( &amp;&amp; <span class="macro-nonterminal">$lang_item </span>== other.<span class="macro-nonterminal">$lang_item </span>)*
+<a href=#625 id=625 data-nosnippet>625</a>                    $( &amp;&amp; <span class="macro-nonterminal">$non_lang_trait </span>== other.<span class="macro-nonterminal">$non_lang_trait </span>)*
+<a href=#626 id=626 data-nosnippet>626</a>                    $( &amp;&amp; <span class="macro-nonterminal">$non_lang_macro_field </span>== other.<span class="macro-nonterminal">$non_lang_macro_field </span>)*
+<a href=#627 id=627 data-nosnippet>627</a>                    $( &amp;&amp; <span class="macro-nonterminal">$resolve_manually </span>== other.<span class="macro-nonterminal">$resolve_manually </span>)*
+<a href=#628 id=628 data-nosnippet>628</a>            }
+<a href=#629 id=629 data-nosnippet>629</a>        }
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>        <span class="kw">impl </span>Eq <span class="kw">for </span><span class="macro-nonterminal">$LangItems </span>{}
+<a href=#632 id=632 data-nosnippet>632</a>
+<a href=#633 id=633 data-nosnippet>633</a>        <span class="kw">impl </span>LangItems {
+<a href=#634 id=634 data-nosnippet>634</a>            <span class="kw">fn </span>is_empty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#635 id=635 data-nosnippet>635</a>                <span class="kw">let </span><span class="self">Self </span>{
+<a href=#636 id=636 data-nosnippet>636</a>                    $( <span class="macro-nonterminal">$lang_item</span>, )*
+<a href=#637 id=637 data-nosnippet>637</a>                    $( <span class="macro-nonterminal">$non_lang_trait</span>, )*
+<a href=#638 id=638 data-nosnippet>638</a>                    $( <span class="macro-nonterminal">$non_lang_macro_field</span>, )*
+<a href=#639 id=639 data-nosnippet>639</a>                    $( <span class="macro-nonterminal">$resolve_manually</span>, )*
+<a href=#640 id=640 data-nosnippet>640</a>
+<a href=#641 id=641 data-nosnippet>641</a>                    solver_trait: <span class="kw">_</span>,
+<a href=#642 id=642 data-nosnippet>642</a>                    solver_adt: <span class="kw">_</span>,
+<a href=#643 id=643 data-nosnippet>643</a>                    solver_projection: <span class="kw">_</span>,
+<a href=#644 id=644 data-nosnippet>644</a>                    reverse_solver_trait: <span class="kw">_</span>,
+<a href=#645 id=645 data-nosnippet>645</a>                    reverse_solver_adt: <span class="kw">_</span>,
+<a href=#646 id=646 data-nosnippet>646</a>                    reverse_solver_projection: <span class="kw">_</span>,
+<a href=#647 id=647 data-nosnippet>647</a>                } = <span class="kw-2">*</span><span class="self">self</span>;
+<a href=#648 id=648 data-nosnippet>648</a>
+<a href=#649 id=649 data-nosnippet>649</a>                <span class="bool-val">true
+<a href=#650 id=650 data-nosnippet>650</a>                    </span>$( &amp;&amp; <span class="macro-nonterminal">$lang_item</span>.is_none() )*
+<a href=#651 id=651 data-nosnippet>651</a>                    $( &amp;&amp; <span class="macro-nonterminal">$non_lang_trait</span>.is_none() )*
+<a href=#652 id=652 data-nosnippet>652</a>                    $( &amp;&amp; <span class="macro-nonterminal">$non_lang_macro_field</span>.is_none() )*
+<a href=#653 id=653 data-nosnippet>653</a>                    $( &amp;&amp; <span class="macro-nonterminal">$resolve_manually</span>.is_none() )*
+<a href=#654 id=654 data-nosnippet>654</a>            }
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>            <span class="doccomment">/// Merges `self` with `other`, with preference to `other` items.
+<a href=#657 id=657 data-nosnippet>657</a>            </span><span class="kw">fn </span>merge_prefer_other(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) {
+<a href=#658 id=658 data-nosnippet>658</a>                $( <span class="self">self</span>.<span class="macro-nonterminal">$lang_item </span>= other.<span class="macro-nonterminal">$lang_item</span>.or(<span class="self">self</span>.<span class="macro-nonterminal">$lang_item</span>); )*
+<a href=#659 id=659 data-nosnippet>659</a>                $( <span class="self">self</span>.<span class="macro-nonterminal">$non_lang_trait </span>= other.<span class="macro-nonterminal">$non_lang_trait</span>.or(<span class="self">self</span>.<span class="macro-nonterminal">$non_lang_trait</span>); )*
+<a href=#660 id=660 data-nosnippet>660</a>                $( <span class="self">self</span>.<span class="macro-nonterminal">$non_lang_macro_field </span>= other.<span class="macro-nonterminal">$non_lang_macro_field</span>.or(<span class="self">self</span>.<span class="macro-nonterminal">$non_lang_macro_field</span>); )*
+<a href=#661 id=661 data-nosnippet>661</a>                $( <span class="self">self</span>.<span class="macro-nonterminal">$resolve_manually </span>= other.<span class="macro-nonterminal">$resolve_manually</span>.or(<span class="self">self</span>.<span class="macro-nonterminal">$resolve_manually</span>); )*
+<a href=#662 id=662 data-nosnippet>662</a>
+<a href=#663 id=663 data-nosnippet>663</a>                merge_array_prefer_other(<span class="kw-2">&amp;mut </span><span class="self">self</span>.solver_trait, <span class="kw-2">&amp;</span>other.solver_trait);
+<a href=#664 id=664 data-nosnippet>664</a>                merge_array_prefer_other(<span class="kw-2">&amp;mut </span><span class="self">self</span>.solver_adt, <span class="kw-2">&amp;</span>other.solver_adt);
+<a href=#665 id=665 data-nosnippet>665</a>                merge_array_prefer_other(<span class="kw-2">&amp;mut </span><span class="self">self</span>.solver_projection, <span class="kw-2">&amp;</span>other.solver_projection);
+<a href=#666 id=666 data-nosnippet>666</a>
+<a href=#667 id=667 data-nosnippet>667</a>                <span class="self">self</span>.reverse_solver_trait.extend(<span class="kw-2">&amp;</span>other.reverse_solver_trait);
+<a href=#668 id=668 data-nosnippet>668</a>                <span class="self">self</span>.reverse_solver_adt.extend(<span class="kw-2">&amp;</span>other.reverse_solver_adt);
+<a href=#669 id=669 data-nosnippet>669</a>                <span class="self">self</span>.reverse_solver_projection.extend(<span class="kw-2">&amp;</span>other.reverse_solver_projection);
+<a href=#670 id=670 data-nosnippet>670</a>            }
+<a href=#671 id=671 data-nosnippet>671</a>
+<a href=#672 id=672 data-nosnippet>672</a>            <span class="kw">fn </span>assign_lang_item(<span class="kw-2">&amp;mut </span><span class="self">self</span>, name: Symbol, target: LangItemTarget) {
+<a href=#673 id=673 data-nosnippet>673</a>                <span class="kw">match </span>name {
+<a href=#674 id=674 data-nosnippet>674</a>                    $(
+<a href=#675 id=675 data-nosnippet>675</a>                        <span class="kw">_ if </span>name == <span class="macro-nonterminal">$module</span>::<span class="macro-nonterminal">$name </span>=&gt; {
+<a href=#676 id=676 data-nosnippet>676</a>                            <span class="kw">if let </span>LangItemTarget::<span class="macro-nonterminal">$target</span>(target) = target {
+<a href=#677 id=677 data-nosnippet>677</a>                                <span class="self">self</span>.<span class="macro-nonterminal">$lang_item </span>= <span class="prelude-val">Some</span>(target);
+<a href=#678 id=678 data-nosnippet>678</a>
+<a href=#679 id=679 data-nosnippet>679</a>                                <span class="macro">assign_solver!</span>(<span class="self">self</span>, target, <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">? </span>);
+<a href=#680 id=680 data-nosnippet>680</a>                            }
+<a href=#681 id=681 data-nosnippet>681</a>                        }
+<a href=#682 id=682 data-nosnippet>682</a>                    )*
+<a href=#683 id=683 data-nosnippet>683</a>                    <span class="kw">_ </span>=&gt; {}
+<a href=#684 id=684 data-nosnippet>684</a>                }
+<a href=#685 id=685 data-nosnippet>685</a>            }
+<a href=#686 id=686 data-nosnippet>686</a>
+<a href=#687 id=687 data-nosnippet>687</a>            <span class="kw">fn </span>fill_non_lang_core_items(<span class="kw-2">&amp;mut </span><span class="self">self</span>, db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>SourceDatabase, core_def_map: <span class="kw-2">&amp;</span>DefMap) {
+<a href=#688 id=688 data-nosnippet>688</a>                $( <span class="self">self</span>.<span class="macro-nonterminal">$non_lang_trait </span>= resolve_core_trait(db, core_def_map, <span class="kw-2">&amp;</span>[ $(sym::<span class="macro-nonterminal">$non_lang_trait_module</span>),* ], sym::<span class="macro-nonterminal">$non_lang_trait</span>); )*
+<a href=#689 id=689 data-nosnippet>689</a>                $( <span class="self">self</span>.<span class="macro-nonterminal">$non_lang_macro_field </span>= resolve_core_macro(db, core_def_map, <span class="kw-2">&amp;</span>[ $(sym::<span class="macro-nonterminal">$non_lang_macro_module</span>),* ], sym::<span class="macro-nonterminal">$non_lang_macro</span>); )*
+<a href=#690 id=690 data-nosnippet>690</a>            }
+<a href=#691 id=691 data-nosnippet>691</a>        }
+<a href=#692 id=692 data-nosnippet>692</a>
+<a href=#693 id=693 data-nosnippet>693</a>        <span class="macro">solver_exhaustiveness_check!</span> {
+<a href=#694 id=694 data-nosnippet>694</a>            <span class="macro-nonterminal">$dollar</span>, SolverTraitLangItem, TraitId,
+<a href=#695 id=695 data-nosnippet>695</a>            [ TraitId ]
+<a href=#696 id=696 data-nosnippet>696</a>
+<a href=#697 id=697 data-nosnippet>697</a>            $( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>; )*
+<a href=#698 id=698 data-nosnippet>698</a>        }
+<a href=#699 id=699 data-nosnippet>699</a>
+<a href=#700 id=700 data-nosnippet>700</a>        <span class="macro">solver_exhaustiveness_check!</span> {
+<a href=#701 id=701 data-nosnippet>701</a>            <span class="macro-nonterminal">$dollar</span>, SolverProjectionLangItem, TypeAliasId,
+<a href=#702 id=702 data-nosnippet>702</a>            [ TypeAliasId ]
+<a href=#703 id=703 data-nosnippet>703</a>
+<a href=#704 id=704 data-nosnippet>704</a>            $( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>; )*
+<a href=#705 id=705 data-nosnippet>705</a>        }
+<a href=#706 id=706 data-nosnippet>706</a>
+<a href=#707 id=707 data-nosnippet>707</a>        <span class="macro">solver_exhaustiveness_check!</span> {
+<a href=#708 id=708 data-nosnippet>708</a>            <span class="macro-nonterminal">$dollar</span>, SolverAdtLangItem, AdtId,
+<a href=#709 id=709 data-nosnippet>709</a>            [ StructId, EnumId, UnionId ]
+<a href=#710 id=710 data-nosnippet>710</a>
+<a href=#711 id=711 data-nosnippet>711</a>            $( <span class="macro-nonterminal">$lang_item</span>, <span class="macro-nonterminal">$target </span>$(, <span class="macro-nonterminal">$solver</span>)<span class="question-mark">?</span>; )*
+<a href=#712 id=712 data-nosnippet>712</a>        }
+<a href=#713 id=713 data-nosnippet>713</a>
+<a href=#714 id=714 data-nosnippet>714</a>        <span class="attr">#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+<a href=#715 id=715 data-nosnippet>715</a>        #[allow(non_camel_case_types)]
+<a href=#716 id=716 data-nosnippet>716</a>        </span><span class="kw">pub enum </span>LangItemEnum {
+<a href=#717 id=717 data-nosnippet>717</a>            $(
+<a href=#718 id=718 data-nosnippet>718</a>                <span class="macro-nonterminal">$lang_item</span>,
+<a href=#719 id=719 data-nosnippet>719</a>            )*
+<a href=#720 id=720 data-nosnippet>720</a>            $( <span class="macro-nonterminal">$non_lang_trait</span>, )*
+<a href=#721 id=721 data-nosnippet>721</a>            $( <span class="macro-nonterminal">$non_lang_macro_field</span>, )*
+<a href=#722 id=722 data-nosnippet>722</a>            $( <span class="macro-nonterminal">$resolve_manually</span>, )*
+<a href=#723 id=723 data-nosnippet>723</a>        }
+<a href=#724 id=724 data-nosnippet>724</a>
+<a href=#725 id=725 data-nosnippet>725</a>        <span class="kw">impl </span>LangItemEnum {
+<a href=#726 id=726 data-nosnippet>726</a>            <span class="attr">#[inline]
+<a href=#727 id=727 data-nosnippet>727</a>            </span><span class="kw">pub fn </span>from_lang_items(<span class="self">self</span>, lang_items: <span class="kw-2">&amp;</span>LangItems) -&gt; <span class="prelude-ty">Option</span>&lt;LangItemTarget&gt; {
+<a href=#728 id=728 data-nosnippet>728</a>                <span class="kw">match </span><span class="self">self </span>{
+<a href=#729 id=729 data-nosnippet>729</a>                    $( LangItemEnum::<span class="macro-nonterminal">$lang_item </span>=&gt; lang_items.<span class="macro-nonterminal">$lang_item</span>.map(Into::into), )*
+<a href=#730 id=730 data-nosnippet>730</a>                    $( LangItemEnum::<span class="macro-nonterminal">$non_lang_trait </span>=&gt; lang_items.<span class="macro-nonterminal">$non_lang_trait</span>.map(Into::into), )*
+<a href=#731 id=731 data-nosnippet>731</a>                    $( LangItemEnum::<span class="macro-nonterminal">$non_lang_macro_field </span>=&gt; lang_items.<span class="macro-nonterminal">$non_lang_macro_field</span>.map(Into::into), )*
+<a href=#732 id=732 data-nosnippet>732</a>                    $( LangItemEnum::<span class="macro-nonterminal">$resolve_manually </span>=&gt; lang_items.<span class="macro-nonterminal">$resolve_manually</span>.map(Into::into), )*
+<a href=#733 id=733 data-nosnippet>733</a>                }
+<a href=#734 id=734 data-nosnippet>734</a>            }
+<a href=#735 id=735 data-nosnippet>735</a>
+<a href=#736 id=736 data-nosnippet>736</a>            <span class="attr">#[inline]
+<a href=#737 id=737 data-nosnippet>737</a>            </span><span class="kw">pub fn </span>from_symbol(symbol: <span class="kw-2">&amp;</span>Symbol) -&gt; <span class="prelude-ty">Option</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#738 id=738 data-nosnippet>738</a>                <span class="kw">match </span>symbol {
+<a href=#739 id=739 data-nosnippet>739</a>                    $( <span class="kw">_ if </span><span class="kw-2">*</span>symbol == <span class="macro-nonterminal">$module</span>::<span class="macro-nonterminal">$name </span>=&gt; <span class="prelude-val">Some</span>(<span class="self">Self</span>::<span class="macro-nonterminal">$lang_item</span>), )*
+<a href=#740 id=740 data-nosnippet>740</a>                    <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#741 id=741 data-nosnippet>741</a>                }
+<a href=#742 id=742 data-nosnippet>742</a>            }
+<a href=#743 id=743 data-nosnippet>743</a>        }
+<a href=#744 id=744 data-nosnippet>744</a>    }
+<a href=#745 id=745 data-nosnippet>745</a>}
+<a href=#746 id=746 data-nosnippet>746</a>
+<a href=#747 id=747 data-nosnippet>747</a><span class="macro">language_item_table!</span> { $ LangItems =&gt;
+<a href=#748 id=748 data-nosnippet>748</a><span class="comment">//  Variant name,            Name,                     Target;
+<a href=#749 id=749 data-nosnippet>749</a>    </span>Sized,                   sym::sized,               TraitId,               solver;
+<a href=#750 id=750 data-nosnippet>750</a>    MetaSized,               sym::meta_sized,          TraitId,               solver;
+<a href=#751 id=751 data-nosnippet>751</a>    PointeeSized,            sym::pointee_sized,       TraitId,               solver;
+<a href=#752 id=752 data-nosnippet>752</a>    Unsize,                  sym::unsize,              TraitId,               solver;
+<a href=#753 id=753 data-nosnippet>753</a>    <span class="comment">// Trait injected by `#[derive(PartialEq)]`, (i.e. "Partial EQ").
+<a href=#754 id=754 data-nosnippet>754</a>    </span>StructuralPeq,           sym::structural_peq,      TraitId;
+<a href=#755 id=755 data-nosnippet>755</a>    <span class="comment">// Trait injected by `#[derive(Eq)]`, (i.e. "Total EQ"; no, I will not apologize).
+<a href=#756 id=756 data-nosnippet>756</a>    </span>StructuralTeq,           sym::structural_teq,      TraitId;
+<a href=#757 id=757 data-nosnippet>757</a>    Copy,                    sym::copy,                TraitId,               solver;
+<a href=#758 id=758 data-nosnippet>758</a>    UseCloned,               sym::use_cloned,          TraitId;
+<a href=#759 id=759 data-nosnippet>759</a>    Clone,                   sym::clone,               TraitId,               solver;
+<a href=#760 id=760 data-nosnippet>760</a>    TrivialClone,            sym::trivial_clone,       TraitId,               solver;
+<a href=#761 id=761 data-nosnippet>761</a>    Sync,                    sym::sync,                TraitId;
+<a href=#762 id=762 data-nosnippet>762</a>    DiscriminantKind,        sym::discriminant_kind,   TraitId,               solver;
+<a href=#763 id=763 data-nosnippet>763</a>    <span class="comment">// The associated item of the `DiscriminantKind` trait.
+<a href=#764 id=764 data-nosnippet>764</a>    </span>Discriminant,            sym::discriminant_type,   TypeAliasId;
+<a href=#765 id=765 data-nosnippet>765</a>
+<a href=#766 id=766 data-nosnippet>766</a>    PointeeTrait,            sym::pointee_trait,       TraitId,               solver;
+<a href=#767 id=767 data-nosnippet>767</a>    Metadata,                sym::metadata_type,       TypeAliasId,           solver;
+<a href=#768 id=768 data-nosnippet>768</a>    DynMetadata,             sym::dyn_metadata,        StructId,              solver;
+<a href=#769 id=769 data-nosnippet>769</a>
+<a href=#770 id=770 data-nosnippet>770</a>    Freeze,                  sym::freeze,              TraitId;
+<a href=#771 id=771 data-nosnippet>771</a>
+<a href=#772 id=772 data-nosnippet>772</a>    NonNull,                 sym::non_null,            StructId;
+<a href=#773 id=773 data-nosnippet>773</a>
+<a href=#774 id=774 data-nosnippet>774</a>    FnPtrTrait,              sym::fn_ptr_trait,        TraitId,               solver;
+<a href=#775 id=775 data-nosnippet>775</a>    FnPtrAsPtr,              sym::fn_ptr_as_ptr,       FunctionId;
+<a href=#776 id=776 data-nosnippet>776</a>    FnPtrFromPtr,            sym::fn_ptr_from_ptr,     FunctionId;
+<a href=#777 id=777 data-nosnippet>777</a>
+<a href=#778 id=778 data-nosnippet>778</a>    Drop,                    sym::drop,                TraitId,               solver;
+<a href=#779 id=779 data-nosnippet>779</a>    Destruct,                sym::destruct,            TraitId,               solver;
+<a href=#780 id=780 data-nosnippet>780</a>    BikeshedGuaranteedNoDrop,sym::bikeshed_guaranteed_no_drop, TraitId,       solver;
+<a href=#781 id=781 data-nosnippet>781</a>
+<a href=#782 id=782 data-nosnippet>782</a>    CoerceUnsized,           sym::coerce_unsized,      TraitId;
+<a href=#783 id=783 data-nosnippet>783</a>    DispatchFromDyn,         sym::dispatch_from_dyn,   TraitId;
+<a href=#784 id=784 data-nosnippet>784</a>    Reborrow,                sym::reborrow,            TraitId;
+<a href=#785 id=785 data-nosnippet>785</a>    CoerceShared,            sym::coerce_shared,       TraitId;
+<a href=#786 id=786 data-nosnippet>786</a>
+<a href=#787 id=787 data-nosnippet>787</a>    <span class="comment">// language items relating to transmutability
+<a href=#788 id=788 data-nosnippet>788</a>    </span>TransmuteOpts,           sym::transmute_opts,      StructId;
+<a href=#789 id=789 data-nosnippet>789</a>    TransmuteTrait,          sym::transmute_trait,     TraitId,               solver;
+<a href=#790 id=790 data-nosnippet>790</a>
+<a href=#791 id=791 data-nosnippet>791</a>    Add,                     sym::add,                 TraitId;
+<a href=#792 id=792 data-nosnippet>792</a>    Sub,                     sym::sub,                 TraitId;
+<a href=#793 id=793 data-nosnippet>793</a>    Mul,                     sym::mul,                 TraitId;
+<a href=#794 id=794 data-nosnippet>794</a>    Div,                     sym::div,                 TraitId;
+<a href=#795 id=795 data-nosnippet>795</a>    Rem,                     sym::rem,                 TraitId;
+<a href=#796 id=796 data-nosnippet>796</a>    Neg,                     sym::neg,                 TraitId;
+<a href=#797 id=797 data-nosnippet>797</a>    Not,                     sym::not,                 TraitId;
+<a href=#798 id=798 data-nosnippet>798</a>    BitXor,                  sym::bitxor,              TraitId;
+<a href=#799 id=799 data-nosnippet>799</a>    BitAnd,                  sym::bitand,              TraitId;
+<a href=#800 id=800 data-nosnippet>800</a>    BitOr,                   sym::bitor,               TraitId;
+<a href=#801 id=801 data-nosnippet>801</a>    Shl,                     sym::shl,                 TraitId;
+<a href=#802 id=802 data-nosnippet>802</a>    Shr,                     sym::shr,                 TraitId;
+<a href=#803 id=803 data-nosnippet>803</a>    AddAssign,               sym::add_assign,          TraitId;
+<a href=#804 id=804 data-nosnippet>804</a>    SubAssign,               sym::sub_assign,          TraitId;
+<a href=#805 id=805 data-nosnippet>805</a>    MulAssign,               sym::mul_assign,          TraitId;
+<a href=#806 id=806 data-nosnippet>806</a>    DivAssign,               sym::div_assign,          TraitId;
+<a href=#807 id=807 data-nosnippet>807</a>    RemAssign,               sym::rem_assign,          TraitId;
+<a href=#808 id=808 data-nosnippet>808</a>    BitXorAssign,            sym::bitxor_assign,       TraitId;
+<a href=#809 id=809 data-nosnippet>809</a>    BitAndAssign,            sym::bitand_assign,       TraitId;
+<a href=#810 id=810 data-nosnippet>810</a>    BitOrAssign,             sym::bitor_assign,        TraitId;
+<a href=#811 id=811 data-nosnippet>811</a>    ShlAssign,               sym::shl_assign,          TraitId;
+<a href=#812 id=812 data-nosnippet>812</a>    ShrAssign,               sym::shr_assign,          TraitId;
+<a href=#813 id=813 data-nosnippet>813</a>    Index,                   sym::index,               TraitId;
+<a href=#814 id=814 data-nosnippet>814</a>    IndexMut,                sym::index_mut,           TraitId;
+<a href=#815 id=815 data-nosnippet>815</a>
+<a href=#816 id=816 data-nosnippet>816</a>    UnsafeCell,              sym::unsafe_cell,         StructId;
+<a href=#817 id=817 data-nosnippet>817</a>    UnsafePinned,            sym::unsafe_pinned,       StructId;
+<a href=#818 id=818 data-nosnippet>818</a>    VaList,                  sym::va_list,             StructId;
+<a href=#819 id=819 data-nosnippet>819</a>
+<a href=#820 id=820 data-nosnippet>820</a>    Deref,                   sym::deref,               TraitId;
+<a href=#821 id=821 data-nosnippet>821</a>    DerefMut,                sym::deref_mut,           TraitId;
+<a href=#822 id=822 data-nosnippet>822</a>    DerefPure,               sym::deref_pure,          TraitId;
+<a href=#823 id=823 data-nosnippet>823</a>    DerefTarget,             sym::deref_target,        TypeAliasId;
+<a href=#824 id=824 data-nosnippet>824</a>    Receiver,                sym::receiver,            TraitId;
+<a href=#825 id=825 data-nosnippet>825</a>    ReceiverTarget,          sym::receiver_target,     TypeAliasId;
+<a href=#826 id=826 data-nosnippet>826</a>
+<a href=#827 id=827 data-nosnippet>827</a>    Fn,                      sym::fn_,                 TraitId,                solver;
+<a href=#828 id=828 data-nosnippet>828</a>    FnMut,                   sym::fn_mut,              TraitId,                solver;
+<a href=#829 id=829 data-nosnippet>829</a>    FnOnce,                  sym::fn_once,             TraitId,                solver;
+<a href=#830 id=830 data-nosnippet>830</a>    AsyncFn,                 sym::async_fn,            TraitId,                solver;
+<a href=#831 id=831 data-nosnippet>831</a>    AsyncFnMut,              sym::async_fn_mut,        TraitId,                solver;
+<a href=#832 id=832 data-nosnippet>832</a>    AsyncFnOnce,             sym::async_fn_once,       TraitId,                solver;
+<a href=#833 id=833 data-nosnippet>833</a>    AsyncFnKindHelper,       sym::async_fn_kind_helper,TraitId,                solver;
+<a href=#834 id=834 data-nosnippet>834</a>    AsyncFnKindUpvars,       sym::async_fn_kind_upvars,TypeAliasId,            solver;
+<a href=#835 id=835 data-nosnippet>835</a>
+<a href=#836 id=836 data-nosnippet>836</a>    CallRefFuture,           sym::call_ref_future,     TypeAliasId,            solver;
+<a href=#837 id=837 data-nosnippet>837</a>    CallOnceFuture,          sym::call_once_future,    TypeAliasId,            solver;
+<a href=#838 id=838 data-nosnippet>838</a>    AsyncFnOnceOutput,       sym::async_fn_once_output, TypeAliasId,           solver;
+<a href=#839 id=839 data-nosnippet>839</a>
+<a href=#840 id=840 data-nosnippet>840</a>    FnOnceOutput,            sym::fn_once_output,      TypeAliasId;
+<a href=#841 id=841 data-nosnippet>841</a>
+<a href=#842 id=842 data-nosnippet>842</a>    Future,                  sym::future_trait,        TraitId,                solver;
+<a href=#843 id=843 data-nosnippet>843</a>    AsyncIterator,           sym::async_iterator,      TraitId,                solver;
+<a href=#844 id=844 data-nosnippet>844</a>    CoroutineState,          sym::coroutine_state,     EnumId;
+<a href=#845 id=845 data-nosnippet>845</a>    Coroutine,               sym::coroutine,           TraitId,                solver;
+<a href=#846 id=846 data-nosnippet>846</a>    CoroutineReturn,         sym::coroutine_return,    TypeAliasId,            solver;
+<a href=#847 id=847 data-nosnippet>847</a>    CoroutineYield,          sym::coroutine_yield,     TypeAliasId,            solver;
+<a href=#848 id=848 data-nosnippet>848</a>    Unpin,                   sym::unpin,               TraitId,                solver;
+<a href=#849 id=849 data-nosnippet>849</a>    Pin,                     sym::pin,                 StructId;
+<a href=#850 id=850 data-nosnippet>850</a>
+<a href=#851 id=851 data-nosnippet>851</a>    AsyncGenReady,           sym::AsyncGenReady,       FunctionId;
+<a href=#852 id=852 data-nosnippet>852</a>
+<a href=#853 id=853 data-nosnippet>853</a>    PartialEq,               sym::eq,                  TraitId;
+<a href=#854 id=854 data-nosnippet>854</a>    PartialOrd,              sym::partial_ord,         TraitId;
+<a href=#855 id=855 data-nosnippet>855</a>    CVoid,                   sym::c_void,              EnumId;
+<a href=#856 id=856 data-nosnippet>856</a>
+<a href=#857 id=857 data-nosnippet>857</a>    <span class="comment">// A number of panic-related lang items. The `panic` item corresponds to divide-by-zero and
+<a href=#858 id=858 data-nosnippet>858</a>    // various panic cases with `match`. The `panic_bounds_check` item is for indexing arrays.
+<a href=#859 id=859 data-nosnippet>859</a>    //
+<a href=#860 id=860 data-nosnippet>860</a>    // The `begin_unwind` lang item has a predefined symbol name and is sort of a "weak lang item"
+<a href=#861 id=861 data-nosnippet>861</a>    // in the sense that a crate is not required to have it defined to use it, but a final product
+<a href=#862 id=862 data-nosnippet>862</a>    // is required to define it somewhere. Additionally, there are restrictions on crates that use
+<a href=#863 id=863 data-nosnippet>863</a>    // a weak lang item, but do not have it defined.
+<a href=#864 id=864 data-nosnippet>864</a>    </span>Panic,                   sym::panic,               FunctionId;
+<a href=#865 id=865 data-nosnippet>865</a>    PanicNounwind,           sym::panic_nounwind,      FunctionId;
+<a href=#866 id=866 data-nosnippet>866</a>    PanicFmt,                sym::panic_fmt,           FunctionId;
+<a href=#867 id=867 data-nosnippet>867</a>    PanicDisplay,            sym::panic_display,       FunctionId;
+<a href=#868 id=868 data-nosnippet>868</a>    ConstPanicFmt,           sym::const_panic_fmt,     FunctionId;
+<a href=#869 id=869 data-nosnippet>869</a>    PanicBoundsCheck,        sym::panic_bounds_check,  FunctionId;
+<a href=#870 id=870 data-nosnippet>870</a>    PanicMisalignedPointerDereference, sym::panic_misaligned_pointer_dereference, FunctionId;
+<a href=#871 id=871 data-nosnippet>871</a>    PanicInfo,               sym::panic_info,          StructId;
+<a href=#872 id=872 data-nosnippet>872</a>    PanicLocation,           sym::panic_location,      StructId;
+<a href=#873 id=873 data-nosnippet>873</a>    PanicImpl,               sym::panic_impl,          FunctionId;
+<a href=#874 id=874 data-nosnippet>874</a>    PanicCannotUnwind,       sym::panic_cannot_unwind, FunctionId;
+<a href=#875 id=875 data-nosnippet>875</a>    PanicNullPointerDereference, sym::panic_null_pointer_dereference, FunctionId;
+<a href=#876 id=876 data-nosnippet>876</a>    <span class="comment">// libstd panic entry point. Necessary for const eval to be able to catch it
+<a href=#877 id=877 data-nosnippet>877</a>    </span>BeginPanic,              sym::begin_panic,         FunctionId;
+<a href=#878 id=878 data-nosnippet>878</a>
+<a href=#879 id=879 data-nosnippet>879</a>    <span class="comment">// Lang items needed for `format_args!()`.
+<a href=#880 id=880 data-nosnippet>880</a>    </span>FormatAlignment,         sym::format_alignment,    EnumId;
+<a href=#881 id=881 data-nosnippet>881</a>    FormatArgument,          sym::format_argument,     StructId;
+<a href=#882 id=882 data-nosnippet>882</a>    FormatArguments,         sym::format_arguments,    StructId;
+<a href=#883 id=883 data-nosnippet>883</a>    FormatCount,             sym::format_count,        EnumId;
+<a href=#884 id=884 data-nosnippet>884</a>    FormatPlaceholder,       sym::format_placeholder,  StructId;
+<a href=#885 id=885 data-nosnippet>885</a>    FormatUnsafeArg,         sym::format_unsafe_arg,   StructId;
+<a href=#886 id=886 data-nosnippet>886</a>
+<a href=#887 id=887 data-nosnippet>887</a>    ExchangeMalloc,          sym::exchange_malloc,     FunctionId;
+<a href=#888 id=888 data-nosnippet>888</a>    BoxFree,                 sym::box_free,            FunctionId;
+<a href=#889 id=889 data-nosnippet>889</a>    DropInPlace,             sym::drop_in_place,       FunctionId;
+<a href=#890 id=890 data-nosnippet>890</a>    AllocLayout,             sym::alloc_layout,        StructId;
+<a href=#891 id=891 data-nosnippet>891</a>
+<a href=#892 id=892 data-nosnippet>892</a>    Start,                   sym::start,               FunctionId;
+<a href=#893 id=893 data-nosnippet>893</a>
+<a href=#894 id=894 data-nosnippet>894</a>    EhPersonality,           sym::eh_personality,      FunctionId;
+<a href=#895 id=895 data-nosnippet>895</a>    EhCatchTypeinfo,         sym::eh_catch_typeinfo,   StaticId;
+<a href=#896 id=896 data-nosnippet>896</a>
+<a href=#897 id=897 data-nosnippet>897</a>    OwnedBox,                sym::owned_box,           StructId;
+<a href=#898 id=898 data-nosnippet>898</a>
+<a href=#899 id=899 data-nosnippet>899</a>    PhantomData,             sym::phantom_data,        StructId;
+<a href=#900 id=900 data-nosnippet>900</a>
+<a href=#901 id=901 data-nosnippet>901</a>    ManuallyDrop,            sym::manually_drop,       StructId;
+<a href=#902 id=902 data-nosnippet>902</a>
+<a href=#903 id=903 data-nosnippet>903</a>    MaybeUninit,             sym::maybe_uninit,        UnionId;
+<a href=#904 id=904 data-nosnippet>904</a>
+<a href=#905 id=905 data-nosnippet>905</a>    <span class="comment">// Align offset for stride != 1; must not panic.
+<a href=#906 id=906 data-nosnippet>906</a>    </span>AlignOffset,             sym::align_offset,        FunctionId;
+<a href=#907 id=907 data-nosnippet>907</a>
+<a href=#908 id=908 data-nosnippet>908</a>    Termination,             sym::termination,         TraitId;
+<a href=#909 id=909 data-nosnippet>909</a>
+<a href=#910 id=910 data-nosnippet>910</a>    Try,                     sym::Try,                 TraitId;
+<a href=#911 id=911 data-nosnippet>911</a>
+<a href=#912 id=912 data-nosnippet>912</a>    Tuple,                   sym::tuple_trait,         TraitId,               solver;
+<a href=#913 id=913 data-nosnippet>913</a>
+<a href=#914 id=914 data-nosnippet>914</a>    SliceLen,                sym::slice_len_fn,        FunctionId;
+<a href=#915 id=915 data-nosnippet>915</a>
+<a href=#916 id=916 data-nosnippet>916</a>    <span class="comment">// Language items from AST lowering
+<a href=#917 id=917 data-nosnippet>917</a>    </span>TryTraitFromResidual,    sym::from_residual,       FunctionId;
+<a href=#918 id=918 data-nosnippet>918</a>    TryTraitFromOutput,      sym::from_output,         FunctionId;
+<a href=#919 id=919 data-nosnippet>919</a>    TryTraitBranch,          sym::branch,              FunctionId;
+<a href=#920 id=920 data-nosnippet>920</a>    TryTraitFromYeet,        sym::from_yeet,           FunctionId;
+<a href=#921 id=921 data-nosnippet>921</a>    ResidualIntoTryType,     sym::into_try_type,       FunctionId;
+<a href=#922 id=922 data-nosnippet>922</a>
+<a href=#923 id=923 data-nosnippet>923</a>    PointerLike,             sym::pointer_like,        TraitId;
+<a href=#924 id=924 data-nosnippet>924</a>
+<a href=#925 id=925 data-nosnippet>925</a>    ConstParamTy,            sym::const_param_ty,      TraitId;
+<a href=#926 id=926 data-nosnippet>926</a>
+<a href=#927 id=927 data-nosnippet>927</a>    Poll,                    sym::Poll,                EnumId,                solver;
+<a href=#928 id=928 data-nosnippet>928</a>    PollReady,               sym::Ready,               EnumVariantId;
+<a href=#929 id=929 data-nosnippet>929</a>    PollPending,             sym::Pending,             EnumVariantId;
+<a href=#930 id=930 data-nosnippet>930</a>
+<a href=#931 id=931 data-nosnippet>931</a>    <span class="comment">// FIXME(swatinem): the following lang items are used for async lowering and
+<a href=#932 id=932 data-nosnippet>932</a>    // should become obsolete eventually.
+<a href=#933 id=933 data-nosnippet>933</a>    </span>ResumeTy,                sym::ResumeTy,            StructId;
+<a href=#934 id=934 data-nosnippet>934</a>    GetContext,              sym::get_context,         FunctionId;
+<a href=#935 id=935 data-nosnippet>935</a>
+<a href=#936 id=936 data-nosnippet>936</a>    Context,                 sym::Context,             StructId;
+<a href=#937 id=937 data-nosnippet>937</a>    FuturePoll,              sym::poll,                FunctionId;
+<a href=#938 id=938 data-nosnippet>938</a>    FutureOutput,            sym::future_output,       TypeAliasId,           solver;
+<a href=#939 id=939 data-nosnippet>939</a>
+<a href=#940 id=940 data-nosnippet>940</a>    <span class="prelude-ty">Option</span>,                  sym::Option,              EnumId,                solver;
+<a href=#941 id=941 data-nosnippet>941</a>    OptionSome,              sym::Some,                EnumVariantId;
+<a href=#942 id=942 data-nosnippet>942</a>    OptionNone,              sym::None,                EnumVariantId;
+<a href=#943 id=943 data-nosnippet>943</a>
+<a href=#944 id=944 data-nosnippet>944</a>    ResultOk,                sym::Ok,                  EnumVariantId;
+<a href=#945 id=945 data-nosnippet>945</a>    ResultErr,               sym::Err,                 EnumVariantId;
+<a href=#946 id=946 data-nosnippet>946</a>
+<a href=#947 id=947 data-nosnippet>947</a>    ControlFlowContinue,     sym::Continue,            EnumVariantId;
+<a href=#948 id=948 data-nosnippet>948</a>    ControlFlowBreak,        sym::Break,               EnumVariantId;
+<a href=#949 id=949 data-nosnippet>949</a>
+<a href=#950 id=950 data-nosnippet>950</a>    IntoFutureIntoFuture,    sym::into_future,         FunctionId;
+<a href=#951 id=951 data-nosnippet>951</a>    IntoIterIntoIter,        sym::into_iter,           FunctionId;
+<a href=#952 id=952 data-nosnippet>952</a>    IteratorNext,            sym::next,                FunctionId;
+<a href=#953 id=953 data-nosnippet>953</a>    Iterator,                sym::iterator,            TraitId,               solver;
+<a href=#954 id=954 data-nosnippet>954</a>    FusedIterator,           sym::fused_iterator,      TraitId,               solver;
+<a href=#955 id=955 data-nosnippet>955</a>
+<a href=#956 id=956 data-nosnippet>956</a>    PinNewUnchecked,         sym::new_unchecked,       FunctionId;
+<a href=#957 id=957 data-nosnippet>957</a>
+<a href=#958 id=958 data-nosnippet>958</a>    RangeFrom,               sym::RangeFrom,           StructId;
+<a href=#959 id=959 data-nosnippet>959</a>    RangeFull,               sym::RangeFull,           StructId;
+<a href=#960 id=960 data-nosnippet>960</a>    RangeInclusiveStruct,    sym::RangeInclusive,      StructId;
+<a href=#961 id=961 data-nosnippet>961</a>    RangeInclusiveNew,       sym::range_inclusive_new, FunctionId;
+<a href=#962 id=962 data-nosnippet>962</a>    Range,                   sym::Range,               StructId;
+<a href=#963 id=963 data-nosnippet>963</a>    RangeToInclusive,        sym::RangeToInclusive,    StructId;
+<a href=#964 id=964 data-nosnippet>964</a>    RangeTo,                 sym::RangeTo,             StructId;
+<a href=#965 id=965 data-nosnippet>965</a>
+<a href=#966 id=966 data-nosnippet>966</a>    RangeFromCopy,           sym::RangeFromCopy,           StructId;
+<a href=#967 id=967 data-nosnippet>967</a>    RangeInclusiveCopy,      sym::RangeInclusiveCopy,      StructId;
+<a href=#968 id=968 data-nosnippet>968</a>    RangeCopy,               sym::RangeCopy,               StructId;
+<a href=#969 id=969 data-nosnippet>969</a>    RangeToInclusiveCopy,    sym::RangeToInclusiveCopy,    StructId;
+<a href=#970 id=970 data-nosnippet>970</a>
+<a href=#971 id=971 data-nosnippet>971</a>    String,                  sym::String,              StructId;
+<a href=#972 id=972 data-nosnippet>972</a>    CStr,                    sym::CStr,                StructId;
+<a href=#973 id=973 data-nosnippet>973</a>    Ordering,                sym::Ordering,            EnumId;
+<a href=#974 id=974 data-nosnippet>974</a>
+<a href=#975 id=975 data-nosnippet>975</a>    Field,                   sym::field,               TraitId,               solver;
+<a href=#976 id=976 data-nosnippet>976</a>    FieldBase,               sym::field_base,          TypeAliasId,           solver;
+<a href=#977 id=977 data-nosnippet>977</a>    FieldType,               sym::field_type,          TypeAliasId,           solver;
+<a href=#978 id=978 data-nosnippet>978</a>
+<a href=#979 id=979 data-nosnippet>979</a>    RangeMin,                sym::RangeMin,            ConstId;
+<a href=#980 id=980 data-nosnippet>980</a>    RangeMax,                sym::RangeMax,            ConstId;
+<a href=#981 id=981 data-nosnippet>981</a>    RangeSub,                sym::RangeSub,            FunctionId;
+<a href=#982 id=982 data-nosnippet>982</a>
+<a href=#983 id=983 data-nosnippet>983</a>    @non_lang_core_traits:
+<a href=#984 id=984 data-nosnippet>984</a>    core::default, Default;
+<a href=#985 id=985 data-nosnippet>985</a>    core::fmt, Debug;
+<a href=#986 id=986 data-nosnippet>986</a>    core::hash, Hash;
+<a href=#987 id=987 data-nosnippet>987</a>    core::cmp, Ord;
+<a href=#988 id=988 data-nosnippet>988</a>    core::cmp, Eq;
+<a href=#989 id=989 data-nosnippet>989</a>
+<a href=#990 id=990 data-nosnippet>990</a>    @non_lang_core_macros:
+<a href=#991 id=991 data-nosnippet>991</a>    core::default, Default, DefaultDerive;
+<a href=#992 id=992 data-nosnippet>992</a>    core::fmt, Debug, DebugDerive;
+<a href=#993 id=993 data-nosnippet>993</a>    core::hash, Hash, HashDerive;
+<a href=#994 id=994 data-nosnippet>994</a>    core::cmp, PartialOrd, PartialOrdDerive;
+<a href=#995 id=995 data-nosnippet>995</a>    core::cmp, Ord, OrdDerive;
+<a href=#996 id=996 data-nosnippet>996</a>    core::cmp, PartialEq, PartialEqDerive;
+<a href=#997 id=997 data-nosnippet>997</a>    core::cmp, Eq, EqDerive;
+<a href=#998 id=998 data-nosnippet>998</a>    core::marker, CoercePointee, CoercePointeeDerive;
+<a href=#999 id=999 data-nosnippet>999</a>    core::marker, CoerceShared, CoerceSharedDerive;
+<a href=#1000 id=1000 data-nosnippet>1000</a>    core::marker, Copy, CopyDerive;
+<a href=#1001 id=1001 data-nosnippet>1001</a>    core::marker, Reborrow, ReborrowDerive;
+<a href=#1002 id=1002 data-nosnippet>1002</a>    core::clone, Clone, CloneDerive;
+<a href=#1003 id=1003 data-nosnippet>1003</a>
+<a href=#1004 id=1004 data-nosnippet>1004</a>    @resolve_manually:
+<a href=#1005 id=1005 data-nosnippet>1005</a>
+<a href=#1006 id=1006 data-nosnippet>1006</a>    IntoFuture,                    TraitId;
+<a href=#1007 id=1007 data-nosnippet>1007</a>    IntoFutureOutput,              TypeAliasId;
+<a href=#1008 id=1008 data-nosnippet>1008</a>    IntoIterator,                  TraitId;
+<a href=#1009 id=1009 data-nosnippet>1009</a>    IntoIteratorItem,              TypeAliasId;
+<a href=#1010 id=1010 data-nosnippet>1010</a>    IntoIterIntoIterType,          TypeAliasId;
+<a href=#1011 id=1011 data-nosnippet>1011</a>    IteratorItem,                  TypeAliasId;
+<a href=#1012 id=1012 data-nosnippet>1012</a>    AsyncIteratorItem,             TypeAliasId;
+<a href=#1013 id=1013 data-nosnippet>1013</a>
+<a href=#1014 id=1014 data-nosnippet>1014</a>    Fn_call,                       FunctionId;
+<a href=#1015 id=1015 data-nosnippet>1015</a>    FnMut_call_mut,                FunctionId;
+<a href=#1016 id=1016 data-nosnippet>1016</a>    FnOnce_call_once,              FunctionId;
+<a href=#1017 id=1017 data-nosnippet>1017</a>    AsyncFn_async_call,            FunctionId;
+<a href=#1018 id=1018 data-nosnippet>1018</a>    AsyncFnMut_async_call_mut,     FunctionId;
+<a href=#1019 id=1019 data-nosnippet>1019</a>    AsyncFnOnce_async_call_once,   FunctionId;
+<a href=#1020 id=1020 data-nosnippet>1020</a>    Not_not,                       FunctionId;
+<a href=#1021 id=1021 data-nosnippet>1021</a>    Neg_neg,                       FunctionId;
+<a href=#1022 id=1022 data-nosnippet>1022</a>    Add_add,                       FunctionId;
+<a href=#1023 id=1023 data-nosnippet>1023</a>    Mul_mul,                       FunctionId;
+<a href=#1024 id=1024 data-nosnippet>1024</a>    Sub_sub,                       FunctionId;
+<a href=#1025 id=1025 data-nosnippet>1025</a>    Div_div,                       FunctionId;
+<a href=#1026 id=1026 data-nosnippet>1026</a>    Rem_rem,                       FunctionId;
+<a href=#1027 id=1027 data-nosnippet>1027</a>    Shl_shl,                       FunctionId;
+<a href=#1028 id=1028 data-nosnippet>1028</a>    Shr_shr,                       FunctionId;
+<a href=#1029 id=1029 data-nosnippet>1029</a>    BitXor_bitxor,                 FunctionId;
+<a href=#1030 id=1030 data-nosnippet>1030</a>    BitOr_bitor,                   FunctionId;
+<a href=#1031 id=1031 data-nosnippet>1031</a>    BitAnd_bitand,                 FunctionId;
+<a href=#1032 id=1032 data-nosnippet>1032</a>    AddAssign_add_assign,          FunctionId;
+<a href=#1033 id=1033 data-nosnippet>1033</a>    MulAssign_mul_assign,          FunctionId;
+<a href=#1034 id=1034 data-nosnippet>1034</a>    SubAssign_sub_assign,          FunctionId;
+<a href=#1035 id=1035 data-nosnippet>1035</a>    DivAssign_div_assign,          FunctionId;
+<a href=#1036 id=1036 data-nosnippet>1036</a>    RemAssign_rem_assign,          FunctionId;
+<a href=#1037 id=1037 data-nosnippet>1037</a>    ShlAssign_shl_assign,          FunctionId;
+<a href=#1038 id=1038 data-nosnippet>1038</a>    ShrAssign_shr_assign,          FunctionId;
+<a href=#1039 id=1039 data-nosnippet>1039</a>    BitXorAssign_bitxor_assign,    FunctionId;
+<a href=#1040 id=1040 data-nosnippet>1040</a>    BitOrAssign_bitor_assign,      FunctionId;
+<a href=#1041 id=1041 data-nosnippet>1041</a>    BitAndAssign_bitand_assign,    FunctionId;
+<a href=#1042 id=1042 data-nosnippet>1042</a>    PartialEq_eq,                  FunctionId;
+<a href=#1043 id=1043 data-nosnippet>1043</a>    PartialEq_ne,                  FunctionId;
+<a href=#1044 id=1044 data-nosnippet>1044</a>    PartialOrd_le,                 FunctionId;
+<a href=#1045 id=1045 data-nosnippet>1045</a>    PartialOrd_lt,                 FunctionId;
+<a href=#1046 id=1046 data-nosnippet>1046</a>    PartialOrd_ge,                 FunctionId;
+<a href=#1047 id=1047 data-nosnippet>1047</a>    PartialOrd_gt,                 FunctionId;
+<a href=#1048 id=1048 data-nosnippet>1048</a>    Drop_drop,                     FunctionId;
+<a href=#1049 id=1049 data-nosnippet>1049</a>    Drop_pin_drop,                     FunctionId;
+<a href=#1050 id=1050 data-nosnippet>1050</a>    Debug_fmt,                     FunctionId;
+<a href=#1051 id=1051 data-nosnippet>1051</a>    Deref_deref,                   FunctionId;
+<a href=#1052 id=1052 data-nosnippet>1052</a>    DerefMut_deref_mut,            FunctionId;
+<a href=#1053 id=1053 data-nosnippet>1053</a>    Index_index,                   FunctionId;
+<a href=#1054 id=1054 data-nosnippet>1054</a>    IndexMut_index_mut,            FunctionId;
+<a href=#1055 id=1055 data-nosnippet>1055</a>}
+</code></pre></div></section></main></body></html>

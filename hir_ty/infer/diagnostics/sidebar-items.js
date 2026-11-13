@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Diagnostics","InferenceTyLoweringContext","InferenceTyLoweringVarsCtx","PathDiagnosticCallbackData"]};

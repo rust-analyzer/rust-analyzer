@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["desugar_doc_comment"]};

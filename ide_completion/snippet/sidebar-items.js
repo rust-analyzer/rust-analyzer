@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SnippetScope"],"fn":["import_edits","validate_snippet"],"struct":["Snippet"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["const_or_static","konst","static_"]};

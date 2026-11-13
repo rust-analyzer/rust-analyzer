@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NeedsLifetime"],"fn":["generate_fn_def_assist","generate_impl_def_assist","generate_unique_lifetime_param_name","insert_lifetime_param","insert_new_generic_param_list_fn","insert_new_generic_param_list_imp","introduce_named_lifetime"],"static":["ASSIST_LABEL","ASSIST_NAME"]};

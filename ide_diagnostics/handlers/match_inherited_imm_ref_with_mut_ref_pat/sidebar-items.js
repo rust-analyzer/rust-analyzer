@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["match_inherited_imm_ref_with_mut_ref_pat"]};

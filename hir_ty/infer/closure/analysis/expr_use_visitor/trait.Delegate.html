@@ -1,0 +1,134 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="This trait defines the callbacks you can expect to receive when employing the ExprUseVisitor."><title>Delegate in hir_ty::infer::closure::analysis::expr_use_visitor - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../../../" data-static-root-path="../../../../../static.files/" data-current-crate="hir_ty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Delegate</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../../hir_ty/index.html">hir_ty</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Delegate</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.borrow" title="borrow">borrow</a></li><li><a href="#tymethod.consume" title="consume">consume</a></li><li><a href="#tymethod.fake_read" title="fake_read">fake_read</a></li><li><a href="#tymethod.mutate" title="mutate">mutate</a></li><li><a href="#tymethod.use_cloned" title="use_cloned">use_cloned</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.bind" title="bind">bind</a></li><li><a href="#method.copy" title="copy">copy</a></li></ul><h3><a href="#foreign-impls">Implementations on Foreign Types</a></h3><ul class="block"><li><a href="#impl-Delegate%3C'db%3E-for-%26mut+D" title="&#38;mut D">&#38;mut D</a></li></ul><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In hir_<wbr>ty::<wbr>infer::<wbr>closure::<wbr>analysis::<wbr>expr_<wbr>use_<wbr>visitor</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../../index.html">hir_ty</a>::<wbr><a href="../../../index.html">infer</a>::<wbr><a href="../../index.html">closure</a>::<wbr><a href="../index.html">analysis</a>::<wbr><a href="index.html">expr_use_visitor</a></div><h1>Trait <span class="trait">Delegate</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#293-362">Source</a> </span></div><pre class="rust item-decl"><code>pub(crate) trait Delegate&lt;'db&gt; {
+    // Required methods
+    fn <a href="#tymethod.consume" class="fn">consume</a>(
+        &amp;mut self,
+        place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.use_cloned" class="fn">use_cloned</a>(
+        &amp;mut self,
+        place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.borrow" class="fn">borrow</a>(
+        &amp;mut self,
+        place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        bk: <a class="enum" href="../../../../closure_analysis/enum.BorrowKind.html" title="enum hir_ty::closure_analysis::BorrowKind">BorrowKind</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.mutate" class="fn">mutate</a>(
+        &amp;mut self,
+        assignee_place: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    );
+<span class="item-spacer"></span>    fn <a href="#tymethod.fake_read" class="fn">fake_read</a>(
+        &amp;mut self,
+        place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        cause: <a class="enum" href="../../../../closure_analysis/enum.FakeReadCause.html" title="enum hir_ty::closure_analysis::FakeReadCause">FakeReadCause</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    );
+
+    // Provided methods
+    fn <a href="#method.copy" class="fn">copy</a>(
+        &amp;mut self,
+        place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    ) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.bind" class="fn">bind</a>(
+        &amp;mut self,
+        binding_place: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+        ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+    ) { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>This trait defines the callbacks you can expect to receive when
+employing the ExprUseVisitor.</p>
+</div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.consume" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#304">Source</a><h4 class="code-header">fn <a href="#tymethod.consume" class="fn">consume</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The value found at <code>place</code> is moved, depending
+on <code>mode</code>. Where <code>diag_expr_id</code> is the id used for diagnostics for <code>place</code>.</p>
+<p>If the value is <code>Copy</code>, <a href="trait.Delegate.html#method.copy" title="method hir_ty::infer::closure::analysis::expr_use_visitor::Delegate::copy"><code>copy</code></a> is called instead, which
+by default falls back to <a href="trait.Delegate.html#tymethod.borrow" title="method hir_ty::infer::closure::analysis::expr_use_visitor::Delegate::borrow"><code>borrow</code></a>.</p>
+<p>The parameter <code>diag_expr_id</code> indicates the HIR id that ought to be used for
+diagnostics. Around pattern matching such as <code>let pat = expr</code>, the diagnostic
+id will be the id of the expression <code>expr</code> but the place itself will have
+the id of the binding in the pattern <code>pat</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.use_cloned" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#319">Source</a><h4 class="code-header">fn <a href="#tymethod.use_cloned" class="fn">use_cloned</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The value found at <code>place</code> is used, depending
+on <code>mode</code>. Where <code>diag_expr_id</code> is the id used for diagnostics for <code>place</code>.</p>
+<p>Use of a <code>Copy</code> type in a ByUse context is considered a use
+by <code>ImmBorrow</code> and <code>borrow</code> is called instead. This is because
+a shared borrow is the “minimum access” that would be needed
+to perform a copy.</p>
+<p>The parameter <code>diag_expr_id</code> indicates the HIR id that ought to be used for
+diagnostics. Around pattern matching such as <code>let pat = expr</code>, the diagnostic
+id will be the id of the expression <code>expr</code> but the place itself will have
+the id of the binding in the pattern <code>pat</code>.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.borrow" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#323-328">Source</a><h4 class="code-header">fn <a href="#tymethod.borrow" class="fn">borrow</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    bk: <a class="enum" href="../../../../closure_analysis/enum.BorrowKind.html" title="enum hir_ty::closure_analysis::BorrowKind">BorrowKind</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The value found at <code>place</code> is being borrowed with kind <code>bk</code>.
+<code>diag_expr_id</code> is the id used for diagnostics (see <code>consume</code> for more details).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.mutate" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#344">Source</a><h4 class="code-header">fn <a href="#tymethod.mutate" class="fn">mutate</a>(
+    &amp;mut self,
+    assignee_place: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The path at <code>assignee_place</code> is being assigned to.
+<code>diag_expr_id</code> is the id used for diagnostics (see <code>consume</code> for more details).</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="tymethod.fake_read" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#356-361">Source</a><h4 class="code-header">fn <a href="#tymethod.fake_read" class="fn">fake_read</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    cause: <a class="enum" href="../../../../closure_analysis/enum.FakeReadCause.html" title="enum hir_ty::closure_analysis::FakeReadCause">FakeReadCause</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The <code>place</code> should be a fake read because of specified <code>cause</code>.</p>
+</div></details></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.copy" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#336-340">Source</a><h4 class="code-header">fn <a href="#method.copy" class="fn">copy</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The value found at <code>place</code> is being copied.
+<code>diag_expr_id</code> is the id used for diagnostics (see <code>consume</code> for more details).</p>
+<p>If an implementation is not provided, use of a <code>Copy</code> type in a ByValue context is instead
+considered a use by <code>ImmBorrow</code> and <code>borrow</code> is called instead. This is because a shared
+borrow is the “minimum access” that would be needed to perform a copy.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.bind" class="method"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#349-353">Source</a><h4 class="code-header">fn <a href="#method.bind" class="fn">bind</a>(
+    &amp;mut self,
+    binding_place: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></summary><div class="docblock"><p>The path at <code>binding_place</code> is a binding that is being initialized.</p>
+<p>This covers cases such as <code>let x = 42;</code></p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait <b>is</b> <a href="https://doc.rust-lang.org/1.100.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="foreign-impls" class="section-header">Implementations on Foreign Types<a href="#foreign-impls" class="anchor">§</a></h2><details class="toggle implementors-toggle"><summary><section id="impl-Delegate%3C'db%3E-for-%26mut+D" class="impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#364-402">Source</a><a href="#impl-Delegate%3C'db%3E-for-%26mut+D" class="anchor">§</a><h3 class="code-header">impl&lt;'db, D: <a class="trait" href="trait.Delegate.html" title="trait hir_ty::infer::closure::analysis::expr_use_visitor::Delegate">Delegate</a>&lt;'db&gt;&gt; <a class="trait" href="trait.Delegate.html" title="trait hir_ty::infer::closure::analysis::expr_use_visitor::Delegate">Delegate</a>&lt;'db&gt; for <a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.reference.html">&amp;mut D</a></h3></section></summary><div class="impl-items"><section id="method.consume" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#365-367">Source</a><a href="#method.consume" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.consume" class="fn">consume</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section><section id="method.use_cloned" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#369-371">Source</a><a href="#method.use_cloned" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.use_cloned" class="fn">use_cloned</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section><section id="method.borrow" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#373-380">Source</a><a href="#method.borrow" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.borrow" class="fn">borrow</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    bk: <a class="enum" href="../../../../closure_analysis/enum.BorrowKind.html" title="enum hir_ty::closure_analysis::BorrowKind">BorrowKind</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section><section id="method.copy-1" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#382-384">Source</a><a href="#method.copy-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.copy" class="fn">copy</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section><section id="method.mutate" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#386-388">Source</a><a href="#method.mutate" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.mutate" class="fn">mutate</a>(
+    &amp;mut self,
+    assignee_place: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section><section id="method.bind-1" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#390-392">Source</a><a href="#method.bind-1" class="anchor">§</a><h4 class="code-header">fn <a href="#method.bind" class="fn">bind</a>(
+    &amp;mut self,
+    binding_place: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section><section id="method.fake_read" class="method trait-impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis/expr_use_visitor.rs.html#394-401">Source</a><a href="#method.fake_read" class="anchor">§</a><h4 class="code-header">fn <a href="#tymethod.fake_read" class="fn">fake_read</a>(
+    &amp;mut self,
+    place_with_id: <a class="struct" href="struct.PlaceWithOrigin.html" title="struct hir_ty::infer::closure::analysis::expr_use_visitor::PlaceWithOrigin">PlaceWithOrigin</a>,
+    cause: <a class="enum" href="../../../../closure_analysis/enum.FakeReadCause.html" title="enum hir_ty::closure_analysis::FakeReadCause">FakeReadCause</a>,
+    ctx: &amp;mut <a class="struct" href="../../../struct.InferenceContext.html" title="struct hir_ty::infer::InferenceContext">InferenceContext</a>&lt;'db&gt;,
+)</h4></section></div></details><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><section id="impl-Delegate%3C'db%3E-for-InferBorrowKind" class="impl"><a class="src rightside" href="../../../../../src/hir_ty/infer/closure/analysis.rs.html#1201-1292">Source</a><a href="#impl-Delegate%3C'db%3E-for-InferBorrowKind" class="anchor">§</a><h3 class="code-header">impl&lt;'db&gt; <a class="trait" href="trait.Delegate.html" title="trait hir_ty::infer::closure::analysis::expr_use_visitor::Delegate">Delegate</a>&lt;'db&gt; for <a class="struct" href="../struct.InferBorrowKind.html" title="struct hir_ty::infer::closure::analysis::InferBorrowKind">InferBorrowKind</a></h3></section></div><script src="../../../../../trait.impl/hir_ty/infer/closure/analysis/expr_use_visitor/trait.Delegate.js" async></script></section></div></main></body></html>

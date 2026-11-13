@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["mismatched_array_pat_len"]};

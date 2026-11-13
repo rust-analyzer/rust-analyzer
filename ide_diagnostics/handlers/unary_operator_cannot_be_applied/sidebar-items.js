@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["unary_operator_cannot_be_applied"]};

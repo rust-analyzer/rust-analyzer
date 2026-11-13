@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["expr","macro_items","macro_stmts","meta_item","pattern","source_file","type_"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_await","add_missing_ok_or_some","add_or_fix_reference","array_length","fixes","insert_postfix","insert_prefix","qualified_display","remove_semicolon","remove_unnecessary_wrapper","str_ref_to_owned","type_mismatch"]};

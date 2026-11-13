@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NodeOrToken"],"fn":["verify_only_whitespaces"],"macro":[["quote_",1],["quote_impl_",1]],"struct":["GreenNode","GreenToken","RSyntaxKind"],"trait":["ToNodeChild"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["print_item_tree"],"macro":[["w",1],["wln",1]],"struct":["Printer"]};

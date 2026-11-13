@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["assoc_func_fix","field_fix","fixes","unresolved_method"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SolverDiagnosticKind"],"fn":["handle_trait_unimplemented"],"struct":["SolverDiagnostic","StoredTraitPredicate"]};

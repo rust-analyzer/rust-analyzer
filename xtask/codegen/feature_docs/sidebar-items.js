@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate","is_valid_feature_name"],"struct":["Feature"]};

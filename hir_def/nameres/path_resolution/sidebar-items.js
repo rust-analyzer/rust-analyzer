@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ReachedFixedPoint","ResolveMode"],"fn":["adjust_to_nearest_non_block_module"],"struct":["ResolvePathResult","ResolvePathResultPrefixInfo"]};

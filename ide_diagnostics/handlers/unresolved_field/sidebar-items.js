@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_field_to_struct_fix","add_variant_to_union","field_fix","fixes","method_fix","record_field_layout","unresolved_field"]};

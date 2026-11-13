@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["upmap_collection"],"macro":[["impl_tuple",1]],"struct":["FileId","RaFixtureAnalysis","RaFixtureConfig"],"trait":["IsEmpty","UpmapFromRaFixture"]};

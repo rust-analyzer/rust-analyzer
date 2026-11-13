@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["CanonicalizeAllFreeRegions","CanonicalizeQueryResponse","CanonicalizeUserTypeAnnotation","Canonicalizer","OriginalQueryValues"],"trait":["CanonicalizeMode"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProcMacroKind"],"fn":["parse_macro_name_and_helper_attrs"],"struct":["ProcMacroDef"]};

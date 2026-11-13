@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BodyValidationDiagnostic","Expr","Pat","RecordSpread","Statement","VariantId"],"fn":["missing_match_arms","record_literal_missing_fields","record_pattern_missing_fields","types_of_subpatterns_do_match"],"struct":["Body","ExprValidator","FilterMapNextChecker","MatchArm"],"type":["ExprId","LocalFieldId","PatId"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Target"],"fn":["build_usage_edit","collect_data","destructure_pat","destructure_struct_binding","destructure_struct_binding_impl","generate_field_names","get_names_in_scope","new_field_name","update_usages"],"struct":["StructEditData"]};

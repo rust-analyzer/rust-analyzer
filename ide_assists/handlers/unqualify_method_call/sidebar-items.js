@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_import","unqualify_method_call"]};

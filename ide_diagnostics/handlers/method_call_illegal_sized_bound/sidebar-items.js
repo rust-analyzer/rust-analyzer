@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["method_call_illegal_sized_bound"]};

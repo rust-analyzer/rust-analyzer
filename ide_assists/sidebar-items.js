@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AssistKind","AssistResolveStrategy"],"fn":["assists"],"mod":["assist_config","assist_context","handlers","utils"],"struct":["Assist","AssistConfig","AssistId","GroupLabel","SingleResolve"]};

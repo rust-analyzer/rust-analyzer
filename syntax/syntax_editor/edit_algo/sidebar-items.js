@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NestedChanges","PathEdit"],"fn":["apply_edits","report_intersecting_changes"],"struct":["ChangedRegion","EditPlan","InvalidEditPlan","PlanEntry","PlannedChange","PreparedElement","SyntaxPath","TrackedAnnotation","TreeState","TreeStore"]};

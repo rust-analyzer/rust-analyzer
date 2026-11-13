@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CONTEXTUAL_BUILTIN_KEYWORDS","CONTEXTUAL_KEYWORDS","EDITION_DEPENDENT_KEYWORDS","EOF","PUNCT","RESERVED","TOKENS"],"enum":["Cardinality","Edition","Field"],"fn":["generate_kind_src"],"struct":["AstEnumSrc","AstNodeSrc","AstSrc","KindsSrc"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MIN_NUMBER_OF_DIGITS_TO_FORMAT"],"fn":["group_size","reformat_number_literal","remove_separators"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["monomorphized_mir_body_cycle_result","monomorphized_mir_body_for_closure_cycle_result","monomorphized_mir_body_for_closure_query","monomorphized_mir_body_query"],"struct":["Filler"]};

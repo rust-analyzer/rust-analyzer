@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["upvars_mentioned","upvars_mentioned_impl"],"struct":["Upvars","UpvarsMentionedVisitor","UpvarsRef"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["glb","variances_of","variances_of_cycle_fn","variances_of_cycle_initial","variances_of_query"],"struct":["Context"]};

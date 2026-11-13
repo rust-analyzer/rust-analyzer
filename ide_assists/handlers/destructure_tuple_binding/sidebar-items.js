@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EditTupleUsage","RefType"],"fn":["collect_data","destructure_tuple_binding","destructure_tuple_binding_impl","destructure_tuple_edit_impl","detect_tuple_index","edit_tuple_assignment","edit_tuple_field_usage","edit_tuple_usage","edit_tuple_usages"],"struct":["AssignmentEdit","TupleData","TupleIndex"]};

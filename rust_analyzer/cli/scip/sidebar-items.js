@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DUPLICATE_SYMBOLS_MESSAGE"],"fn":["compute_symbol_info","get_line_index","get_relative_filepath","moniker_descriptors","moniker_to_symbol","new_descriptor_str","symbol_kind","text_range_to_scip_range","text_range_to_string"],"struct":["SymbolGenerator","TokenSymbols"]};

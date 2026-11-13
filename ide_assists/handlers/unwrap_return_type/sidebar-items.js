@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UnwrapperKind"],"fn":["extract_wrapped_type","is_unit_type","tail_cb_impl","unwrap_return_type"]};

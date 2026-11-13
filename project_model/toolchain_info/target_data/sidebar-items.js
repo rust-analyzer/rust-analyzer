@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Arch"],"fn":["get"],"struct":["TargetSpec"]};

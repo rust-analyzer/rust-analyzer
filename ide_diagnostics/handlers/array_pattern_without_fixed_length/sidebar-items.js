@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["array_pattern_without_fixed_length"]};

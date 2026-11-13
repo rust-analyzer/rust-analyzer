@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConcatMetaVarExprElem","ExprKind","MetaVarKind","Mode","Op","RepeatKind","Separator"],"fn":["eat_fragment_kind","is_boolean_literal","next_op","parse_depth","parse_metavar_expr","parse_repeat","parse_rule_style","try_eat_comma","try_eat_dollar"],"struct":["MetaTemplate"]};

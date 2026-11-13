@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuiltinShadowMode","ImportOrDef","ImportOrExternCrate","ImportOrGlob","ItemInNs"],"static":["BUILTIN_SCOPE"],"struct":["DeriveMacroInvocation","GlobId","ImportId","ItemScope","PerNsGlobImports"]};

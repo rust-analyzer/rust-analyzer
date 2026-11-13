@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ScopeKind"],"fn":["empty_entries"],"struct":["ExprScopeVisitor","ExprScopes","ScopeData","ScopeEntry"],"type":["ScopeId"]};

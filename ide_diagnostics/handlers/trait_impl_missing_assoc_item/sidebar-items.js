@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["trait_impl_missing_assoc_item"]};

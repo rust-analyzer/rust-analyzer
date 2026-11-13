@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Edition","PrefixEntryPoint","Step","StrStep","SyntaxKind","TopEntryPoint"],"fn":["is_rust_whitespace"],"macro":[["T",1],["T_",1]],"mod":["event","frontmatter","grammar","input","lexed_str","output","parser","shortcuts","syntax_kind","token_set"],"struct":["Input","LexedStr","Output","Reparser"]};

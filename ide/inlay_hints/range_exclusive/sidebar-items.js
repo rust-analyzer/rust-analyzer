@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["hints","inlay_hint"]};

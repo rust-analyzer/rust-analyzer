@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuiltinDeriveImplMethod","BuiltinDeriveImplTrait"],"fn":["has_builtin_derive_impl","with_derive_traits"],"macro":[["declare_enum",1]]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["complete_dot","complete_fields","complete_methods","complete_undotted_self"]};

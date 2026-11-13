@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PathParent"],"fn":["expr_ty","generate_enum_variant","name_from_field","name_from_field_shorthand"]};

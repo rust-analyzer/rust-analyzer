@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ResolvedAttr"],"fn":["attr_macro_as_call_id","derive_macro_as_call_id"]};

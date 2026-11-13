@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["calculate_counts","expand_record_rest_pattern","expand_rest_pattern","expand_slice_rest_pattern","expand_tuple_rest_pattern","expand_tuple_struct_rest_pattern","gen_unnamed_pat"]};

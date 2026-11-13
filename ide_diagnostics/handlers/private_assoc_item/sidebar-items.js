@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["private_assoc_item"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fru_in_destructuring_assignment"]};

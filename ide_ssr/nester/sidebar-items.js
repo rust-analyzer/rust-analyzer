@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["nest_and_remove_collisions","try_add_sub_match"],"struct":["MatchCollector"]};

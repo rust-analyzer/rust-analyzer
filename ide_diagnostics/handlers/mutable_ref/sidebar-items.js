@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["mutable_ref_binding"]};

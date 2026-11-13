@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["complete_field_list_record_variant","complete_field_list_tuple_variant"]};

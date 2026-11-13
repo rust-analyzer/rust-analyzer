@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FnType","InsertOrReplace"],"fn":["add_return_type","extract_tail","peel_blocks","ret_ty_to_action"]};

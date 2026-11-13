@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_bang_paren","apply_demorgan","apply_demorgan_iterator","tail_cb_impl","validate_method_call_expr"]};

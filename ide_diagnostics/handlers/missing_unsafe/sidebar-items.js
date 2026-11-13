@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["display_unsafety_reason","fixes","missing_unsafe","needs_parentheses","pick_best_node_to_add_unsafe_block"]};

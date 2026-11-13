@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["find_all_methods","method_range"]};

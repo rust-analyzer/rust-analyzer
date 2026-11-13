@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compute_dbg_replacement","pure_expr","remove_dbg","replace_nested_dbgs"]};

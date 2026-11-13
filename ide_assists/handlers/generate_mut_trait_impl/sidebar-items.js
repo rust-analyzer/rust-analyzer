@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["apply_generate_mut_impl","delete_with_trivia","generate_mut_trait_impl","get_trait_mut","process_method_name","process_ref_mut","process_ret_type"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["AUTODEREF_RECURSION_LIMIT"],"enum":["AutoderefKind"],"fn":["autoderef","structurally_normalize_ty"],"struct":["AutoderefSnapshot","AutoderefTraits","DefaultAutoderefCtx","GeneralAutoderef","InferenceContextAutoderefCtx"],"trait":["AutoderefCtx","TrackAutoderefSteps"],"type":["Autoderef","InferenceContextAutoderef"]};

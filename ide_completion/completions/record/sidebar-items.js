@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_default_update","complete_fields","complete_record_expr_fields","complete_record_pattern_fields"]};

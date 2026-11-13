@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_named_struct_to_tuple_struct","delete_whitespace","edit_field_references","edit_struct_def","edit_struct_references","process_struct_name_reference","record_to_tuple_struct_like","remove_trailing_comma"]};

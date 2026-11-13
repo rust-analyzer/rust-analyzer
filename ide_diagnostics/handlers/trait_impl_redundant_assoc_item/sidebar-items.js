@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["find_insert_after","quickfix_for_redundant_assoc_item","trait_impl_redundant_assoc_item"]};

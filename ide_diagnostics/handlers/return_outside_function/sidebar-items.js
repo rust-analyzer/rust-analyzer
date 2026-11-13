@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["return_outside_function"]};

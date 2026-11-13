@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AdjustMode","InheritedRefMatchRule","MutblCap","PatOrigin","PeelKind","ResolvedPatKind"],"struct":["PatInfo","ResolvedPat"]};

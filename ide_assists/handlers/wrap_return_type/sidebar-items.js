@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WrapperKind"],"fn":["tail_cb_impl","wrap_return_type","wrapper_alias"]};

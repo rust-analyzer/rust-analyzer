@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["cannot_implicitly_deref_trait_object"]};

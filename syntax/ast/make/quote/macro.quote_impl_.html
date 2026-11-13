@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `quote_impl_` macro in crate `syntax`."><title>quote_impl_ in syntax::ast::make::quote - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="syntax" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">quote_impl_</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../syntax/index.html">syntax</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In syntax::<wbr>ast::<wbr>make::<wbr>quote</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">syntax</a>::<wbr><a href="../../index.html">ast</a>::<wbr><a href="../index.html">make</a>::<wbr><a href="index.html">quote</a></div><h1>Macro <span class="macro">quote_<wbr>impl_</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../src/syntax/ast/make/quote.rs.html#5-125">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! quote_impl_ {
+    ( @append $children:ident ) =&gt; { ... };
+    ( @append $children:ident
+        $node:ident {
+            $($tree:tt)*
+        }
+        $($rest:tt)*
+    ) =&gt; { ... };
+    ( @append $children:ident
+        [ $token_kind:ident $token_text:expr ]
+        $($rest:tt)*
+    ) =&gt; { ... };
+    ( @append $children:ident
+        [$($token:tt)+]
+        $($rest:tt)*
+    ) =&gt; { ... };
+    ( @append $children:ident
+        $whitespace:literal
+        $($rest:tt)*
+    ) =&gt; { ... };
+    ( @append $children:ident
+        # $var:ident
+        $($rest:tt)*
+    ) =&gt; { ... };
+    ( @append $children:ident
+        #( $($repetition:tt)+ )*
+        $($rest:tt)*
+    ) =&gt; { ... };
+    ( @extract_pounded_in_repetition $children:ident
+        [ $($repetition:tt)* ] [ ]
+    ) =&gt; { ... };
+    ( @extract_pounded_in_repetition $children:ident
+        [ $($repetition:tt)* ] [ $repetition_var:ident ]
+    ) =&gt; { ... };
+    ( @extract_pounded_in_repetition $children:ident
+        [ $($repetition:tt)* ] [ $repetition_var1:ident ] # $repetition_var2:ident $($rest:tt)*
+    ) =&gt; { ... };
+    ( @extract_pounded_in_repetition $children:ident
+        [ $($repetition:tt)* ] [ ] # $repetition_var:ident $($rest:tt)*
+    ) =&gt; { ... };
+    ( @extract_pounded_in_repetition $children:ident
+        [ $($repetition:tt)* ] [ $($repetition_var:tt)* ] $non_repetition_var:tt $($rest:tt)*
+    ) =&gt; { ... };
+}</code></pre></section></div></main></body></html>

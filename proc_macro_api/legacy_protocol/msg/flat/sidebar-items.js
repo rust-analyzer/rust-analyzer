@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["deserialize_span_data_index_map","read_vec","serialize_span_data_index_map","write_vec"],"struct":["FlatTree","IdentRepr","LiteralRepr","PunctRepr","Reader","SubtreeRepr","Writer"],"trait":["SpanTransformer"],"type":["SpanDataIndexMap"]};

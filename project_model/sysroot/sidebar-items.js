@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["RustLibSrcWorkspace"],"fn":["discover_rust_lib_src_dir","discover_rust_lib_src_dir_or_add_component","discover_sysroot_dir","get_rust_lib_src","get_rustc_src"],"mod":["stitched"],"struct":["Sysroot"]};

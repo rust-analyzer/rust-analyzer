@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["container_name","orig_range","orig_range_r","orig_range_with_focus","orig_range_with_focus_r"],"struct":["NavigationTarget","UpmappingResult"],"trait":["ToNav","ToNavFromAst","TryToNav"]};

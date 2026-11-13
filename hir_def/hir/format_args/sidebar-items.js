@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FormatAlignment","FormatArgPositionKind","FormatArgsPiece","FormatArgumentKind","FormatCount","FormatDebugHex","FormatSign","FormatTrait","PositionUsedAs"],"fn":["parse"],"struct":["FormatArgPosition","FormatArgs","FormatArgument","FormatArguments","FormatArgumentsCollector","FormatOptions","FormatPlaceholder"]};

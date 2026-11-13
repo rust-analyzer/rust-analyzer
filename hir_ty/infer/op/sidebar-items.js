@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BinOpCategory"],"fn":["deref_ty_if_possible","is_builtin_binop","is_op_by_value"]};

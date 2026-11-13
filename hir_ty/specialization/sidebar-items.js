@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["specializes","specializes_query","specializes_query_cycle"]};

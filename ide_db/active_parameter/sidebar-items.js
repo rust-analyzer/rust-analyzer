@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["callable_for_arg_list","callable_for_node","callable_for_token","generic_def_for_node","into_comma"],"struct":["ActiveParameter"]};

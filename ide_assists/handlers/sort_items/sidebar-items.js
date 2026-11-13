@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_sort_field_list_assist","add_sort_fields_assist","add_sort_methods_assist","add_sort_variants_assist","sort_by_name","sort_items"],"trait":["AddRewrite"]};

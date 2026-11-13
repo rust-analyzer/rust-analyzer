@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MappedRustChildDiagnostic"],"fn":["clippy_code_description","diagnostic_related_information","diagnostic_severity","is_dummy_macro_file","location","map_rust_child_diagnostic","map_rust_diagnostic_to_lsp","position","primary_location","resolve_path","rustc_code_description"],"struct":["MappedRustDiagnostic","SubDiagnostic"]};

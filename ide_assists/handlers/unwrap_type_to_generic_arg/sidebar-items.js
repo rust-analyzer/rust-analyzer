@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["unwrap_type_to_generic_arg"]};

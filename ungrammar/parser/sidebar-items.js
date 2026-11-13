@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DUMMY_RULE"],"fn":["atom_rule","node","opt_atom_rule","parse","rule","seq_rule"],"macro":[["bail",1]],"struct":["Parser"]};

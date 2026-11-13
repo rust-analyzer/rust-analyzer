@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ITEM_PAREN_RECOVERY_SET","ITEM_RECOVERY_SET"],"fn":["extern_crate","extern_item_list","fn_","item_list","item_or_macro","macro_call","macro_call_after_excl","macro_def","macro_rules","mod_contents","mod_item","opt_item","opt_item_without_modifiers","token_tree","type_alias"],"mod":["adt","consts","traits","use_item"]};

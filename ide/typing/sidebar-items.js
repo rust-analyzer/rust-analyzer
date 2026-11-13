@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TRIGGER_CHARS"],"fn":["conv","on_char_typed","on_char_typed_","on_delimited_node_typed","on_dot_typed","on_eq_typed","on_left_angle_typed","on_left_brace_typed","on_opening_delimiter_typed","on_pipe_typed","on_plus_typed","on_right_angle_typed"],"mod":["on_enter"],"struct":["ExtendedTextEdit"]};

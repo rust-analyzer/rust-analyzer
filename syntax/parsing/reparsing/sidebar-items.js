@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["find_reparsable_node","get_text_after_edit","incremental_reparse","is_balanced","is_contextual_kw","merge_errors","reparse_block","reparse_token"]};

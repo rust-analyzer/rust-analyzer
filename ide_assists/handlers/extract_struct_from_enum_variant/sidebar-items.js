@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["apply_references","collect_variant_comments","create_struct_def","existing_definition","extract_field_list_if_applicable","extract_generic_params","extract_struct_from_enum_variant","process_references","reference_to_node","tag_generics_in_variant","update_variant"]};

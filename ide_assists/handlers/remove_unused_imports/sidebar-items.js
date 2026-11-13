@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_path_per_ns_unused_in_scope","is_path_unused_in_scope","is_trait_unused_in_scope","module_search_scope","remove_unused_imports","used_once_in_scope"]};

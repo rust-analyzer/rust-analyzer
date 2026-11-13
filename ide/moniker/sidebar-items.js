@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["MonikerDescriptorKind","MonikerKind","MonikerResult","SymbolInformationKind"],"fn":["def_to_kind","def_to_moniker","def_to_non_local_moniker","display","enclosing_def_to_moniker","moniker"],"struct":["Moniker","MonikerDescriptor","MonikerIdentifier","PackageInformation"]};

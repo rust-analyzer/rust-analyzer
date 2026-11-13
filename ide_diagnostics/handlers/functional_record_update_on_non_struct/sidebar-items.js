@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["functional_record_update_on_non_struct"]};

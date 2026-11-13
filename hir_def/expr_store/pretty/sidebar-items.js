@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LineFormat"],"fn":["item_name","print_body_hir","print_expr_hir","print_function","print_generic_params","print_pat_hir","print_path","print_signature","print_struct","print_variant_body_hir","print_where_clauses"],"macro":[["w",1],["wln",1]],"struct":["Printer"]};

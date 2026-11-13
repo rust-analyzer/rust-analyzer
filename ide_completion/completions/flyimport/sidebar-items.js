@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compute_fuzzy_completion_order_key","filter_excluded_flyimport","import_assets_for_path","import_name","import_on_the_fly","import_on_the_fly_dot","import_on_the_fly_method","import_on_the_fly_pat","import_on_the_fly_pat_","import_on_the_fly_path"]};

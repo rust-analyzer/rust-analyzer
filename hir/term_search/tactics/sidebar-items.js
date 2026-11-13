@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["assoc_const","data_constructor","famous_types","free_function","impl_method","impl_static_method","make_tuple","struct_projection","trivial"]};

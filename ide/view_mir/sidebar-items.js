@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["body_mir","view_mir"]};

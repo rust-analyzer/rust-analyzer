@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TargetFeatureIsSafeInTarget","Unsafety"],"fn":["all_super_traits","detect_variant_from_bytes","direct_super_traits","fn_traits","is_fn_unsafe_to_call","target_feature_is_safe_in_target"],"struct":["EnumerateAndAdjust"],"trait":["EnumerateAndAdjustIterator"]};

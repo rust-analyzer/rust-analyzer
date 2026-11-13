@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["assert_disjoint_or_equal","check_disjoint","check_disjoint_and_sort","coalesce_indels"],"struct":["Indel","TextEdit","TextEditBuilder","TextRange","TextSize"]};

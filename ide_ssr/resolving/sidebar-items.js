@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_self","path_contains_type_arguments","pick_node_for_resolution"],"struct":["ResolutionScope","ResolvedPath","ResolvedPattern","ResolvedRule","Resolver","UfcsCallInfo"]};

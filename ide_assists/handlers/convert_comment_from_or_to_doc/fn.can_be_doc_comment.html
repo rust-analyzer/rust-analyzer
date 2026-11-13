@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Not all comments are valid candidates for conversion into doc comments. For example, the comments in the code:"><title>can_be_doc_comment in ide_assists::handlers::convert_comment_from_or_to_doc - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="ide_assists" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">can_be_doc_comment</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../ide_assists/index.html">ide_<wbr>assists</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In ide_<wbr>assists::<wbr>handlers::<wbr>convert_<wbr>comment_<wbr>from_<wbr>or_<wbr>to_<wbr>doc</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">ide_assists</a>::<wbr><a href="../index.html">handlers</a>::<wbr><a href="index.html">convert_comment_from_or_to_doc</a></div><h1>Function <span class="fn">can_<wbr>be_<wbr>doc_<wbr>comment</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/ide_assists/handlers/convert_comment_from_or_to_doc.rs.html#181-200">Source</a> </span></div><pre class="rust item-decl"><code>fn can_be_doc_comment(comment: &amp;AnyComment) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;AttrKind&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Not all comments are valid candidates for conversion into doc comments. For example, the
+comments in the code:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="comment">// Brilliant module right here
+
+// Really good right
+</span><span class="kw">fn </span>good_function(foo: Foo) -&gt; Bar {
+    foo.into_bar()
+}
+
+<span class="comment">// So nice
+</span><span class="kw">mod </span>nice_module {}</code></pre></div>
+<p>can be converted to doc comments. However, the comments in this example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>foo_bar(foo: Foo <span class="comment">/* not bar yet */</span>) -&gt; Bar {
+    foo.into_bar()
+    <span class="comment">// Nicely done
+</span>}
+<span class="comment">// end of function
+
+</span><span class="kw">struct </span>S {
+    <span class="comment">// The S struct
+</span>}</code></pre></div>
+<p>are not allowed to become doc comments. Moreover, some comments <em>are</em> allowed, but aren’t common
+style in Rust. For example, the following comments are allowed to be doc comments, but it is not
+common style for them to be:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>foo_bar(foo: Foo) -&gt; Bar {
+    <span class="comment">// this could be an inner comment with //!
+    </span>foo.into_bar()
+}
+
+<span class="kw">trait </span>T {
+    <span class="comment">// The T struct could also be documented from within
+</span>}
+
+<span class="kw">mod </span>mymod {
+    <span class="comment">// Modules only normally get inner documentation when they are defined as a separate file.
+</span>}</code></pre></div></div></details></section></div></main></body></html>

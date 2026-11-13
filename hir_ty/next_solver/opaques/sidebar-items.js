@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["ExternalConstraints","ExternalConstraintsInterned","PredefinedOpaques","PredefinedOpaquesStorage","SolverDefIds","SolverDefIdsStorage","StoredPredefinedOpaques","StoredSolverDefIds"],"type":["ExternalConstraintsData","OpaqueTypeKey","PredefinedOpaque"]};

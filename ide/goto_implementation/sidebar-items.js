@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["goto_implementation","impls_for_trait","impls_for_trait_item","impls_for_ty"],"struct":["GotoImplementationConfig"]};

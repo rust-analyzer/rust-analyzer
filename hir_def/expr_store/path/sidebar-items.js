@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GenericArg","GenericArgsParentheses","Path"],"struct":["AssociatedTypeBinding","GenericArgs","NormalPath","PathSegment","PathSegments"]};

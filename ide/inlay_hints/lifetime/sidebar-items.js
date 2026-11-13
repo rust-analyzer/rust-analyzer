@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fn_hints","fn_path_hints","fn_ptr_hints","hints_","path_as_fn"]};

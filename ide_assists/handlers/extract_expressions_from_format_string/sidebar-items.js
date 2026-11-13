@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["extract_expressions_from_format_string","format_str_index"]};

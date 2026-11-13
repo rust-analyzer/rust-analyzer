@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["enum_hints","variant_hints"]};

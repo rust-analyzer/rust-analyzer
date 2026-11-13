@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["CFG_CONDITION","KNOWN_ARCH","KNOWN_ENV","KNOWN_OS","KNOWN_VENDOR"],"fn":["complete_cfg"]};

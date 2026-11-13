@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AttrsOwner"],"fn":["as_module_def_if_namespace_matches","doc_modpath_from_str","resolve_assoc_item","resolve_assoc_or_field","resolve_doc_path_on","resolve_doc_path_on_","resolve_field","resolve_impl_trait_item"],"macro":[["impl_has_attrs",1],["impl_has_attrs_enum",1]],"struct":["AttrsWithOwner"],"trait":["HasAttrs"]};

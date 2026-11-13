@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["block_is_none_variant","convert_bool_then_to_if","convert_if_to_bool_then","is_invalid_body","option_variants"]};

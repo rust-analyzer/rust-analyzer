@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PatKind","PatternError"],"mod":["pat_analysis","pat_util"],"struct":["FieldPat","Pat","PatCtxt","WriteWith"]};

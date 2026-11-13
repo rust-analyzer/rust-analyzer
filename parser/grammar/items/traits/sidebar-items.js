@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["assoc_item_list","impl_","impl_type","not_a_qualified_path","trait_"]};

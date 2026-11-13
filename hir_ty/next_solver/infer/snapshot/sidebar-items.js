@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["fudge","undo_log"],"struct":["CombinedSnapshot","VariableLengths"]};

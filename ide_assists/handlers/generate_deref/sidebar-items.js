@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DerefType"],"fn":["existing_deref_impl","generate_deref","generate_edit","generate_record_deref","generate_tuple_deref"]};

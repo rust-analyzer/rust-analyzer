@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["drop_generic_args","maybe_replace_path","path_eq_no_generics","replace_qualified_name_with_use","shorten_paths","target_path"]};

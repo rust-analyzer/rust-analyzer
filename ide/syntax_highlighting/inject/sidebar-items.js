@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RUSTDOC_FENCES","RUSTDOC_FENCE_LENGTH"],"fn":["doc_comment","module_def_to_hl_tag","ra_fixture"]};

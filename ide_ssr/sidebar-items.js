@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["ssr_from_comment"],"mod":["errors","fragments","from_comment","matching","nester","parsing","replacing","resolving","search"],"struct":["Match","MatchDebugInfo","MatchFinder","SsrError","SsrMatches","SsrPattern","SsrRule"]};

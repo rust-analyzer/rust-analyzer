@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DynCompatibilityViolation","MethodViolationCode"],"fn":["dyn_compatibility","dyn_compatibility_of_trait_query","dyn_compatibility_of_trait_with_callback","dyn_compatibility_with_callback","generics_require_sized_self"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["complete_vis_path"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["inline_let","inline_local_variable","inline_usage","remove_whitespace"],"struct":["InlineData"]};

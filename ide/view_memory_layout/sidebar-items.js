@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FieldOrTupleIdx"],"fn":["view_memory_layout"],"struct":["MemoryLayoutNode","RecursiveMemoryLayout"]};

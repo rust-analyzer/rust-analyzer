@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BidirectionalMessage","Request","Response","SubRequest","SubResponse"],"struct":["ApiVersionCheck","ExpandMacro","ExpandMacroData","ExpandMacroResponse","ExpnGlobals","ListMacros","ParentSpan","SpanJoin"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AutoImportExclusionType","CallableSnippets"],"struct":["CompletionConfig"]};

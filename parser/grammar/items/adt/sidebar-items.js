@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["TUPLE_FIELD_FIRST"],"fn":["enum_","record_field_list","struct_or_union","strukt","tuple_field_list","union","variant_list"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_search_permitted","is_search_permitted_ancestors","pick_path_for_usages"],"struct":["UsageCache"]};

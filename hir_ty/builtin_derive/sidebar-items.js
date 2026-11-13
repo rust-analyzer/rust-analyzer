@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["coerce_pointee_new_type_param","coerce_pointee_params","explicit_own_predicates","extend_assoc_type_bounds","generic_params_count","generics_of","impl_super_outlives","impl_trait","param_env","predicates","replace_pointee","simple_trait_predicates","trait_args"],"struct":["FlattenBinders","MentionsPointee"]};

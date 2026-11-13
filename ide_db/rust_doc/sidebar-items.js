@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RUSTDOC_FENCES"],"fn":["code_line_ignored_by_rustdoc","format_docs","format_docs_","is_rust_fence"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_generated"],"struct":["Display","Name"],"trait":["AsName"]};

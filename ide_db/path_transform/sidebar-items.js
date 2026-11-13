@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TypeOrConst"],"fn":["find_trait_for_assoc_item","get_syntactic_substs","get_type_args_from_arg_list","preorder_rev"],"struct":["AstSubsts","Ctx","PathTransform"],"type":["DefaultedParam","LifetimeName"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EvaluationResult","NotConstEvaluatable","OverflowError","SelectionError"],"struct":["SignatureMismatchData"]};

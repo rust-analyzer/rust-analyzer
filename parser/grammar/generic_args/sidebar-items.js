@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GENERIC_ARG_FIRST","GENERIC_ARG_RECOVERY_SET"],"fn":["const_arg","const_arg_expr","generic_arg","lifetime_arg","opt_generic_arg_list_expr","type_arg"]};

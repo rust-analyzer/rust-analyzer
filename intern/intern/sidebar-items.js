@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["InternStorage","Interned","InternedRef"],"trait":["Internable"],"type":["Guard","InternMap"]};

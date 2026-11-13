@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_constant","get_text_for_generate_constant","target_data_for_generate_constant"]};

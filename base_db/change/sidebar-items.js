@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["file_text_durability","source_root_durability"],"struct":["FileChange"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["RECORDING_MATCH_FAIL_REASONS"],"enum":["Phase"],"fn":["get_match","is_closing_token","only_ident","record_match_fails_reasons_scope","recording_match_fail_reasons"],"macro":[["fail_match",1],["match_error",1]],"struct":["Match","MatchFailed","MatchFailureReason","Matcher","PatternIterator","PlaceholderMatch"]};

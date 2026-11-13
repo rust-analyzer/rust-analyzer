@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_nested_function_to_closure","has_modifiers","has_semicolon","is_generic","is_nested_function"]};

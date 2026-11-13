@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_hash","make_raw_string","make_usual_string","remove_hash","replace_literal"]};

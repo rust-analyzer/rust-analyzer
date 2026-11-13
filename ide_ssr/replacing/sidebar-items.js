@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["matches_to_edit","matches_to_edit_at_offset","parse_as_kind","render_replace","token_is_method_call_receiver"],"struct":["ReplacementRenderer"]};

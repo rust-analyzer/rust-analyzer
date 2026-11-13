@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/hir-ty/src/layout/target.rs`."><title>target.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hir_ty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">hir_ty/layout/</div>target.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="doccomment">//! Target dependent parameters needed for layouts
+<a href=#2 id=2 data-nosnippet>2</a>
+<a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span>base_db::{Crate, target::TargetLoadError};
+<a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>hir_def::layout::TargetDataLayout;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>rustc_abi::{AddressSpace, AlignFromBytesError, TargetDataLayoutError};
+<a href=#6 id=6 data-nosnippet>6</a>
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span><span class="kw">crate</span>::db::HirDatabase;
+<a href=#8 id=8 data-nosnippet>8</a>
+<a href=#9 id=9 data-nosnippet>9</a><span class="attr">#[salsa::tracked(returns(as_ref))]
+<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub fn </span>target_data_layout_query(
+<a href=#11 id=11 data-nosnippet>11</a>    db: <span class="kw-2">&amp;</span><span class="kw">dyn </span>HirDatabase,
+<a href=#12 id=12 data-nosnippet>12</a>    krate: Crate,
+<a href=#13 id=13 data-nosnippet>13</a>) -&gt; <span class="prelude-ty">Result</span>&lt;TargetDataLayout, TargetLoadError&gt; {
+<a href=#14 id=14 data-nosnippet>14</a>    <span class="kw">match </span><span class="kw-2">&amp;</span>krate.workspace_data(db).target {
+<a href=#15 id=15 data-nosnippet>15</a>        <span class="prelude-val">Ok</span>(target) =&gt; <span class="kw">match </span>TargetDataLayout::parse_from_llvm_datalayout_string(<span class="kw-2">&amp;</span>target.data_layout, AddressSpace::ZERO) {
+<a href=#16 id=16 data-nosnippet>16</a>            <span class="prelude-val">Ok</span>(it) =&gt; <span class="prelude-val">Ok</span>(it),
+<a href=#17 id=17 data-nosnippet>17</a>            <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#18 id=18 data-nosnippet>18</a>                <span class="prelude-val">Err</span>(<span class="kw">match </span>e {
+<a href=#19 id=19 data-nosnippet>19</a>                    TargetDataLayoutError::InvalidAddressSpace { addr_space, cause, err } =&gt; {
+<a href=#20 id=20 data-nosnippet>20</a>                        <span class="macro">format!</span>(
+<a href=#21 id=21 data-nosnippet>21</a>                            <span class="string">r#"invalid address space `{addr_space}` for `{cause}` in "data-layout": {err}"#
+<a href=#22 id=22 data-nosnippet>22</a>                        </span>)
+<a href=#23 id=23 data-nosnippet>23</a>                    }
+<a href=#24 id=24 data-nosnippet>24</a>                    TargetDataLayoutError::InvalidBits { kind, bit, cause, err } =&gt; <span class="macro">format!</span>(<span class="string">r#"invalid {kind} `{bit}` for `{cause}` in "data-layout": {err}"#</span>),
+<a href=#25 id=25 data-nosnippet>25</a>                    TargetDataLayoutError::MissingAlignment { cause } =&gt; <span class="macro">format!</span>(<span class="string">r#"missing alignment for `{cause}` in "data-layout""#</span>),
+<a href=#26 id=26 data-nosnippet>26</a>                    TargetDataLayoutError::InvalidAlignment { cause, err } =&gt; {
+<a href=#27 id=27 data-nosnippet>27</a>                        <span class="kw">let </span>(align, err_kind) = <span class="kw">match </span>err {
+<a href=#28 id=28 data-nosnippet>28</a>                            AlignFromBytesError::NotPowerOfTwo(align) =&gt; (align, <span class="string">"not a power of two"</span>),
+<a href=#29 id=29 data-nosnippet>29</a>                            AlignFromBytesError::TooLarge(align) =&gt; (align, <span class="string">"too large"</span>),
+<a href=#30 id=30 data-nosnippet>30</a>                        };
+<a href=#31 id=31 data-nosnippet>31</a>                        <span class="macro">format!</span>(<span class="string">r#"invalid alignment for `{cause}` in "data-layout": `{align}` is {err_kind}"#</span>)
+<a href=#32 id=32 data-nosnippet>32</a>                    },
+<a href=#33 id=33 data-nosnippet>33</a>                    TargetDataLayoutError::InconsistentTargetArchitecture { dl, target } =&gt; {
+<a href=#34 id=34 data-nosnippet>34</a>                        <span class="macro">format!</span>(<span class="string">r#"inconsistent target specification: "data-layout" claims architecture is {dl}-endian, while "target-endian" is `{target}`"#</span>)
+<a href=#35 id=35 data-nosnippet>35</a>                    }
+<a href=#36 id=36 data-nosnippet>36</a>                    TargetDataLayoutError::InconsistentTargetPointerWidth {
+<a href=#37 id=37 data-nosnippet>37</a>                        pointer_size,
+<a href=#38 id=38 data-nosnippet>38</a>                        target,
+<a href=#39 id=39 data-nosnippet>39</a>                    } =&gt; <span class="macro">format!</span>(<span class="string">r#"inconsistent target specification: "data-layout" claims pointers are {pointer_size}-bit, while "target-pointer-width" is `{target}`"#</span>),
+<a href=#40 id=40 data-nosnippet>40</a>                    TargetDataLayoutError::InvalidBitsSize { err } =&gt; err,
+<a href=#41 id=41 data-nosnippet>41</a>                    TargetDataLayoutError::UnknownPointerSpecification { err } =&gt; <span class="macro">format!</span>(<span class="string">r#"use of unknown pointer specifier in "data-layout": {err}"#</span>),
+<a href=#42 id=42 data-nosnippet>42</a>                }.into())
+<a href=#43 id=43 data-nosnippet>43</a>            }
+<a href=#44 id=44 data-nosnippet>44</a>        },
+<a href=#45 id=45 data-nosnippet>45</a>        <span class="prelude-val">Err</span>(e) =&gt; <span class="prelude-val">Err</span>(e.clone()),
+<a href=#46 id=46 data-nosnippet>46</a>    }
+<a href=#47 id=47 data-nosnippet>47</a>}
+</code></pre></div></section></main></body></html>

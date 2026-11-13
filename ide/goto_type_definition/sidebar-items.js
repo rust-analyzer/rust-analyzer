@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["goto_type_definition"]};

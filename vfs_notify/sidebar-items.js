@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Event","Message"],"fn":["log_notify_error","path_might_be_cyclic","read"],"struct":["NotifyActor","NotifyHandle"],"type":["NotifyEvent"]};

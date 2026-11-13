@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["highlight_format_specifier","highlight_format_string"]};

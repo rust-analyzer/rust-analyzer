@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["PARAM_FIRST"],"enum":["Flavor"],"fn":["list_","opt_self_param","param","param_list_closure","param_list_fn_def","param_list_fn_ptr","self_as_name","variadic_param"]};

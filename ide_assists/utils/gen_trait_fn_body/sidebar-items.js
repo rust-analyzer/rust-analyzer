@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["gen_clone_impl","gen_debug_impl","gen_default_impl","gen_hash_impl","gen_partial_eq","gen_partial_ord","gen_trait_fn_body","make_discriminant"]};

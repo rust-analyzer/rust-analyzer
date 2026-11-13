@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TestKind"],"fn":["collect_tests","existing_tests","generate","install_tests","tests_from_dir"],"struct":["Test","Tests"]};

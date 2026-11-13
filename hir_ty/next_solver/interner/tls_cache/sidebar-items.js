@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GLOBAL_CACHE"],"fn":["borrow_assume_valid","clear_tls_solver_cache","reinit_cache"],"struct":["Cache"]};

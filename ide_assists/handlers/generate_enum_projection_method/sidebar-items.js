@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_fn_item","generate_enum_as_method","generate_enum_projection_method","generate_enum_try_into_method"],"struct":["Method","ProjectionProps"]};

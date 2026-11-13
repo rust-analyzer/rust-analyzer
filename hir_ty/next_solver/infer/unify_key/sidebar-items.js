@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConstVariableValue","RegionVariableValue"],"struct":["ConstVidKey","RegionUnificationError","RegionVidKey"]};

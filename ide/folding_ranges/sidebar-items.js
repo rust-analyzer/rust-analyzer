@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["REGION_END","REGION_START"],"enum":["FoldKind"],"fn":["collapse_expr","collapsed_stmt","contiguous_range_for_comment","contiguous_range_for_item_group","eq_visibility","fold_kind","fold_range_for_multiline_match_arm","folding_ranges"],"struct":["Fold"]};

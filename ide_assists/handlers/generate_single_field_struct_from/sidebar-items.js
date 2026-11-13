@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["from_impl_exists","generate_single_field_struct_from","get_fields","make_adt_constructor","make_constructors"]};

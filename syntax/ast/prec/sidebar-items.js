@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ExprPrecedence","Fixity"],"fn":["check_ancestry","next_token_of","precedence"]};

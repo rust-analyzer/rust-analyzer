@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["banged_name","guess_macro_braces","label","render","render_macro","render_macro_pat"]};

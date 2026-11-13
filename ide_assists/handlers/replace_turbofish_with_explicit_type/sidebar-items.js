@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generic_arg_list","replace_turbofish_with_explicit_type"]};

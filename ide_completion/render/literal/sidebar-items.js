@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Variant"],"fn":["render","render_struct_literal","render_variant_lit"]};

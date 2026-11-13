@@ -1,0 +1,44 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Main entry point for completion. We run completion as a two-phase process."><title>completions in ide_completion - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ide_completion" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">completions</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ide_completion/index.html">ide_<wbr>completion</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">completions</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#speculative-completion-problem" title="Speculative Completion Problem">Speculative Completion Problem</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate ide_<wbr>completion</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">ide_completion</a></div><h1>Function <span class="fn">completions</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ide_completion/lib.rs.html#191-275">Source</a> </span></div><pre class="rust item-decl"><code>pub fn completions(
+    db: &amp;RootDatabase,
+    config: &amp;<a class="struct" href="struct.CompletionConfig.html" title="struct ide_completion::CompletionConfig">CompletionConfig</a>&lt;'_&gt;,
+    position: FilePosition,
+    trigger_character: <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.char.html">char</a>&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;<a class="struct" href="struct.CompletionItem.html" title="struct ide_completion::CompletionItem">CompletionItem</a>&gt;&gt;</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Main entry point for completion. We run completion as a two-phase process.</p>
+<p>First, we look at the position and collect a so-called <code>CompletionContext</code>.
+This is a somewhat messy process, because, during completion, syntax tree is
+incomplete and can look really weird.</p>
+<p>Once the context is collected, we run a series of completion routines which
+look at the context and produce completion items. One subtlety about this
+phase is that completion engine should not filter by the substring which is
+already present, it should give all possible variants for the identifier at
+the caret. In other words, for</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">fn </span>f() {
+    <span class="kw">let </span>foo = <span class="number">92</span>;
+    <span class="kw">let _ </span>= bar$<span class="number">0
+</span>}</code></pre></div>
+<p><code>foo</code> <em>should</em> be present among the completion variants. Filtering by
+identifier prefix/fuzzy match should be done higher in the stack, together
+with ordering of completions (currently this is done by the client).</p>
+<h2 id="speculative-completion-problem"><a class="doc-anchor" href="#speculative-completion-problem">§</a>Speculative Completion Problem</h2>
+<p>There’s a curious unsolved problem in the current implementation. Often, you
+want to compute completions on a <em>slightly different</em> text document.</p>
+<p>In the simplest case, when the code looks like <code>let x = </code>, you want to
+insert a fake identifier to get a better syntax tree: <code>let x = complete_me</code>.</p>
+<p>We do this in <code>CompletionContext</code>, and it works OK-enough for <em>syntax</em>
+analysis. However, we might want to, eg, ask for the type of <code>complete_me</code>
+variable, and that’s where our current infrastructure breaks down. salsa
+doesn’t allow such “phantom” inputs.</p>
+<p>Another case where this would be instrumental is macro expansion. We want to
+insert a fake ident and re-expand code. There’s <code>expand_speculative</code> as a
+workaround for this.</p>
+<p>A different use-case is completion of injection (examples and links in doc
+comments). When computing completion for a path in a doc-comment, you want
+to inject a fake path expression into the item being documented and complete
+that.</p>
+<p>IntelliJ has CodeFragment/Context infrastructure for that. You can create a
+temporary PSI node, and say that the context (“parent”) of this node is some
+existing node. Asking for, eg, type of this <code>CodeFragment</code> node works
+correctly, as the underlying infrastructure makes use of contexts to do
+analysis.</p>
+</div></details></section></div></main></body></html>

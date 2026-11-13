@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ELLIPSIS"],"fn":["fn_qualifiers","format_for_label","format_let_else_label","format_match_label","hints","keyword_with_condition","label_for_if_block","snippet_from_node"]};

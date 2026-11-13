@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_default_from_new","generate_default_impl","is_default_implemented"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LayoutError"],"fn":["layout_of_adt_query","layout_of_ty_query","target_data_layout_query"],"struct":["RustcEnumVariantIdx","RustcFieldIdx"],"type":["Layout","TagEncoding","Variants"]};

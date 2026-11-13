@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["method_predicate","replace_is_method_with_if_let_method"]};

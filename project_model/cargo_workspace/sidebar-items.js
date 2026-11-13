@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CargoFeatures","CargoMetadataKind","DepKind","RustLibSource","TargetDirectoryConfig"],"fn":["convert_target_kind"],"struct":["CargoConfig","CargoMetadataConfig","CargoWorkspace","FetchMetadata","PackageData","PackageDependency","PackageMetadata","RustAnalyzerPackageMetaData","TargetData"],"type":["Package","Target"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_record_fields","comma_after","get_or_insert_comma_after","normalize_ws_between_braces"],"trait":["GetOrCreateWhereClause","Removable"]};

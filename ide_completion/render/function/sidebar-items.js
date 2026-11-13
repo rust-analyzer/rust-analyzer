@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["FuncKind"],"fn":["add_call_parens","compute_return_type_match","detail","detail_full","params","params_display","ref_of_param","render","render_fn","render_method"]};

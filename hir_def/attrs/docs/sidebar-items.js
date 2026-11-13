@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DocCommentKind","IsInnerDoc"],"fn":["expand_doc_expr_via_macro_pipeline","expand_doc_macro_call","extend_with_attrs","extract_docs","get_horizontal_trim","get_vertical_trim"],"struct":["DocMacroExpander","Docs","DocsSourceMapLine","Indent"]};

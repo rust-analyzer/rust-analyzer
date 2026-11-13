@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["IS_QOS_AVAILABLE"],"enum":["ThreadIntent"],"fn":["get_current_thread_qos_class","set_current_thread_qos_class","thread_intent_to_qos_class"],"mod":["imp"]};

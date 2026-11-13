@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["ancestors_at_offset","find_node_at_offset","find_node_at_range","has_errors","least_common_ancestor","least_common_ancestor_element","neighbor","next_non_trivia_token","non_trivia_sibling","previous_non_trivia_token","skip_trivia_token","skip_whitespace_token"]};

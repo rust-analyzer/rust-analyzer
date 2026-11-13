@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BodyOrSig"],"fn":["adjust","name_hygiene","record_literal_matched_fields","record_pattern_matched_fields","resolve_hir_path","resolve_hir_path_","resolve_hir_path_as_attr_macro","resolve_hir_path_qualifier","resolve_hir_value_path","scope_for","scope_for_offset"],"struct":["SourceAnalyzer"]};

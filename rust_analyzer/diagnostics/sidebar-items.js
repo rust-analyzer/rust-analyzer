@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NativeDiagnosticsFetchKind"],"fn":["are_diagnostics_equal","convert_diagnostic","fetch_native_diagnostics"],"mod":["flycheck_to_proto"],"struct":["DiagnosticCollection","DiagnosticsMapConfig","Fix","PackageFlycheckDiagnostic","WorkspaceFlycheckDiagnostic"],"type":["CheckFixes","DiagnosticsGeneration"]};

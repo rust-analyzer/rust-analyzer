@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WrapUnwrapOption"],"fn":["attempt_get_derive","unwrap_cfg_attr","wrap_cfg_attrs","wrap_derive","wrap_unwrap_cfg_attr"]};

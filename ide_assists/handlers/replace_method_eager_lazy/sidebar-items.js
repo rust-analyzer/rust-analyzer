@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["eager_method_name","ends_is","into_call","into_closure","lazy_method_name","replace_with_eager_method","replace_with_lazy_method"]};

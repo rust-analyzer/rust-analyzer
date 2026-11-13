@@ -1,0 +1,34 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Generates `From` impls that wrap values in, or map variants between, enums."><title>impl_from in stdx - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="stdx" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">impl_from</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../stdx/index.html">stdx</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">impl_<wbr>from</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#examples" title="Examples">Examples</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate stdx</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">stdx</a></div><h1>Macro <span class="macro">impl_<wbr>from</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/stdx/macros.rs.html#46-145">Source</a> </span></div><pre class="rust item-decl"><code>macro_rules! impl_from {
+    (
+        impl&lt;$lifetime:lifetime&gt;
+        $source:ident $(&lt;$source_lifetime:lifetime&gt;)?
+        { $($source_variant:ident $(=&gt; $target_variant:ident)?),* $(,)? }
+        for $target:ident&lt;$target_lifetime:lifetime&gt;
+    ) =&gt; { ... };
+    (
+        $source:ident
+        { $($source_variant:ident $(=&gt; $target_variant:ident)?),* $(,)? }
+        for $target:ident
+    ) =&gt; { ... };
+    (@map_enum_variant $target:ident, $value:ident, $variant:ident) =&gt; { ... };
+    (
+        @map_enum_variant $target:ident, $value:ident,
+        $source_variant:ident =&gt; $target_variant:ident
+    ) =&gt; { ... };
+    (
+        impl&lt;$lifetime:lifetime&gt;
+        $(
+            $variant:ident $(&lt;$variant_lifetime:lifetime&gt;)?
+            $(($($sub_variant:ident $(&lt;$sub_variant_lifetime:lifetime&gt;)?),*))?
+        ),*
+        for $enum:ident&lt;$enum_lifetime:lifetime&gt;
+    ) =&gt; { ... };
+    ($($variant:ident $(($($sub_variant:ident),*))?),* for $enum:ident) =&gt; { ... };
+    ($($variant:ident$(&lt;$V:ident&gt;)?),* for $enum:ident) =&gt; { ... };
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Generates <code>From</code> impls that wrap values in, or map variants between, enums.</p>
+<p>Enum mappings with <code>Source =&gt; Target</code> rename the variant and convert its payload with <code>.into()</code>.</p>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">impl_from!</span>(Struct, Union, Enum <span class="kw">for </span>Adt);
+<span class="macro">impl_from!</span>(<span class="kw">impl</span>&lt;<span class="lifetime">'db</span>&gt; Item, InternedItem&lt;<span class="lifetime">'db</span>&gt; <span class="kw">for </span>ItemId&lt;<span class="lifetime">'db</span>&gt;);
+<span class="macro">impl_from!</span>(AssocItem { Function, Const, TypeAlias } <span class="kw">for </span>Item);
+<span class="macro">impl_from!</span>(AdtId { StructId =&gt; Struct, EnumId =&gt; Enum } <span class="kw">for </span>Adt);</code></pre></div></div></details></section></div></main></body></html>

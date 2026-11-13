@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_definition","is_editable_crate","item_name","lint_eq_or_in_group","mod_path_to_ast","mod_path_to_ast_with_factory","pick_best_token","pick_token","visit_file_defs"]};

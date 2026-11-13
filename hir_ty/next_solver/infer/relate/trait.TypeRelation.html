@@ -1,0 +1,84 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `TypeRelation` trait in crate `hir_ty`."><title>TypeRelation in hir_ty::next_solver::infer::relate - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hir_ty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">TypeRelation</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../hir_ty/index.html">hir_ty</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Type<wbr>Relation</a></h2><h3><a href="#required-methods">Required Methods</a></h3><ul class="block"><li><a href="#tymethod.binders" title="binders">binders</a></li><li><a href="#tymethod.consts" title="consts">consts</a></li><li><a href="#tymethod.cx" title="cx">cx</a></li><li><a href="#tymethod.regions" title="regions">regions</a></li><li><a href="#tymethod.relate_ty_args" title="relate_ty_args">relate_ty_args</a></li><li><a href="#tymethod.relate_with_variance" title="relate_with_variance">relate_with_variance</a></li><li><a href="#tymethod.tys" title="tys">tys</a></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.relate" title="relate">relate</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2><a href="index.html">In hir_<wbr>ty::<wbr>next_<wbr>solver::<wbr>infer::<wbr>relate</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">hir_ty</a>::<wbr><a href="../../index.html">next_solver</a>::<wbr><a href="../index.html">infer</a>::<wbr><a href="index.html">relate</a></div><h1>Trait <span class="trait">Type<wbr>Relation</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"></span></div><pre class="rust item-decl"><code>pub trait TypeRelation&lt;I&gt;: <a class="trait" href="https://doc.rust-lang.org/1.100.0/core/marker/trait.Sized.html" title="trait core::marker::Sized">Sized</a><div class="where">where
+    I: Interner,</div>{
+    // Required methods
+    fn <a href="#tymethod.cx" class="fn">cx</a>(&amp;self) -&gt; I;
+<span class="item-spacer"></span>    fn <a href="#tymethod.relate_ty_args" class="fn">relate_ty_args</a>(
+        &amp;mut self,
+        a_ty: &lt;I as Interner&gt;::Ty,
+        b_ty: &lt;I as Interner&gt;::Ty,
+        ty_def_id: &lt;I as Interner&gt;::DefId,
+        a_arg: &lt;I as Interner&gt;::GenericArgs,
+        b_arg: &lt;I as Interner&gt;::GenericArgs,
+        mk: impl <a class="trait" href="https://doc.rust-lang.org/1.100.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(&lt;I as Interner&gt;::GenericArgs) -&gt; &lt;I as Interner&gt;::Ty,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Ty, TypeError&lt;I&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.relate_with_variance" class="fn">relate_with_variance</a>&lt;T&gt;(
+        &amp;mut self,
+        variance: Variance,
+        info: <a class="enum" href="enum.VarianceDiagInfo.html" title="enum hir_ty::next_solver::infer::relate::VarianceDiagInfo">VarianceDiagInfo</a>&lt;I&gt;,
+        a: T,
+        b: T,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, TypeError&lt;I&gt;&gt;
+       <span class="where">where T: <a class="trait" href="trait.Relate.html" title="trait hir_ty::next_solver::infer::relate::Relate">Relate</a>&lt;I&gt;</span>;
+<span class="item-spacer"></span>    fn <a href="#tymethod.tys" class="fn">tys</a>(
+        &amp;mut self,
+        a: &lt;I as Interner&gt;::Ty,
+        b: &lt;I as Interner&gt;::Ty,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Ty, TypeError&lt;I&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.regions" class="fn">regions</a>(
+        &amp;mut self,
+        a: &lt;I as Interner&gt;::Region,
+        b: &lt;I as Interner&gt;::Region,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Region, TypeError&lt;I&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.consts" class="fn">consts</a>(
+        &amp;mut self,
+        a: &lt;I as Interner&gt;::Const,
+        b: &lt;I as Interner&gt;::Const,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Const, TypeError&lt;I&gt;&gt;;
+<span class="item-spacer"></span>    fn <a href="#tymethod.binders" class="fn">binders</a>&lt;T&gt;(
+        &amp;mut self,
+        a: Binder&lt;I, T&gt;,
+        b: Binder&lt;I, T&gt;,
+    ) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Binder&lt;I, T&gt;, TypeError&lt;I&gt;&gt;
+       <span class="where">where T: <a class="trait" href="trait.Relate.html" title="trait hir_ty::next_solver::infer::relate::Relate">Relate</a>&lt;I&gt;</span>;
+
+    // Provided method
+    fn <a href="#method.relate" class="fn">relate</a>&lt;T&gt;(&amp;mut self, a: T, b: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, TypeError&lt;I&gt;&gt;
+       <span class="where">where T: <a class="trait" href="trait.Relate.html" title="trait hir_ty::next_solver::infer::relate::Relate">Relate</a>&lt;I&gt;</span> { ... }
+}</code></pre><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><section id="tymethod.cx" class="method"><h4 class="code-header">fn <a href="#tymethod.cx" class="fn">cx</a>(&amp;self) -&gt; I</h4></section><section id="tymethod.relate_ty_args" class="method"><h4 class="code-header">fn <a href="#tymethod.relate_ty_args" class="fn">relate_ty_args</a>(
+    &amp;mut self,
+    a_ty: &lt;I as Interner&gt;::Ty,
+    b_ty: &lt;I as Interner&gt;::Ty,
+    ty_def_id: &lt;I as Interner&gt;::DefId,
+    a_arg: &lt;I as Interner&gt;::GenericArgs,
+    b_arg: &lt;I as Interner&gt;::GenericArgs,
+    mk: impl <a class="trait" href="https://doc.rust-lang.org/1.100.0/core/ops/function/trait.FnOnce.html" title="trait core::ops::function::FnOnce">FnOnce</a>(&lt;I as Interner&gt;::GenericArgs) -&gt; &lt;I as Interner&gt;::Ty,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Ty, TypeError&lt;I&gt;&gt;</h4></section><details class="toggle method-toggle" open><summary><section id="tymethod.relate_with_variance" class="method"><h4 class="code-header">fn <a href="#tymethod.relate_with_variance" class="fn">relate_with_variance</a>&lt;T&gt;(
+    &amp;mut self,
+    variance: Variance,
+    info: <a class="enum" href="enum.VarianceDiagInfo.html" title="enum hir_ty::next_solver::infer::relate::VarianceDiagInfo">VarianceDiagInfo</a>&lt;I&gt;,
+    a: T,
+    b: T,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, TypeError&lt;I&gt;&gt;<div class="where">where
+    T: <a class="trait" href="trait.Relate.html" title="trait hir_ty::next_solver::infer::relate::Relate">Relate</a>&lt;I&gt;,</div></h4></section></summary><div class="docblock"><p>Switch variance for the purpose of relating <code>a</code> and <code>b</code>.</p>
+</div></details><section id="tymethod.tys" class="method"><h4 class="code-header">fn <a href="#tymethod.tys" class="fn">tys</a>(
+    &amp;mut self,
+    a: &lt;I as Interner&gt;::Ty,
+    b: &lt;I as Interner&gt;::Ty,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Ty, TypeError&lt;I&gt;&gt;</h4></section><section id="tymethod.regions" class="method"><h4 class="code-header">fn <a href="#tymethod.regions" class="fn">regions</a>(
+    &amp;mut self,
+    a: &lt;I as Interner&gt;::Region,
+    b: &lt;I as Interner&gt;::Region,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Region, TypeError&lt;I&gt;&gt;</h4></section><section id="tymethod.consts" class="method"><h4 class="code-header">fn <a href="#tymethod.consts" class="fn">consts</a>(
+    &amp;mut self,
+    a: &lt;I as Interner&gt;::Const,
+    b: &lt;I as Interner&gt;::Const,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;&lt;I as Interner&gt;::Const, TypeError&lt;I&gt;&gt;</h4></section><section id="tymethod.binders" class="method"><h4 class="code-header">fn <a href="#tymethod.binders" class="fn">binders</a>&lt;T&gt;(
+    &amp;mut self,
+    a: Binder&lt;I, T&gt;,
+    b: Binder&lt;I, T&gt;,
+) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;Binder&lt;I, T&gt;, TypeError&lt;I&gt;&gt;<div class="where">where
+    T: <a class="trait" href="trait.Relate.html" title="trait hir_ty::next_solver::infer::relate::Relate">Relate</a>&lt;I&gt;,</div></h4></section></div><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.relate" class="method"><h4 class="code-header">fn <a href="#method.relate" class="fn">relate</a>&lt;T&gt;(&amp;mut self, a: T, b: T) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.100.0/core/result/enum.Result.html" title="enum core::result::Result">Result</a>&lt;T, TypeError&lt;I&gt;&gt;<div class="where">where
+    T: <a class="trait" href="trait.Relate.html" title="trait hir_ty::next_solver::infer::relate::Relate">Relate</a>&lt;I&gt;,</div></h4></section></summary><div class="docblock"><p>Generic relation routine suitable for most anything.</p>
+</div></details></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.100.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><section id="impl-TypeRelation%3CDbInterner%3C'db%3E%3E-for-Generalizer%3C'_,+'db%3E" class="impl"><a class="src rightside" href="../../../../src/hir_ty/next_solver/infer/relate/generalize.rs.html#388-682">Source</a><a href="#impl-TypeRelation%3CDbInterner%3C'db%3E%3E-for-Generalizer%3C'_,+'db%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'db&gt; <a class="trait" href="trait.TypeRelation.html" title="trait hir_ty::next_solver::infer::relate::TypeRelation">TypeRelation</a>&lt;<a class="struct" href="../../interner/struct.DbInterner.html" title="struct hir_ty::next_solver::interner::DbInterner">DbInterner</a>&lt;'db&gt;&gt; for <a class="struct" href="generalize/struct.Generalizer.html" title="struct hir_ty::next_solver::infer::relate::generalize::Generalizer">Generalizer</a>&lt;'_, 'db&gt;</h3></section><section id="impl-TypeRelation%3CDbInterner%3C'db%3E%3E-for-LatticeOp%3C'_,+'db%3E" class="impl"><a class="src rightside" href="../../../../src/hir_ty/next_solver/infer/relate/lattice.rs.html#85-218">Source</a><a href="#impl-TypeRelation%3CDbInterner%3C'db%3E%3E-for-LatticeOp%3C'_,+'db%3E" class="anchor">§</a><h3 class="code-header">impl&lt;'db&gt; <a class="trait" href="trait.TypeRelation.html" title="trait hir_ty::next_solver::infer::relate::TypeRelation">TypeRelation</a>&lt;<a class="struct" href="../../interner/struct.DbInterner.html" title="struct hir_ty::next_solver::interner::DbInterner">DbInterner</a>&lt;'db&gt;&gt; for <a class="struct" href="lattice/struct.LatticeOp.html" title="struct hir_ty::next_solver::infer::relate::lattice::LatticeOp">LatticeOp</a>&lt;'_, 'db&gt;</h3></section><section id="impl-TypeRelation%3CI%3E-for-SolverRelating%3C'_,+Infcx,+I%3E" class="impl"><a href="#impl-TypeRelation%3CI%3E-for-SolverRelating%3C'_,+Infcx,+I%3E" class="anchor">§</a><h3 class="code-header">impl&lt;Infcx, I&gt; <a class="trait" href="trait.TypeRelation.html" title="trait hir_ty::next_solver::infer::relate::TypeRelation">TypeRelation</a>&lt;I&gt; for <a class="struct" href="solver_relating/struct.SolverRelating.html" title="struct hir_ty::next_solver::infer::relate::solver_relating::SolverRelating">SolverRelating</a>&lt;'_, Infcx, I&gt;<div class="where">where
+    Infcx: InferCtxtLike&lt;Interner = I&gt;,
+    I: Interner,</div></h3></section></div><script src="../../../../trait.impl/ra_ap_rustc_type_ir/relate/trait.TypeRelation.js" data-ignore-extern-crates="ra_ap_rustc_type_ir" async></script></section></div></main></body></html>

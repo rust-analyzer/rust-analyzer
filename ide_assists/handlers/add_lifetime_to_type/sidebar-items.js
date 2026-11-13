@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Change"],"fn":["add_lifetime_to_type","fetch_borrowed_types","find_ref_types_from_field_list","infer_lifetimes"]};

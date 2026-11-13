@@ -1,0 +1,104 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="A trait for setting up test databases from fixture strings."><title>WithFixture in test_fixture - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="test_fixture" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc trait"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">WithFixture</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../test_fixture/index.html">test_<wbr>fixture</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">With<wbr>Fixture</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#fixture-syntax" title="Fixture Syntax">Fixture Syntax</a><ul><li><a href="#basic-structure" title="Basic Structure">Basic Structure</a></li><li><a href="#file-metadata" title="File Metadata">File Metadata</a></li><li><a href="#global-meta-must-appear-at-the-top-in-order" title="Global Meta (must appear at the top, in order)">Global Meta (must appear at the top, in order)</a></li><li><a href="#cursor-markers" title="Cursor Markers">Cursor Markers</a></li></ul></li><li><a href="#examples" title="Examples">Examples</a><ul><li><a href="#single-file-with-cursor-position" title="Single file with cursor position">Single file with cursor position</a></li><li><a href="#multiple-crates-with-dependencies" title="Multiple crates with dependencies">Multiple crates with dependencies</a></li><li><a href="#using-minicore-for-lang-items" title="Using minicore for lang items">Using minicore for lang items</a></li><li><a href="#using-test-proc-macros" title="Using test proc macros">Using test proc macros</a></li></ul></li></ul><h3><a href="#provided-methods">Provided Methods</a></h3><ul class="block"><li><a href="#method.test_crate" title="test_crate">test_crate</a></li><li><a href="#method.with_files" title="with_files">with_files</a></li><li><a href="#method.with_files_extra_proc_macros" title="with_files_extra_proc_macros">with_files_extra_proc_macros</a></li><li><a href="#method.with_many_files" title="with_many_files">with_many_files</a></li><li><a href="#method.with_position" title="with_position">with_position</a></li><li><a href="#method.with_range" title="with_range">with_range</a></li><li><a href="#method.with_range_or_offset" title="with_range_or_offset">with_range_or_offset</a></li><li><a href="#method.with_single_file" title="with_single_file">with_single_file</a></li></ul><h3><a href="#dyn-compatibility">Dyn Compatibility</a></h3><h3><a href="#implementors">Implementors</a></h3></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate test_<wbr>fixture</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">test_fixture</a></div><h1>Trait <span class="trait">With<wbr>Fixture</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/test_fixture/lib.rs.html#141-231">Source</a> </span></div><pre class="rust item-decl"><code>pub trait WithFixture:
+    <a class="trait" href="https://doc.rust-lang.org/1.100.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a>
+    + SourceDatabase
+    + 'static {
+    // Provided methods
+    fn <a href="#method.with_single_file" class="fn">with_single_file</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, EditionedFileId) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_many_files" class="fn">with_many_files</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, <a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;EditionedFileId&gt;) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_files" class="fn">with_files</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_files_extra_proc_macros" class="fn">with_files_extra_proc_macros</a>(
+        ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>,
+        proc_macros: <a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(<a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, ProcMacro)&gt;,
+    ) -&gt; Self { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_position" class="fn">with_position</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, FilePosition) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_range" class="fn">with_range</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, FileRange) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.with_range_or_offset" class="fn">with_range_or_offset</a>(
+        ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>,
+    ) -&gt; (Self, EditionedFileId, RangeOrOffset) { ... }
+<span class="item-spacer"></span>    fn <a href="#method.test_crate" class="fn">test_crate</a>(&amp;self) -&gt; Crate { ... }
+}</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>A trait for setting up test databases from fixture strings.</p>
+<p>Fixtures are strings containing Rust source code with optional metadata that describe
+a project setup. This is the primary way to write tests for rust-analyzer without
+having to depend on the entire sysroot.</p>
+<h2 id="fixture-syntax"><a class="doc-anchor" href="#fixture-syntax">§</a>Fixture Syntax</h2><h3 id="basic-structure"><a class="doc-anchor" href="#basic-structure">§</a>Basic Structure</h3>
+<p>A fixture without metadata is parsed into a single source file (<code>/main.rs</code>).
+Metadata is added after a <code>//-</code> comment prefix.</p>
+<div class="example-wrap"><pre class="language-text"><code>//- /main.rs
+fn main() {
+    println!(&quot;Hello&quot;);
+}</code></pre></div>
+<p>Note that the fixture syntax is optional and can be omitted if the test only requires
+a simple single file.</p>
+<h3 id="file-metadata"><a class="doc-anchor" href="#file-metadata">§</a>File Metadata</h3>
+<p>Each file can have the following metadata after <code>//-</code>:</p>
+<ul>
+<li><strong>Path</strong> (required): Must start with <code>/</code>, e.g., <code>/main.rs</code>, <code>/lib.rs</code>, <code>/foo/bar.rs</code></li>
+<li><strong><code>crate:&lt;name&gt;</code></strong>: Defines a new crate with this file as its root
+<ul>
+<li>Optional version: <code>crate:foo@0.1.0,https://example.com/repo.git</code></li>
+</ul>
+</li>
+<li><strong><code>deps:&lt;crate1&gt;,&lt;crate2&gt;</code></strong>: Dependencies (requires <code>crate:</code>)</li>
+<li><strong><code>extern-prelude:&lt;crate1&gt;,&lt;crate2&gt;</code></strong>: Limits extern prelude to specified crates</li>
+<li><strong><code>edition:&lt;year&gt;</code></strong>: Rust edition (2015, 2018, 2021, 2024). Defaults to current.</li>
+<li><strong><code>cfg:&lt;key&gt;=&lt;value&gt;,&lt;flag&gt;</code></strong>: Configuration options, e.g., <code>cfg:test,feature="foo"</code></li>
+<li><strong><code>env:&lt;KEY&gt;=&lt;value&gt;</code></strong>: Environment variables</li>
+<li><strong><code>crate-attr:&lt;attr&gt;</code></strong>: Crate-level attributes, e.g., <code>crate-attr:no_std</code></li>
+<li><strong><code>new_source_root:local|library</code></strong>: Starts a new source root</li>
+<li><strong><code>library</code></strong>: Marks crate as external library (not workspace member)</li>
+</ul>
+<h3 id="global-meta-must-appear-at-the-top-in-order"><a class="doc-anchor" href="#global-meta-must-appear-at-the-top-in-order">§</a>Global Meta (must appear at the top, in order)</h3>
+<ul>
+<li><strong><code>//- toolchain: nightly|stable</code></strong>: Sets the Rust toolchain (default: stable)</li>
+<li><strong><code>//- target_data_layout: &lt;layout&gt;</code></strong>: LLVM data layout string</li>
+<li><strong><code>//- target_arch: &lt;arch&gt;</code></strong>: Target architecture (default: x86_64)</li>
+<li><strong><code>//- proc_macros: &lt;name1&gt;,&lt;name2&gt;</code></strong>: Enables predefined test proc macros</li>
+<li><strong><code>//- minicore: &lt;flag1&gt;, &lt;flag2&gt;</code></strong>: Includes subset of libcore</li>
+</ul>
+<h3 id="cursor-markers"><a class="doc-anchor" href="#cursor-markers">§</a>Cursor Markers</h3>
+<p>Use <code>$0</code> to mark cursor position(s) in the fixture:</p>
+<ul>
+<li>Single <code>$0</code>: marks a position (use with <a href="trait.WithFixture.html#method.with_position" title="associated function test_fixture::WithFixture::with_position"><code>with_position</code></a>)</li>
+<li>Two <code>$0</code> markers: marks a range (use with <a href="trait.WithFixture.html#method.with_range" title="associated function test_fixture::WithFixture::with_range"><code>with_range</code></a>)</li>
+<li>Escape as <code>\$0</code> if you need a literal <code>$0</code></li>
+</ul>
+<h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2><h3 id="single-file-with-cursor-position"><a class="doc-anchor" href="#single-file-with-cursor-position">§</a>Single file with cursor position</h3><div class="example-wrap"><pre class="language-text"><code>r#&quot;
+fn main() {
+    let x$0 = 42;
+}
+&quot;#</code></pre></div><h3 id="multiple-crates-with-dependencies"><a class="doc-anchor" href="#multiple-crates-with-dependencies">§</a>Multiple crates with dependencies</h3><div class="example-wrap"><pre class="language-text"><code>r#&quot;
+//- /main.rs crate:main deps:helper
+use helper::greet;
+fn main() { greet(); }
+
+//- /lib.rs crate:helper
+pub fn greet() {}
+&quot;#</code></pre></div><h3 id="using-minicore-for-lang-items"><a class="doc-anchor" href="#using-minicore-for-lang-items">§</a>Using minicore for lang items</h3><div class="example-wrap"><pre class="language-text"><code>r#&quot;
+//- minicore: option, result, iterator
+//- /main.rs
+fn foo() -&gt; Option&lt;i32&gt; { Some(42) }
+&quot;#</code></pre></div>
+<p>The available minicore flags are listed at the top of crates\test-utils\src\minicore.rs.</p>
+<h3 id="using-test-proc-macros"><a class="doc-anchor" href="#using-test-proc-macros">§</a>Using test proc macros</h3><div class="example-wrap"><pre class="language-text"><code>r#&quot;
+//- proc_macros: identity, mirror
+//- /main.rs crate:main deps:proc_macros
+use proc_macros::identity;
+
+#[identity]
+fn foo() {}
+&quot;#</code></pre></div>
+<p>Available proc macros: <code>identity</code> (attr), <code>DeriveIdentity</code> (derive), <code>input_replace</code> (attr),
+<code>mirror</code> (bang), <code>shorten</code> (bang)</p>
+</div></details><h2 id="provided-methods" class="section-header">Provided Methods<a href="#provided-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="method.with_single_file" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#144-153">Source</a><h4 class="code-header">fn <a href="#method.with_single_file" class="fn">with_single_file</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, EditionedFileId)</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_many_files" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#157-170">Source</a><h4 class="code-header">fn <a href="#method.with_many_files" class="fn">with_many_files</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, <a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;EditionedFileId&gt;)</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_files" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#174-180">Source</a><h4 class="code-header">fn <a href="#method.with_files" class="fn">with_files</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; Self</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_files_extra_proc_macros" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#184-194">Source</a><h4 class="code-header">fn <a href="#method.with_files_extra_proc_macros" class="fn">with_files_extra_proc_macros</a>(
+    ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>,
+    proc_macros: <a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/vec/struct.Vec.html" title="struct alloc::vec::Vec">Vec</a>&lt;(<a class="struct" href="https://doc.rust-lang.org/1.100.0/alloc/string/struct.String.html" title="struct alloc::string::String">String</a>, ProcMacro)&gt;,
+) -&gt; Self</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_position" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#198-202">Source</a><h4 class="code-header">fn <a href="#method.with_position" class="fn">with_position</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, FilePosition)</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_range" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#206-210">Source</a><h4 class="code-header">fn <a href="#method.with_range" class="fn">with_range</a>(ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>) -&gt; (Self, FileRange)</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.with_range_or_offset" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#214-226">Source</a><h4 class="code-header">fn <a href="#method.with_range_or_offset" class="fn">with_range_or_offset</a>(
+    ra_fixture: &amp;<a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.str.html">str</a>,
+) -&gt; (Self, EditionedFileId, RangeOrOffset)</h4></section></summary><div class="docblock"><p>See the trait documentation for more information on fixtures.</p>
+</div></details><section id="method.test_crate" class="method"><a class="src rightside" href="../src/test_fixture/lib.rs.html#228-230">Source</a><h4 class="code-header">fn <a href="#method.test_crate" class="fn">test_crate</a>(&amp;self) -&gt; Crate</h4></section></div><h2 id="dyn-compatibility" class="section-header">Dyn Compatibility<a href="#dyn-compatibility" class="anchor">§</a></h2><div class="dyn-compatibility-info"><p>This trait is <b>not</b> <a href="https://doc.rust-lang.org/1.100.0/reference/items/traits.html#dyn-compatibility">dyn compatible</a>.</p><p><i>In older versions of Rust, dyn compatibility was called "object safety".</i></p></div><h2 id="implementors" class="section-header">Implementors<a href="#implementors" class="anchor">§</a></h2><div id="implementors-list"><div class="negative-marker"></div><section id="impl-WithFixture-for-DB" class="impl"><a class="src rightside" href="../src/test_fixture/lib.rs.html#233">Source</a><a href="#impl-WithFixture-for-DB" class="anchor">§</a><h3 class="code-header">impl&lt;DB: SourceDatabase + <a class="trait" href="https://doc.rust-lang.org/1.100.0/core/default/trait.Default.html" title="trait core::default::Default">Default</a> + 'static&gt; <a class="trait" href="trait.WithFixture.html" title="trait test_fixture::WithFixture">WithFixture</a> for DB</h3></section></div><script src="../trait.impl/test_fixture/trait.WithFixture.js" async></script></section></div></main></body></html>

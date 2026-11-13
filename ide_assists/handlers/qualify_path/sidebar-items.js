@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["QualifyCandidate"],"fn":["find_trait_method","group_label","item_as_trait","label","qualify_path"]};

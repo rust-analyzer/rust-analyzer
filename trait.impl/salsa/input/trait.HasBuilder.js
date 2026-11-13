@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["base_db",[["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.AllCrates.html\" title=\"struct base_db::AllCrates\">AllCrates</a>",0],["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.Crate.html\" title=\"struct base_db::Crate\">Crate</a>",0],["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.FileSourceRootInput.html\" title=\"struct base_db::FileSourceRootInput\">FileSourceRootInput</a>",0],["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.FileText.html\" title=\"struct base_db::FileText\">FileText</a>",0],["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.LibraryRoots.html\" title=\"struct base_db::LibraryRoots\">LibraryRoots</a>",0],["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.LocalRoots.html\" title=\"struct base_db::LocalRoots\">LocalRoots</a>",0],["impl HasBuilder for <a class=\"struct\" href=\"base_db/struct.SourceRootInput.html\" title=\"struct base_db::SourceRootInput\">SourceRootInput</a>",0]]],["hir_def",[["impl HasBuilder for <a class=\"struct\" href=\"hir_def/struct.ExpandProcAttrMacros.html\" title=\"struct hir_def::ExpandProcAttrMacros\">ExpandProcAttrMacros</a>",0]]],["hir_expand",[["impl HasBuilder for <a class=\"struct\" href=\"hir_expand/proc_macro/struct.ProcMacros.html\" title=\"struct hir_expand::proc_macro::ProcMacros\">ProcMacros</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[1003,182,184]}

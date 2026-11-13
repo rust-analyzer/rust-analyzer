@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["mut_ref_in_imm_ref_pat"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["GarbageCollector","InternedSliceStorage","InternedStorage"],"trait":["GcInternedSliceVisit","GcInternedVisit","Storage"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["distribute_conj","flatten","make_dnf","make_nnf","make_nnf_neg"],"struct":["Builder","Conjunction","DnfExpr","Literal"]};

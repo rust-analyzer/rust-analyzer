@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["format_literal_label","format_literal_lookup","render_record_lit","render_tuple_lit","visible_fields"],"struct":["RenderedLiteral"]};

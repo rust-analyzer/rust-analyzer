@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["file_item_tree","set_expand_proc_attr_macros"],"trait":["HirDatabase"]};

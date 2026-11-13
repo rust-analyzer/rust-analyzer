@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProcMacroKind","ProtocolFormat"],"mod":["bidirectional_protocol","legacy_protocol","pool","process","transport","version"],"struct":["MacroDylib","ProcMacro","ProcMacroClient","ServerError"]};

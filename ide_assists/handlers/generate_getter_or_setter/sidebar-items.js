@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AssistType"],"fn":["build_source_change","extract_and_parse","extract_and_parse_record_fields","generate_getter","generate_getter_from_info","generate_getter_impl","generate_getter_mut","generate_setter","generate_setter_from_info","items","parse_record_field"],"struct":["AssistInfo","RecordFieldInfo"]};

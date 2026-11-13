@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["explicit_drop_method_use","fix_method_call","fix_path"]};

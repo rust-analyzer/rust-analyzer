@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["NodeOrToken","RustLanguage"],"struct":["GreenNode","GreenToken","SyntaxTreeBuilder"],"type":["PreorderWithTokens","SyntaxElement","SyntaxElementChildren","SyntaxNode","SyntaxNodeChildren","SyntaxToken"]};

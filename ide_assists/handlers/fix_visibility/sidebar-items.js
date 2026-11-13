@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_vis_to_referenced_module_def","fix_visibility","target_data_for_def"]};

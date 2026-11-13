@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_is_empty_from_len","get_impl_method"]};

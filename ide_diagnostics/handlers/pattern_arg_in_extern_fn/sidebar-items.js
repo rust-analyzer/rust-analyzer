@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pattern_arg_in_extern_fn"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DESTINATION"],"enum":["Severity"],"fn":["find_and_slice","generate","generate_descriptor_clippy","generate_feature_descriptor","generate_lint_descriptor","push_lint_completion","push_lint_group","unescape"],"struct":["ClippyLint","Lint"]};

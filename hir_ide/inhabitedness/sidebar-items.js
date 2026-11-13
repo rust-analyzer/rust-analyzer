@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_enum_variant_uninhabited_from","is_ty_uninhabited_from"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["doc_comment","ident","literal","whitespace"],"static":["SOURCE_FILE"]};

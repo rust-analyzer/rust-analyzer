@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DESTINATION"],"fn":["extract_list_ident_to_array_entry","extract_to_unstable_feature_gate","generate"]};

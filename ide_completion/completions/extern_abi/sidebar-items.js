@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["SUPPORTED_CALLING_CONVENTIONS"],"fn":["complete_extern_abi"]};

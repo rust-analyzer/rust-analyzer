@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BorrowKind","FakeReadCause","PlaceBase","ProjectionKind","UpvarCapture"],"struct":["CaptureInfo","CaptureSourceStack","CapturedPlace","ClosureData","Place","Projection"]};

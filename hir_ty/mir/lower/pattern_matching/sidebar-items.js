@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AdtPatternShape","MatchingMode"],"macro":[["not_supported",1]]};

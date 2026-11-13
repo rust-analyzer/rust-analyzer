@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CatPatternPat","FakeReadCause","PlaceBase","ProjectionKind"],"struct":["ExprUseVisitor","Place","PlaceWithOrigin","Projection"],"trait":["Delegate"],"type":["Result"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["indent","prev_tokens"],"struct":["IndentLevel"],"trait":["AstNodeEdit","AttrsOwnerEdit"]};

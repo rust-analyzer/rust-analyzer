@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["move_from_mod_rs"]};

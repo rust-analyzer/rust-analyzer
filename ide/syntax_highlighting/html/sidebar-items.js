@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["STYLE"],"fn":["highlight_as_html","highlight_as_html_with_config","html_escape"]};

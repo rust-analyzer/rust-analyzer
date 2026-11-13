@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["fold_tys"],"struct":["FnMutDelegate"],"trait":["BoundVarReplacerDelegate"]};

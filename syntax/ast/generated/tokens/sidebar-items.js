@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"struct":["Byte","ByteString","CString","Char","Comment","FloatNumber","Ident","IntNumber","String","Whitespace"]};

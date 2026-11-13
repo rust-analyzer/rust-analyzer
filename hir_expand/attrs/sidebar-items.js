@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AttrInput"],"fn":["collect_item_tree_attrs","expand_cfg_attr","expand_cfg_attr_with_doc_comments","is_item_tree_filtered_attr","parse_path_comma_token_tree","unescape"],"struct":["Attr","AttrId"],"trait":["AstKeyValueMetaExt","AstPathExt"]};

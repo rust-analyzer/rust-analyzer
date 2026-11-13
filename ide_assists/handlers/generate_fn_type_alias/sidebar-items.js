@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ParamStyle"],"fn":["generate_fn_type_alias"]};

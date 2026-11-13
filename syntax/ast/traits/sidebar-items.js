@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["attrs_including_inner","attrs_with_doc_including_inner"],"struct":["AttrsIter"],"trait":["HasArgList","HasAttrs","HasGenericArgs","HasGenericParams","HasLoopBody","HasModuleItem","HasName","HasTypeBounds","HasVisibility"]};

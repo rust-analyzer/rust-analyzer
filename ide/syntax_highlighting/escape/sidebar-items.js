@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["highlight_escape_byte","highlight_escape_char","highlight_escape_string"]};

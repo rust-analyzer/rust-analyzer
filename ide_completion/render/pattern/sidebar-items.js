@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_completion","render_pat","render_record_as_pat","render_struct_pat","render_tuple_as_pat","render_variant_pat"]};

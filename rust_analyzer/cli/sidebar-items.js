@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Verbosity"],"fn":["full_name_of_item","print_memory_usage","read_stdin","report_metric"],"mod":["analysis_stats","diagnostics","flags","highlight","lsif","parse","prime_caches","progress_report","run_tests","rustc_tests","scip","ssr","symbols","unresolved_references"]};

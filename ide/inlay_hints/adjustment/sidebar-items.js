@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["hints","mode_and_needs_parens_for_adjustment_hints","needs_parens_for_adjustment_hints"]};

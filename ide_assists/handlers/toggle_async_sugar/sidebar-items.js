@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["desugar_async_into_impl_future","following_whitespace","sugar_impl_future_into_async","unwrap_future_output"]};

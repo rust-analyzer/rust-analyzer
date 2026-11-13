@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["invalid_lhs_of_assignment"]};

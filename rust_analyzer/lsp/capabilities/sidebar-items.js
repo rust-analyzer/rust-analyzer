@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["server_capabilities"],"struct":["ClientCapabilities"]};

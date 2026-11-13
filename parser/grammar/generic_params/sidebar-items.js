@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["GENERIC_PARAM_FIRST"],"fn":["bounds","bounds_without_colon","bounds_without_colon_m","const_param","generic_param","generic_param_list","lifetime_bounds","lifetime_param","opt_generic_param_list","opt_where_clause","path_type_bound","type_bound","type_param","where_predicate"]};

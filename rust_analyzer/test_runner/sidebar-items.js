@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CargoTestOutput","TestState"],"struct":["CargoTestHandle","CargoTestMessage","CargoTestOutputParser","TestTarget"]};

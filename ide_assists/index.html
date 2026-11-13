@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="`assists` crate provides a bunch of code assists, also known as code actions (in LSP) or intentions (in IntelliJ)."><title>ide_assists - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="ide_assists" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate ide_assists</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../ide_assists/index.html">ide_<wbr>assists</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#assists-guidelines" title="Assists Guidelines">Assists Guidelines</a></li></ul><h3><a href="#modules">Crate Items</a></h3><ul class="block"><li><a href="#modules" title="Modules">Modules</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>ide_<wbr>assists</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/ide_assists/lib.rs.html#1-417">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p><code>assists</code> crate provides a bunch of code assists, also known as code actions
+(in LSP) or intentions (in IntelliJ).</p>
+<p>An assist is a micro-refactoring, which is automatically activated in
+certain context. For example, if the cursor is over <code>,</code>, a “swap <code>,</code>” assist
+becomes available.</p>
+<h3 id="assists-guidelines"><a class="doc-anchor" href="#assists-guidelines">§</a>Assists Guidelines</h3>
+<p>Assists are the main mechanism to deliver advanced IDE features to the user,
+so we should pay extra attention to the UX.</p>
+<p>The power of assists comes from their context-awareness. The main problem
+with IDE features is that there are a lot of them, and it’s hard to teach
+the user what’s available. Assists solve this problem nicely: 💡 signifies
+that <em>something</em> is possible, and clicking on it reveals a <em>short</em> list of
+actions. Contrast it with Emacs <code>M-x</code>, which just spits an infinite list of
+all the features.</p>
+<p>Here are some considerations when creating a new assist:</p>
+<ul>
+<li>It’s good to preserve semantics, and it’s good to keep the code compiling,
+but it isn’t necessary. Example: “flip binary operation” might change
+semantics.</li>
+<li>Assist shouldn’t necessary make the code “better”. A lot of assist come in
+pairs: “if let &lt;-&gt; match”.</li>
+<li>Assists should have as narrow scope as possible. Each new assists greatly
+improves UX for cases where the user actually invokes it, but it makes UX
+worse for every case where the user clicks 💡 to invoke some <em>other</em>
+assist. So, a rarely useful assist which is always applicable can be a net
+negative.</li>
+<li>Rarely useful actions are tricky. Sometimes there are features which are
+clearly useful to some users, but are just noise most of the time. We
+don’t have a good solution here, our current approach is to make this
+functionality available only if assist is applicable to the whole
+selection. Example: <code>sort_items</code> sorts items alphabetically. Naively, it
+should be available more or less everywhere, which isn’t useful. So
+instead we only show it if the user <em>selects</em> the items they want to sort.</li>
+<li>Consider grouping related assists together (see <a href="assist_context/struct.Assists.html#method.add_group" title="method ide_assists::assist_context::Assists::add_group"><code>Assists::add_group</code></a>).</li>
+<li>Make assists robust. If the assist depends on results of type-inference too
+much, it might only fire in fully-correct code. This makes assist less
+useful and (worse) less predictable. The user should have a clear
+intuition when each particular assist is available.</li>
+<li>Make small assists, which compose. Example: rather than auto-importing
+enums in <code>add_missing_match_arms</code>, we use fully-qualified names. There’s a
+separate assist to shorten a fully-qualified name.</li>
+<li>Distinguish between assists and fixits for diagnostics. Internally, fixits
+and assists are equivalent. They have the same “show a list + invoke a
+single element” workflow, and both use <a href="struct.Assist.html" title="struct ide_assists::Assist"><code>Assist</code></a> data structure. The main
+difference is in the UX: while 💡 looks only at the cursor position,
+diagnostics squigglies and fixits are calculated for the whole file and
+are presented to the user eagerly. So, diagnostics should be fixable
+errors, while assists can be just suggestions for an alternative way to do
+something. If something <em>could</em> be a diagnostic, it should be a
+diagnostic. Conversely, it might be valuable to turn a diagnostic with a
+lot of false errors into an assist.</li>
+</ul>
+<p>See also this post:
+<a href="https://rust-analyzer.github.io/blog/2020/09/28/how-to-make-a-light-bulb.html">https://rust-analyzer.github.io/blog/2020/09/28/how-to-make-a-light-bulb.html</a></p>
+</div></details><h2 id="modules" class="section-header">Modules<a href="#modules" class="anchor">§</a></h2><dl class="item-table"><dt><a class="mod" href="assist_config/index.html" title="mod ide_assists::assist_config">assist_<wbr>config</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Settings for tweaking assists.</dd><dt><a class="mod" href="assist_context/index.html" title="mod ide_assists::assist_context">assist_<wbr>context</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>See <a href="assist_context/struct.AssistContext.html" title="struct ide_assists::assist_context::AssistContext"><code>AssistContext</code></a>.</dd><dt><a class="mod" href="handlers/index.html" title="mod ide_assists::handlers">handlers</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="mod" href="utils/index.html" title="mod ide_assists::utils">utils</a></dt><dd>Assorted functions shared by several assists.</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Assist.html" title="struct ide_assists::Assist">Assist</a></dt><dt><a class="struct" href="struct.AssistConfig.html" title="struct ide_assists::AssistConfig">Assist<wbr>Config</a></dt><dt><a class="struct" href="struct.AssistId.html" title="struct ide_assists::AssistId">Assist<wbr>Id</a></dt><dd>Unique identifier of the assist, should not be shown to the user
+directly.</dd><dt><a class="struct" href="struct.GroupLabel.html" title="struct ide_assists::GroupLabel">Group<wbr>Label</a></dt><dt><a class="struct" href="struct.SingleResolve.html" title="struct ide_assists::SingleResolve">Single<wbr>Resolve</a></dt><dd>Hold the <a href="struct.AssistId.html" title="struct ide_assists::AssistId"><code>AssistId</code></a> data of a certain assist to resolve.
+The original id object cannot be used due to a <code>'static</code> lifetime
+and the requirement to construct this struct dynamically during the resolve handling.</dd></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.AssistKind.html" title="enum ide_assists::AssistKind">Assist<wbr>Kind</a></dt><dt><a class="enum" href="enum.AssistResolveStrategy.html" title="enum ide_assists::AssistResolveStrategy">Assist<wbr>Resolve<wbr>Strategy</a></dt><dd>A way to control how many assist to resolve during the assist resolution.
+When an assist is resolved, its edits are calculated that might be costly to always do by default.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.assists.html" title="fn ide_assists::assists">assists</a></dt><dd>Return all the assists applicable at the given position.</dd></dl></section></div></main></body></html>

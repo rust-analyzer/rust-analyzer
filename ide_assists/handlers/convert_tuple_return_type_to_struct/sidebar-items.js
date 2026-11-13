@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_tuple_struct_def","augment_references_with_imports","convert_tuple_return_type_to_struct","node_to_pats","replace_body_return_values","replace_usages","tail_cb_impl"]};

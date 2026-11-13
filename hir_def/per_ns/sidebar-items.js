@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Namespace"],"struct":["Item","NsAvailability","PerNs"],"type":["MacrosItem","TypesItem","ValuesItem"]};

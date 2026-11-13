@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":[["_bail",1],["_format_err",1]],"struct":["Error"],"type":["Result"]};

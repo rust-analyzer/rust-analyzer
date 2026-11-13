@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_vis","can_add","change_vis","change_visibility","check_is_not_variant"]};

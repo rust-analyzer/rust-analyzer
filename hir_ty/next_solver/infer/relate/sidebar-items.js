@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StructurallyRelateAliases","VarianceDiagInfo"],"fn":["relate_args_invariantly","relate_args_with_variances","structurally_relate_consts","structurally_relate_tys"],"mod":["combine","generalize","higher_ranked","lattice","solver_relating"],"trait":["PredicateEmittingRelation","Relate","TypeRelation"],"type":["RelateResult"]};

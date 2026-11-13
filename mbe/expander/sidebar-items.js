@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Binding","Fragment","TokensOrigin"],"fn":["expand_rules"],"mod":["matcher","transcriber"],"struct":["Bindings"]};

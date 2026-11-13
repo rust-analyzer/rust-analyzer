@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["invalid_pat_path_res"]};

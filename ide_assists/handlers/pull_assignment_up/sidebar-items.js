@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_equivalent","pull_assignment_up"],"struct":["AssignmentsCollector"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["compute_item_ranks","reorder_impl_items","trait_definition"]};

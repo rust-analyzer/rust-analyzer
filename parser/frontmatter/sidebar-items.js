@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["is_horizontal_whitespace","is_whitespace","strip_newline","strip_shebang","strip_ws_lines"],"struct":["FrontmatterError","ScriptSource"],"type":["Span"]};

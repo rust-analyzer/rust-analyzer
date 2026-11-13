@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["StructureNodeKind"],"fn":["file_structure","structure_node","structure_token"],"struct":["FileStructureConfig","StructureNode"]};

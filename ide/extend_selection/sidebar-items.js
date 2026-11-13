@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["adj_comments","extend_comments","extend_list_item","extend_selection","extend_single_word_in_comment_or_string","extend_tokens_from_range","extend_ws","pick_best","shallowest_node","try_extend_selection"]};

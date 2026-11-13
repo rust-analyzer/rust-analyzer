@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["layout_of_adt_cycle_result","layout_of_adt_query","repr_discr"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["has_disaplayable_predicates","visible_fields","write_builtin_derive_impl_method","write_fields","write_function","write_generic_args","write_generic_params","write_generic_params_or_args","write_impl_header","write_trait_header","write_variants","write_where_clause","write_where_predicates"]};

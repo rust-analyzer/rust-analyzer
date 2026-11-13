@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["can_be_doc_comment","comment_to_doc","convert_comment_from_or_to_doc","doc_to_comment","line_comments_text_range"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_for_loop_to_while_let","impls_core_iter","is_ref_and_impls_iter_method"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"attr":["extension"],"derive":["GenericTypeVisitable","TypeFoldable","TypeVisitable","UpmapFromRaFixture"],"fn":["generic_type_visitable_derive","has_ignore_attr","type_foldable_derive","type_visitable_derive","upmap_from_ra_fixture"],"mod":["extension"]};

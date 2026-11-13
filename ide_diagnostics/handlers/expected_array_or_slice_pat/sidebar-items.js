@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["expected_array_or_slice_pat"]};

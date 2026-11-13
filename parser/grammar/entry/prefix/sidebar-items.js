@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["block","expr","item","meta_item","pat","pat_top","path","stmt","ty","vis"]};

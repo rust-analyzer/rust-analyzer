@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["REPR_COMPLETIONS"],"fn":["attr","complete_repr"],"struct":["ReprCompletion"]};

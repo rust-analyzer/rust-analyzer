@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["OutputFormat","RustAnalyzerCmd","Severity"],"struct":["AnalysisStats","Diagnostics","Highlight","Lsif","LspServer","Parse","PrimeCaches","RunTests","RustAnalyzer","RustcTests","Scip","Search","Ssr","Symbols","UnresolvedReferences"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["build_predicate","move_bounds_to_where_clause"]};

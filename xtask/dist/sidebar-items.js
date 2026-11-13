@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["VERSION_DEV","VERSION_NIGHTLY","VERSION_STABLE"],"fn":["build_command","dist_client","dist_server","gzip","zip"],"struct":["Patch","Target"]};

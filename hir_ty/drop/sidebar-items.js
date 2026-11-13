@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["DropGlue"],"fn":["destructor","has_drop_glue","has_drop_glue_impl"]};

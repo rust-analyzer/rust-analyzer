@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["DEFAULT_DERIVE_DEPENDENCIES"],"fn":["complete_derive_path"],"struct":["DeriveDependencies"]};

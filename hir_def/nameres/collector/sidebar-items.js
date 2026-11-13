@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FIXED_POINT_LIMIT","GLOB_RECURSION_LIMIT"],"enum":["MacroDirectiveKind","PartialResolvedImport"],"fn":["collect_defs"],"struct":["DefCollector","DeferredBuiltinDerive","Import","ImportDirective","ImportSource","MacroDirective","ModCollector"]};

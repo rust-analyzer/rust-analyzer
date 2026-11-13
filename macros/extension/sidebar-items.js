@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["extension","scrub_attrs","scrub_header"],"struct":["ExtensionAttr","Impl"]};

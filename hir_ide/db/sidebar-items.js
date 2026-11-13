@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["GeneralConstId"],"fn":["signature_anon_consts_and_diagnostics"],"struct":["AnonConstId","AnonConstLoc","InternedClosure","InternedClosureId","InternedCoroutineClosureId","InternedCoroutineId","InternedOpaqueTyId"],"trait":["HirDatabase"]};

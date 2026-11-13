@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["descend_token","filter_by_config","highlight","string_injections","traverse"],"mod":["escape","format","highlight","highlights","html","inject","tags"],"struct":["HighlightConfig","HlRange"]};

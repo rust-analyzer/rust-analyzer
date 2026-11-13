@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["hir_segment_to_ast_segment","lower_path"]};

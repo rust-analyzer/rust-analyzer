@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_format_like_completions"],"static":["KINDS","SNIPPET_RETURNS_NON_UNIT"]};

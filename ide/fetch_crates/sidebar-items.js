@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["crate_info","crate_name","fetch_crates"],"struct":["CrateInfo"]};

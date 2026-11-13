@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AdjustKind"],"fn":["add_explicit_method_call_deref","simple_adjust_kind"]};

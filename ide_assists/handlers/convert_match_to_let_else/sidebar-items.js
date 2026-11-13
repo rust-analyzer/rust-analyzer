@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_match_to_let_else","find_arms","find_extracted_variable","rename_variable"]};

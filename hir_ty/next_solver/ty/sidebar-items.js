@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["references_non_lt_error","references_only_ty_error"],"struct":["ErrorGuaranteed","ParamTy","ReferencesOnlyTyError","StoredTy","StoredTys","Ty","TyInterned","Tys","TysStorage"],"type":["AliasTermKind","AliasTyKind","BoundTy","BoundTyKind","FnHeader","FnSigKind","PlaceholderType","SimplifiedType","TyKind"]};

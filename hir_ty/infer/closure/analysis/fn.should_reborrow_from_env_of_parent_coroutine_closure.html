@@ -1,0 +1,38 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Determines whether a child capture that is derived from a parent capture should be borrowed with the lifetime of the parent coroutine-closure’s env."><title>should_reborrow_from_env_of_parent_coroutine_closure in hir_ty::infer::closure::analysis - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../../" data-static-root-path="../../../../static.files/" data-current-crate="hir_ty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../../static.files/favicon-044be391.svg"></head><body class="rustdoc fn"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">should_reborrow_from_env_of_parent_coroutine_closure</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../../hir_ty/index.html">hir_ty</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><div id="rustdoc-modnav"><h2><a href="index.html">In hir_<wbr>ty::<wbr>infer::<wbr>closure::<wbr>analysis</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../../index.html">hir_ty</a>::<wbr><a href="../../index.html">infer</a>::<wbr><a href="../index.html">closure</a>::<wbr><a href="index.html">analysis</a></div><h1>Function <span class="fn">should_<wbr>reborrow_<wbr>from_<wbr>env_<wbr>of_<wbr>parent_<wbr>coroutine_<wbr>closure</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../../src/hir_ty/infer/closure/analysis.rs.html#1096-1120">Source</a> </span></div><pre class="rust item-decl"><code>fn should_reborrow_from_env_of_parent_coroutine_closure(
+    parent_capture: &amp;<a class="struct" href="../../struct.CapturedPlace.html" title="struct hir_ty::infer::CapturedPlace">CapturedPlace</a>,
+    child_capture: &amp;<a class="struct" href="../../struct.CapturedPlace.html" title="struct hir_ty::infer::CapturedPlace">CapturedPlace</a>,
+) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.100.0/std/primitive.bool.html">bool</a></code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Determines whether a child capture that is derived from a parent capture
+should be borrowed with the lifetime of the parent coroutine-closure’s env.</p>
+<p>There are two cases when this needs to happen:</p>
+<p>(1.) Are we borrowing data owned by the parent closure? We can determine if
+that is the case by checking if the parent capture is by move, EXCEPT if we
+apply a deref projection of an immutable reference, reborrows of immutable
+references which aren’t restricted to the LUB of the lifetimes of the deref
+chain. This is why <code>&amp;'short mut &amp;'long T</code> can be reborrowed as <code>&amp;'long T</code>.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>x = <span class="kw-2">&amp;</span><span class="number">1i32</span>; <span class="comment">// Let's call this lifetime `'1`.
+</span><span class="kw">let </span>c = <span class="kw">async move </span>|| {
+    <span class="macro">println!</span>(<span class="string">"{:?}"</span>, <span class="kw-2">*</span>x);
+    <span class="comment">// Even though the inner coroutine borrows by ref, we're only capturing `*x`,
+    // not `x`, so the inner closure is allowed to reborrow the data for `'1`.
+</span>};</code></pre></div>
+<p>(2.) If a coroutine is mutably borrowing from a parent capture, then that
+mutable borrow cannot live for longer than either the parent <em>or</em> the borrow
+that we have on the original upvar. Therefore we always need to borrow the
+child capture with the lifetime of the parent coroutine-closure’s env.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span><span class="kw-2">mut </span>x = <span class="number">1i32</span>;
+<span class="kw">let </span>c = <span class="kw">async </span>|| {
+    x = <span class="number">1</span>;
+    <span class="comment">// The parent borrows `x` for some `&amp;'1 mut i32`.
+    // However, when we call `c()`, we implicitly autoref for the signature of
+    // `AsyncFnMut::async_call_mut`. Let's call that lifetime `'call`. Since
+    // the maximum that `&amp;'call mut &amp;'1 mut i32` can be reborrowed is `&amp;'call mut i32`,
+    // the inner coroutine should capture w/ the lifetime of the coroutine-closure.
+</span>};</code></pre></div>
+<p>If either of these cases apply, then we should capture the borrow with the
+lifetime of the parent coroutine-closure’s env. Luckily, if this function is
+not correct, then the program is not unsound, since we still borrowck and validate
+the choices made from this function – the only side-effect is that the user
+may receive unnecessary borrowck errors.</p>
+</div></details></section></div></main></body></html>

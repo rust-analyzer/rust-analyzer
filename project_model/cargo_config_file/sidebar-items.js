@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LockfileUsage"],"fn":["make_lockfile_copy"],"struct":["CargoConfigFile","CargoConfigFileReader","LockfileCopy"]};

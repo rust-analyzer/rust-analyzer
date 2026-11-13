@@ -1,0 +1,48 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Defines `Fixture` – a convenient way to describe the initial state of rust-analyzer database from a single string."><title>test_utils::fixture - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="test_utils" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module fixture</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../test_utils/index.html">test_<wbr>utils</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module fixture</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate test_<wbr>utils</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">test_utils</a></div><h1>Module <span>fixture</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/test_utils/fixture.rs.html#1-604">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Defines <code>Fixture</code> – a convenient way to describe the initial state of
+rust-analyzer database from a single string.</p>
+<p>Fixtures are strings containing rust source code with optional metadata.
+A fixture without metadata is parsed into a single source file.
+Use this to test functionality local to one file.</p>
+<p>Simple Example:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="string">r#"
+fn main() {
+    println!("Hello World")
+}
+"#</span></code></pre></div>
+<p>Metadata can be added to a fixture after a <code>//-</code> comment.
+The basic form is specifying filenames,
+which is also how to define multiple files in a single test fixture</p>
+<p>Example using two files in the same crate:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="string">"
+//- /main.rs
+mod foo;
+fn main() {
+    foo::bar();
+}
+
+//- /foo.rs
+pub fn bar() {}
+"</span></code></pre></div>
+<p>Example using two crates with one file each, with one crate depending on the other:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="string">r#"
+//- /main.rs crate:a deps:b
+fn main() {
+    b::foo();
+}
+//- /lib.rs crate:b
+pub fn b() {
+    println!("Hello World")
+}
+"#</span></code></pre></div>
+<p>Metadata allows specifying all settings and variables
+that are available in a real rust project. See <a href="../struct.Fixture.html" title="struct test_utils::Fixture"><code>Fixture</code></a>
+for the syntax.</p>
+<p>Example using some available metadata:</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="string">"
+//- /lib.rs crate:foo deps:bar,baz cfg:foo=a,bar=b env:OUTDIR=path/to,OTHER=foo
+fn insert_source_code_here() {}
+"</span></code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Fixture.html" title="struct test_utils::fixture::Fixture">Fixture</a></dt><dt><a class="struct" href="struct.FixtureWithProjectMeta.html" title="struct test_utils::fixture::FixtureWithProjectMeta">Fixture<wbr>With<wbr>Project<wbr>Meta</a></dt><dt><a class="struct" href="struct.MiniCore.html" title="struct test_utils::fixture::MiniCore">Mini<wbr>Core</a></dt></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["move_module_to_file"]};

@@ -1,0 +1,53 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="An NFA-based parser, which is porting from rustc mbe parsing code"><title>mbe::expander::matcher - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="mbe" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module matcher</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../mbe/index.html">mbe</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module matcher</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In mbe::<wbr>expander</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">mbe</a>::<wbr><a href="../index.html">expander</a></div><h1>Module <span>matcher</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/mbe/expander/matcher.rs.html#1-1014">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>An NFA-based parser, which is porting from rustc mbe parsing code</p>
+<p>See <a href="https://github.com/rust-lang/rust/blob/70b18bc2cbac4712020019f5bf57c00905373205/compiler/rustc_expand/src/mbe/macro_parser.rs">https://github.com/rust-lang/rust/blob/70b18bc2cbac4712020019f5bf57c00905373205/compiler/rustc_expand/src/mbe/macro_parser.rs</a>
+Here is a quick intro to how the parser works, copied from rustc:</p>
+<p>A ‘position’ is a dot in the middle of a matcher, usually represented as a
+dot. For example <code>· a $( a )* a b</code> is a position, as is <code>a $( · a )* a b</code>.</p>
+<p>The parser walks through the input a character at a time, maintaining a list
+of threads consistent with the current position in the input string: <code>cur_items</code>.</p>
+<p>As it processes them, it fills up <code>eof_items</code> with threads that would be valid if
+the macro invocation is now over, <code>bb_items</code> with threads that are waiting on
+a Rust non-terminal like <code>$e:expr</code>, and <code>next_items</code> with threads that are waiting
+on a particular token. Most of the logic concerns moving the · through the
+repetitions indicated by Kleene stars. The rules for moving the · without
+consuming any input are called epsilon transitions. It only advances or calls
+out to the real Rust parser when no <code>cur_items</code> threads remain.</p>
+<p>Example:</p>
+<div class="example-wrap"><pre class="language-text"><code>Start parsing a a a a b against [· a $( a )* a b].
+
+Remaining input: a a a a b
+next: [· a $( a )* a b]
+
+- - - Advance over an a. - - -
+
+Remaining input: a a a b
+cur: [a · $( a )* a b]
+Descend/Skip (first item).
+next: [a $( · a )* a b]  [a $( a )* · a b].
+
+- - - Advance over an a. - - -
+
+Remaining input: a a b
+cur: [a $( a · )* a b]  [a $( a )* a · b]
+Follow epsilon transition: Finish/Repeat (first item)
+next: [a $( a )* · a b]  [a $( · a )* a b]  [a $( a )* a · b]
+
+- - - Advance over an a. - - - (this looks exactly like the last step)
+
+Remaining input: a b
+cur: [a $( a · )* a b]  [a $( a )* a · b]
+Follow epsilon transition: Finish/Repeat (first item)
+next: [a $( a )* · a b]  [a $( · a )* a b]  [a $( a )* a · b]
+
+- - - Advance over an a. - - - (this looks exactly like the last step)
+
+Remaining input: b
+cur: [a $( a · )* a b]  [a $( a )* a · b]
+Follow epsilon transition: Finish/Repeat (first item)
+next: [a $( a )* · a b]  [a $( · a )* a b]  [a $( a )* a · b]
+
+- - - Advance over a b. - - -
+
+Remaining input: &#39;&#39;
+eof: [a $( a )* a b ·]</code></pre></div></div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.BindingsBuilder.html" title="struct mbe::expander::matcher::BindingsBuilder">Bindings<wbr>Builder</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.BindingsIdx.html" title="struct mbe::expander::matcher::BindingsIdx">Bindings<wbr>Idx</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.Match.html" title="struct mbe::expander::matcher::Match">Match</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.MatchState.html" title="struct mbe::expander::matcher::MatchState">Match<wbr>State</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.OpDelimitedIter.html" title="struct mbe::expander::matcher::OpDelimitedIter">OpDelimited<wbr>Iter</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.BindingKind.html" title="enum mbe::expander::matcher::BindingKind">Binding<wbr>Kind</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="enum" href="enum.LinkNode.html" title="enum mbe::expander::matcher::LinkNode">Link<wbr>Node</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="enum" href="enum.OpDelimited.html" title="enum mbe::expander::matcher::OpDelimited">OpDelimited</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.collect_vars.html" title="fn mbe::expander::matcher::collect_vars">collect_<wbr>vars</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.eat_char.html" title="fn mbe::expander::matcher::eat_char">eat_<wbr>char</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.expect_lifetime.html" title="fn mbe::expander::matcher::expect_lifetime">expect_<wbr>lifetime</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.expect_separator.html" title="fn mbe::expander::matcher::expect_separator">expect_<wbr>separator</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.expect_tt.html" title="fn mbe::expander::matcher::expect_tt">expect_<wbr>tt</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.match_.html" title="fn mbe::expander::matcher::match_">match_</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Matching errors are added to the <code>Match</code>.</dd><dt><a class="fn" href="fn.match_loop.html" title="fn mbe::expander::matcher::match_loop">match_<wbr>loop</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.match_loop_inner.html" title="fn mbe::expander::matcher::match_loop_inner">match_<wbr>loop_<wbr>inner</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Process the matcher positions of <code>cur_items</code> until it is empty. In the process, this will
+produce more items in <code>next_items</code>, <code>eof_items</code>, and <code>bb_items</code>.</dd><dt><a class="fn" href="fn.match_meta_var.html" title="fn mbe::expander::matcher::match_meta_var">match_<wbr>meta_<wbr>var</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html>

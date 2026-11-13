@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ARG_PLACEHOLDER"],"enum":["DiscoverArgument","DiscoverProjectData","DiscoverProjectMessage"],"fn":["serialize_abs_pathbuf"],"struct":["DiscoverCommand","DiscoverHandle","DiscoverProjectParser"]};

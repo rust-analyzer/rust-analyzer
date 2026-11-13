@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EditionData","RunnableKind","RunnableKindData","TargetKindData"],"fn":["deserialize_crate_name","serialize_crate_name"],"mod":["cfg_"],"struct":["Build","BuildData","CfgList","Crate","CrateArrayIdx","CrateData","CrateSource","Dep","ProjectJson","ProjectJsonData","Runnable","RunnableData"]};

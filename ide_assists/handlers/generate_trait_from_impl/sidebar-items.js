@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate_trait_from_impl","remove_doc_comments","remove_items_visibility","strip_body","trait_name","used_params"]};

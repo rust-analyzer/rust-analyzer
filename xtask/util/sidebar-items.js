@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["detect_target","list_files","list_rust_files"]};

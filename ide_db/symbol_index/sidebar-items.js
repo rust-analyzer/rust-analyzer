@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["crate_symbols","resolve_path_to_modules","world_symbols"],"struct":["Query","SymbolIndex"]};

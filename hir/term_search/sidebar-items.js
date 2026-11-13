@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AlternativeExprs","Expr","NewTypesKey"],"fn":["term_search"],"mod":["expr","tactics"],"struct":["LookupTable","TermSearchConfig","TermSearchCtx"]};

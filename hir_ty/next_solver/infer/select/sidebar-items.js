@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EvaluationResult","ImplSource","NotConstEvaluatable","OverflowError","SelectionError"],"fn":["candidate_should_be_dropped_in_favor_of","to_selection"],"struct":["ImplSourceUserDefinedData","Select","SignatureMismatchData"],"type":["Selection","SelectionResult"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["HandlerCancelledError"],"fn":["result_to_response","thread_result_to_response"],"struct":["NotificationDispatcher","RequestDispatcher"]};

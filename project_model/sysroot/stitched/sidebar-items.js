@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["ALLOC_DEPS","PROC_MACRO_DEPS","STD_DEPS","SYSROOT_CRATES"],"struct":["RustLibSrcCrateData","Stitched"],"type":["RustLibSrcCrate"]};

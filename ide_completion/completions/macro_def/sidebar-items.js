@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["MACRO_SEGMENTS"],"fn":["complete_macro_segment"]};

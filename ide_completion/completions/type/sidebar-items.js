@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["complete_ascribed_type","complete_type_path"]};

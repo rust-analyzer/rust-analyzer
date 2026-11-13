@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Entry","LoadingProgress","Message"],"fn":["dirs"],"struct":["Config","Directories"],"trait":["Handle"],"type":["Sender"]};

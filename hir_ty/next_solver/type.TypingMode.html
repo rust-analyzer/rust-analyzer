@@ -1,0 +1,74 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="API documentation for the Rust `TypingMode` type in crate `hir_ty`."><title>TypingMode in hir_ty::next_solver - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="hir_ty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc type"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">TypingMode</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../hir_ty/index.html">hir_ty</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Typing<wbr>Mode</a></h2><h3><a href="#aliased-type">Aliased Type</a></h3><h3><a href="#variants">Variants</a></h3><ul class="block variant"><li><a href="#variant.Analysis" title="Analysis">Analysis</a></li><li><a href="#variant.Borrowck" title="Borrowck">Borrowck</a></li><li><a href="#variant.Coherence" title="Coherence">Coherence</a></li><li><a href="#variant.ErasedNotCoherence" title="ErasedNotCoherence">ErasedNotCoherence</a></li><li><a href="#variant.PostAnalysis" title="PostAnalysis">PostAnalysis</a></li><li><a href="#variant.PostBorrowckAnalysis" title="PostBorrowckAnalysis">PostBorrowckAnalysis</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="index.html">In hir_<wbr>ty::<wbr>next_<wbr>solver</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">hir_ty</a>::<wbr><a href="index.html">next_solver</a></div><h1>Type Alias <span class="type">Typing<wbr>Mode</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/hir_ty/next_solver.rs.html#59">Source</a> </span></div><pre class="rust item-decl"><code>pub type TypingMode&lt;'db, S = MayBeErased&gt; = TypingMode&lt;<a class="struct" href="interner/struct.DbInterner.html" title="struct hir_ty::next_solver::interner::DbInterner">DbInterner</a>&lt;'db&gt;, S&gt;;</code></pre><h2 id="aliased-type" class="section-header">Aliased Type<a href="#aliased-type" class="anchor">§</a></h2><pre class="rust item-decl"><code>pub enum TypingMode&lt;'db, S = MayBeErased&gt; {
+    Coherence,
+    Analysis {
+        defining_opaque_types_and_generators: <a class="struct" href="struct.SolverDefIds.html" title="struct hir_ty::next_solver::SolverDefIds">SolverDefIds</a>&lt;'db&gt;,
+    },
+    Borrowck {
+        defining_opaque_types: <a class="struct" href="struct.SolverDefIds.html" title="struct hir_ty::next_solver::SolverDefIds">SolverDefIds</a>&lt;'db&gt;,
+    },
+    PostBorrowckAnalysis {
+        defined_opaque_types: <a class="struct" href="struct.SolverDefIds.html" title="struct hir_ty::next_solver::SolverDefIds">SolverDefIds</a>&lt;'db&gt;,
+    },
+    PostAnalysis,
+    ErasedNotCoherence(S),
+}</code></pre><h2 id="variants" class="variants section-header">Variants<a href="#variants" class="anchor">§</a></h2><div class="variants"><section id="variant.Coherence" class="variant"><a href="#variant.Coherence" class="anchor">§</a><h3 class="code-header">Coherence</h3></section><div class="docblock"><p>When checking whether impls overlap, we check whether any obligations
+are guaranteed to never hold when unifying the impls. This requires us
+to be complete: we must never fail to prove something which may actually
+hold.</p>
+<p>In this typing mode we bail with ambiguity in case its not knowable
+whether a trait goal may hold, e.g. because the trait may get implemented
+in a downstream or sibling crate.</p>
+<p>We also have to be careful when generalizing aliases inside of higher-ranked
+types to not unnecessarily constrain any inference variables.</p>
+</div><section id="variant.Analysis" class="variant"><a href="#variant.Analysis" class="anchor">§</a><h3 class="code-header">Analysis</h3></section><div class="docblock"><p>Analysis includes type inference, checking that items are well-formed, and
+pretty much everything else which may emit proper type errors to the user.</p>
+<p>We only normalize opaque types which may get defined by the current body,
+which are stored in <code>defining_opaque_types</code>.</p>
+<p>We also refuse to project any associated type that is marked <code>default</code>.
+Non-<code>default</code> (“final”) types are always projected. This is necessary in
+general for soundness of specialization. However, we <em>could</em> allow projections
+in fully-monomorphic cases. We choose not to, because we prefer for <code>default type</code>
+to force the type definition to be treated abstractly by any consumers of the
+impl. Concretely, that means that the following example will
+fail to compile:</p>
+
+<div class="example-wrap compile_fail"><a href="#" class="tooltip" title="This example deliberately fails to compile">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="attr">#![feature(specialization)]
+</span><span class="kw">trait </span>Assoc {
+    <span class="kw">type </span>Output;
+}
+
+<span class="kw">impl</span>&lt;T&gt; Assoc <span class="kw">for </span>T {
+    default <span class="kw">type </span>Output = bool;
+}
+
+<span class="kw">fn </span>main() {
+    <span class="kw">let </span>x: &lt;() <span class="kw">as </span>Assoc&gt;::Output = <span class="bool-val">true</span>;
+}</code></pre></div></div><div class="sub-variant" id="variant.Analysis.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.Analysis.field.defining_opaque_types_and_generators" class="section-header"><a href="#variant.Analysis.field.defining_opaque_types_and_generators" class="anchor field">§</a><code>defining_opaque_types_and_generators: <a class="struct" href="struct.SolverDefIds.html" title="struct hir_ty::next_solver::SolverDefIds">SolverDefIds</a>&lt;'db&gt;</code></span></div></div><section id="variant.Borrowck" class="variant"><a href="#variant.Borrowck" class="anchor">§</a><h3 class="code-header">Borrowck</h3></section><div class="docblock"><p>The behavior during MIR borrowck is identical to <code>TypingMode::Analysis</code>
+except that the initial value for opaque types is the type computed during
+HIR typeck with unique unconstrained region inference variables.</p>
+<p>This is currently only used with by the new solver as it results in new
+non-universal defining uses of opaque types, which is a breaking change.
+See tests/ui/impl-trait/non-defining-use/as-projection-term.rs.</p>
+</div><div class="sub-variant" id="variant.Borrowck.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.Borrowck.field.defining_opaque_types" class="section-header"><a href="#variant.Borrowck.field.defining_opaque_types" class="anchor field">§</a><code>defining_opaque_types: <a class="struct" href="struct.SolverDefIds.html" title="struct hir_ty::next_solver::SolverDefIds">SolverDefIds</a>&lt;'db&gt;</code></span></div></div><section id="variant.PostBorrowckAnalysis" class="variant"><a href="#variant.PostBorrowckAnalysis" class="anchor">§</a><h3 class="code-header">PostBorrowckAnalysis</h3></section><div class="docblock"><p>Any analysis after borrowck for a given body should be able to use all the
+hidden types defined by borrowck, without being able to define any new ones.</p>
+<p>This is currently only used by the new solver, but should be implemented in
+the old solver as well.</p>
+</div><div class="sub-variant" id="variant.PostBorrowckAnalysis.fields"><h4>Fields</h4><div class="sub-variant-field"><span id="variant.PostBorrowckAnalysis.field.defined_opaque_types" class="section-header"><a href="#variant.PostBorrowckAnalysis.field.defined_opaque_types" class="anchor field">§</a><code>defined_opaque_types: <a class="struct" href="struct.SolverDefIds.html" title="struct hir_ty::next_solver::SolverDefIds">SolverDefIds</a>&lt;'db&gt;</code></span></div></div><section id="variant.PostAnalysis" class="variant"><a href="#variant.PostAnalysis" class="anchor">§</a><h3 class="code-header">PostAnalysis</h3></section><div class="docblock"><p>After analysis, mostly during codegen and MIR optimizations, we’re able to
+reveal all opaque types. As the hidden type should <em>never</em> be observable
+directly by the user, this should not be used by checks which may expose
+such details to the user.</p>
+<p>There are some exceptions to this as for example <code>layout_of</code> and const-evaluation
+always run in <code>PostAnalysis</code> mode, even when used during analysis. This exposes
+some information about the underlying type to users, but not the type itself.</p>
+</div><section id="variant.ErasedNotCoherence" class="variant"><a href="#variant.ErasedNotCoherence" class="anchor">§</a><h3 class="code-header">ErasedNotCoherence(S)</h3></section><div class="docblock"><p>The typing modes above (except coherence) only differ in how they handle</p>
+<ul>
+<li>Generators</li>
+<li>Opaque types</li>
+<li>Specialization (in <code>PostAnalysis</code>)</li>
+</ul>
+<p>We replace all of them with this <code>TypingMode</code> in the first attempt at canonicalization.
+If, during that attempt, we try to access information about opaques or generators
+we bail out, setting a field on <code>EvalCtxt</code> that indicates the canonicalization must be
+rerun in the original typing mode.</p>
+<p><code>TypingMode::Coherence</code> is not replaced by this and is always kept as-is.</p>
+</div></div><script src="../../type.impl/ra_ap_rustc_type_ir/infer_ctxt/enum.TypingMode.js" data-self-path="hir_ty::next_solver::TypingMode" async></script></section></div></main></body></html>

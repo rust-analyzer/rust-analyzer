@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["PrKind"],"fn":["get_changelog","parse_changelog_line","parse_pr_number","parse_title_line","unescape"],"struct":["PrInfo"]};

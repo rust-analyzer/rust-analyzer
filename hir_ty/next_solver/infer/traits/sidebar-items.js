@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["pred_known_to_hold_modulo_regions","type_known_to_meet_bound_modulo_regions"],"struct":["Obligation","ObligationCause"],"type":["ObligationInspector","PredicateObligation","PredicateObligations","TraitObligation"]};

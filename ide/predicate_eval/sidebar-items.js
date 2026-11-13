@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["evaluate_predicate","parse_where_clause"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["opaque_types_defined_by","rpit_hidden_types","tait_defining_bodies","tait_hidden_types"]};

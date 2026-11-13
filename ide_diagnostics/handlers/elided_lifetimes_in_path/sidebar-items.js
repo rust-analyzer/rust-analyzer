@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["elided_lifetimes_in_path"]};

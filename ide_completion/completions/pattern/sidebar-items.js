@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["complete_pattern","complete_pattern_path"]};

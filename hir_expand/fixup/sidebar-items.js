@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["FIXUP_DUMMY_AST_ID","FIXUP_DUMMY_RANGE","FIXUP_DUMMY_RANGE_END"],"fn":["can_handle_error","fixup_syntax","has_error","has_error_to_handle","reverse_fixups","reverse_fixups_"],"struct":["SyntaxFixupUndoInfo","SyntaxFixups"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["union_pat_has_rest"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_preamble","clone_rust","ensure_file_contents","normalize_newlines","reformat"],"mod":["assists_doc_tests","diagnostics_docs","feature_docs","grammar","lints","parser_inline_tests","target_features"],"struct":["CommentBlock","Location"]};

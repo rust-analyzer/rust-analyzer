@@ -1,0 +1,107 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Minimalistic snapshot testing for Rust."><title>expect_test - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="expect_test" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="../crates.js"></script><script defer src="../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc mod crate"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Crate expect_test</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../expect_test/index.html">expect_<wbr>test</a><span class="version">1.5.1</span></h2></div><div class="sidebar-elems"><ul class="block"><li><a id="all-types" href="all.html">All Items</a></li></ul><section id="rustdoc-toc"><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#introduction" title="Introduction">Introduction</a></li><li><a href="#guide" title="Guide">Guide</a></li><li><a href="#suggested-workflows" title="Suggested Workflows">Suggested Workflows</a></li><li><a href="#alternatives" title="Alternatives">Alternatives</a></li><li><a href="#maintenance-status" title="Maintenance status">Maintenance status</a><ul><li><a href="#minimal-supported-rust-version" title="Minimal Supported Rust Version">Minimal Supported Rust Version</a></li></ul></li></ul><h3><a href="#macros">Crate Items</a></h3><ul class="block"><li><a href="#macros" title="Macros">Macros</a></li><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#constants" title="Constants">Constants</a></li><li><a href="#statics" title="Statics">Statics</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1>Crate <span>expect_<wbr>test</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/expect_test/lib.rs.html#1-890">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Minimalistic snapshot testing for Rust.</p>
+<h2 id="introduction"><a class="doc-anchor" href="#introduction">§</a>Introduction</h2>
+<p><code>expect_test</code> is a small addition over plain <code>assert_eq!</code> testing approach,
+which allows to automatically update tests results.</p>
+<p>The core of the library is the <code>expect!</code> macro. It can be though of as a
+super-charged string literal, which can update itself.</p>
+<p>Let’s see an example:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>expect_test::expect;
+
+<span class="kw">let </span>actual = <span class="number">2 </span>+ <span class="number">2</span>;
+<span class="kw">let </span>expected = <span class="macro">expect!</span>[<span class="string">"5"</span>]; <span class="comment">// or expect![["5"]]
+</span>expected.assert_eq(<span class="kw-2">&amp;</span>actual.to_string())</code></pre></div>
+<p>Running this code will produce a test failure, as <code>"5"</code> is indeed not equal
+to <code>"4"</code>. Running the test with <code>UPDATE_EXPECT=1</code> env variable however would
+“magically” update the code to:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>actual = <span class="number">2 </span>+ <span class="number">2</span>;
+<span class="kw">let </span>expected = <span class="macro">expect!</span>[<span class="string">"4"</span>];
+expected.assert_eq(<span class="kw-2">&amp;</span>actual.to_string())</code></pre></div>
+<p>This becomes very useful when you have a lot of tests with verbose and
+potentially changing expected output.</p>
+<p>Under the hood, the <code>expect!</code> macro uses <code>file!</code>, <code>line!</code> and <code>column!</code> to
+record source position at compile time. At runtime, this position is used
+to patch the file in-place, if <code>UPDATE_EXPECT</code> is set.</p>
+<h2 id="guide"><a class="doc-anchor" href="#guide">§</a>Guide</h2>
+<p><code>expect!</code> returns an instance of <code>Expect</code> struct, which holds position
+information and a string literal. Use <code>Expect::assert_eq</code> for string
+comparison. Use <code>Expect::assert_debug_eq</code> for verbose debug comparison. Note
+that leading indentation is automatically removed.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>expect_test::expect;
+
+<span class="attr">#[derive(Debug)]
+</span><span class="kw">struct </span>Foo {
+    value: i32,
+}
+
+<span class="kw">let </span>actual = Foo { value: <span class="number">92 </span>};
+<span class="kw">let </span>expected = <span class="macro">expect!</span>[[<span class="string">"
+    Foo {
+        value: 92,
+    }
+"</span>]];
+expected.assert_debug_eq(<span class="kw-2">&amp;</span>actual);</code></pre></div>
+<p>Be careful with <code>assert_debug_eq</code> - in general, stability of the debug
+representation is not guaranteed. However, even if it changes, you can
+quickly update all the tests by running the test suite with <code>UPDATE_EXPECT</code>
+environmental variable set.</p>
+<p>If the expected data is too verbose to include inline, you can store it in
+an external file using the <code>expect_file!</code> macro:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>expect_test::expect_file;
+
+<span class="kw">let </span>actual = <span class="number">42</span>;
+<span class="kw">let </span>expected = <span class="macro">expect_file!</span>[<span class="string">"./the-answer.txt"</span>];
+expected.assert_eq(<span class="kw-2">&amp;</span>actual.to_string());</code></pre></div>
+<p>File path is relative to the current file.</p>
+<h2 id="suggested-workflows"><a class="doc-anchor" href="#suggested-workflows">§</a>Suggested Workflows</h2>
+<p>I like to use data-driven tests with <code>expect_test</code>. I usually define a
+single driver function <code>check</code> and then call it from individual tests:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>expect_test::{expect, Expect};
+
+<span class="kw">fn </span>check(actual: i32, expect: Expect) {
+    <span class="kw">let </span>actual = actual.to_string();
+    expect.assert_eq(<span class="kw-2">&amp;</span>actual);
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>test_addition() {
+    check(<span class="number">90 </span>+ <span class="number">2</span>, <span class="macro">expect!</span>[[<span class="string">"92"</span>]]);
+}
+
+<span class="attr">#[test]
+</span><span class="kw">fn </span>test_multiplication() {
+    check(<span class="number">46 </span>* <span class="number">2</span>, <span class="macro">expect!</span>[[<span class="string">"92"</span>]]);
+}</code></pre></div>
+<p>Each test’s body is a single call to <code>check</code>. All the variation in tests
+comes from the input data.</p>
+<p>When writing a new test, I usually copy-paste an old one, leave the <code>expect</code>
+blank and use <code>UPDATE_EXPECT</code> to fill the value for me:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[test]
+</span><span class="kw">fn </span>test_division() {
+    check(<span class="number">92 </span>/ <span class="number">2</span>, <span class="macro">expect!</span>[[<span class="string">""</span>]])
+}</code></pre></div>
+<p>See
+<a href="https://blog.janestreet.com/using-ascii-waveforms-to-test-hardware-designs/">https://blog.janestreet.com/using-ascii-waveforms-to-test-hardware-designs/</a>
+for a cool example of snapshot testing in the wild!</p>
+<h2 id="alternatives"><a class="doc-anchor" href="#alternatives">§</a>Alternatives</h2>
+<ul>
+<li><a href="https://crates.io/crates/insta">insta</a> - a more feature full snapshot
+testing library.</li>
+<li><a href="https://crates.io/crates/k9">k9</a> - a testing library which includes
+support for snapshot testing among other things.</li>
+</ul>
+<h2 id="maintenance-status"><a class="doc-anchor" href="#maintenance-status">§</a>Maintenance status</h2>
+<p>The main customer of this library is rust-analyzer. The library is  stable,
+it is planned to not release any major versions past 1.0.</p>
+<h3 id="minimal-supported-rust-version"><a class="doc-anchor" href="#minimal-supported-rust-version">§</a>Minimal Supported Rust Version</h3>
+<p>This crate’s minimum supported <code>rustc</code> version is <code>1.60.0</code>. MSRV is updated
+conservatively, supporting roughly 10 minor versions of <code>rustc</code>. MSRV bump
+is not considered semver breaking, but will require at least minor version
+bump.</p>
+</div></details><h2 id="macros" class="section-header">Macros<a href="#macros" class="anchor">§</a></h2><dl class="item-table"><dt><a class="macro" href="macro.expect.html" title="macro expect_test::expect">expect</a></dt><dd>Creates an instance of <code>Expect</code> from string literal:</dd><dt><a class="macro" href="macro.expect_file.html" title="macro expect_test::expect_file">expect_<wbr>file</a></dt><dd>Creates an instance of <code>ExpectFile</code> from relative or absolute path:</dd></dl><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Expect.html" title="struct expect_test::Expect">Expect</a></dt><dd>Self-updating string literal.</dd><dt><a class="struct" href="struct.ExpectFile.html" title="struct expect_test::ExpectFile">Expect<wbr>File</a></dt><dd>Self-updating file.</dd><dt><a class="struct" href="struct.FileRuntime.html" title="struct expect_test::FileRuntime">File<wbr>Runtime</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.LinesWithEnds.html" title="struct expect_test::LinesWithEnds">Lines<wbr>With<wbr>Ends</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.Location.html" title="struct expect_test::Location">Location</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.Patchwork.html" title="struct expect_test::Patchwork">Patchwork</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.Position.html" title="struct expect_test::Position">Position</a></dt><dd>Position of original <code>expect!</code> in the source file.</dd><dt><a class="struct" href="struct.Runtime.html" title="struct expect_test::Runtime">Runtime</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.StrLitKind.html" title="enum expect_test::StrLitKind">StrLit<wbr>Kind</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="constants" class="section-header">Constants<a href="#constants" class="anchor">§</a></h2><dl class="item-table"><dt><a class="constant" href="constant.HELP.html" title="constant expect_test::HELP">HELP</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="statics" class="section-header">Statics<a href="#statics" class="anchor">§</a></h2><dl class="item-table"><dt><a class="static" href="static.RT.html" title="static expect_test::RT">RT</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.find_str_lit_len.html" title="fn expect_test::find_str_lit_len">find_<wbr>str_<wbr>lit_<wbr>len</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dd>Parses a string literal, returning the byte index of its last character
+(either a quote or a hash).</dd><dt><a class="fn" href="fn.format_chunks.html" title="fn expect_test::format_chunks">format_<wbr>chunks</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.format_patch.html" title="fn expect_test::format_patch">format_<wbr>patch</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.lines_with_ends.html" title="fn expect_test::lines_with_ends">lines_<wbr>with_<wbr>ends</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.lit_kind_for_patch.html" title="fn expect_test::lit_kind_for_patch">lit_<wbr>kind_<wbr>for_<wbr>patch</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.locate_end.html" title="fn expect_test::locate_end">locate_<wbr>end</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.to_abs_ws_path.html" title="fn expect_test::to_abs_ws_path">to_<wbr>abs_<wbr>ws_<wbr>path</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.trim_indent.html" title="fn expect_test::trim_indent">trim_<wbr>indent</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="fn" href="fn.update_expect.html" title="fn expect_test::update_expect">update_<wbr>expect</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html>

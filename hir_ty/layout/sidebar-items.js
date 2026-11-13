@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["LayoutError"],"fn":["extract_const_value","field_ty","layout_of_adt_query","layout_of_simd_ty","layout_of_ty_cycle_result","layout_of_ty_query","scalar_unit","struct_tail_erasing_lifetimes","target_data_layout_query"],"mod":["adt","target"],"struct":["LayoutCx","RustcEnumVariantIdx","RustcFieldIdx"],"type":["Layout","TagEncoding","Variants"]};

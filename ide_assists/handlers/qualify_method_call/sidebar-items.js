@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["item_as_assoc","item_for_path_search","qualify_method_call"]};

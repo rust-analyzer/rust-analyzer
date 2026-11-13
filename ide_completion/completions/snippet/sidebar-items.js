@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_custom_completions","complete_expr_snippet","complete_item_snippet","snippet"]};

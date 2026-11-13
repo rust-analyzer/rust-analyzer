@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["get_fn_params","inline","inline_call","inline_into_callers","is_in_type_path","path_expr_as_record_field","split_refs_and_uses"],"struct":["CallInfo"]};

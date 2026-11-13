@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["render","render_type_alias","render_type_alias_with_eq"]};

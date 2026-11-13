@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["use_trivial_constructor","use_trivial_constructor_with_factory"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["flip_trait_bound"]};

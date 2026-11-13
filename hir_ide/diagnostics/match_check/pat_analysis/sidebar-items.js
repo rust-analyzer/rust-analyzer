@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Void"],"struct":["EnumVariantContiguousIndex","MatchCheckCtx"],"type":["DeconstructedPat","MatchArm","WitnessPat"]};

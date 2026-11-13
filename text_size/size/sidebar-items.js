@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":[["ops",1]],"struct":["TextSize"]};

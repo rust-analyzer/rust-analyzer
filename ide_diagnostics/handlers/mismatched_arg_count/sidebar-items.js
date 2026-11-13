@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["invalid_args_range","mismatched_arg_count","mismatched_tuple_struct_pat_arg_count"]};

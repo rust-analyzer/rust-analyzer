@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["UseSubtyping"],"fn":["could_unify","could_unify_deeply","could_unify_impl"],"mod":["resolve_completely"],"struct":["InferenceTable","NestedObligationsForSelfTy"]};

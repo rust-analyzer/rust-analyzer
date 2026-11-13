@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ProcMacroDylibPath"],"fn":["is_dylib"],"struct":["BuildScriptOutput","WorkspaceBuildScripts"]};

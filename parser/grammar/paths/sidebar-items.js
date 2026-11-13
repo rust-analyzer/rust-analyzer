@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"constant":["EXPR_PATH_SEGMENT_RECOVERY_SET","PATH_FIRST","TYPE_PATH_SEGMENT_RECOVERY_SET"],"enum":["Mode"],"fn":["attr_path","expr_path","is_path_start","is_use_path_start","opt_path_args","opt_path_type_args","path","path_for_qualifier","path_segment","type_path","type_path_for_qualifier","use_path","vis_path"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AnnotationSnippet","FileSystemEdit","Snippet"],"struct":["ChangeAnnotation","ChangeAnnotationId","SnippetEdit","SourceChange","SourceChangeBuilder"]};

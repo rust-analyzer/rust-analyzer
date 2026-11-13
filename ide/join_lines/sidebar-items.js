@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["as_if_expr","compute_ws","join_assignments","join_lines","join_single_expr_block","join_single_use_tree","remove_newline","remove_newlines"],"struct":["JoinLinesConfig"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BindingKind","LinkNode","OpDelimited"],"fn":["collect_vars","eat_char","expect_lifetime","expect_separator","expect_tt","match_","match_loop","match_loop_inner","match_meta_var"],"struct":["BindingsBuilder","BindingsIdx","Match","MatchState","OpDelimitedIter"]};

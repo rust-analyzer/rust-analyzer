@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["move_const_to_impl"]};

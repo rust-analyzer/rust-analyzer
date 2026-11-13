@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["lower_use_tree","private_vis","visibility_from_ast"],"struct":["Ctx","UseTreeLowering"]};

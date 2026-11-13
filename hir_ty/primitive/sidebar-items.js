@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuiltinFloat","BuiltinInt","BuiltinUint","FloatTy","IntTy","UintTy"],"fn":["float_ty_to_string","int_ty_to_string","uint_ty_to_string"]};

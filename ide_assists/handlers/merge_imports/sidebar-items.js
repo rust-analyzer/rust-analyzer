@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["merge_imports","merge_use_trees","merge_uses"]};

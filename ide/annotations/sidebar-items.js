@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["AnnotationKind","AnnotationLocation"],"fn":["annotations","resolve_annotation","should_skip_runnable"],"mod":["fn_references"],"struct":["Annotation","AnnotationConfig"]};

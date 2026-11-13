@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["convert_tuple_struct_to_named_struct","delete_rest_pat","edit_field_references","edit_struct_def","edit_struct_references","first_token_of","generate_names","last_token_of","process_delimiter","process_struct_name_reference","tuple_pat_field_targets","tuple_struct_pat_parens"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["capture_as_arg","compute_closure_type_params","convert_closure_to_fn","expr_of_pat","handle_call","handle_calls","peel_blocks_and_refs_and_parens","peel_parens","peel_ref","wrap_capture_in_deref_if_needed"]};

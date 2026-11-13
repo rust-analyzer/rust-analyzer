@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["InsideUnsafeBlock","UnsafeDiagnostic","UnsafetyReason"],"fn":["missing_unsafe","unsafe_operations"],"struct":["MissingUnsafeResult","UnsafeVisitor"]};

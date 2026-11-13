@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["extern_block_hints","fn_hints","item_hint","static_hints"]};

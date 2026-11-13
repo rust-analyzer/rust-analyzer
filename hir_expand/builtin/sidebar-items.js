@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuiltinAttrExpander","BuiltinDeriveExpander","BuiltinFnLikeExpander","EagerExpander"],"fn":["find_builtin_attr","find_builtin_derive","find_builtin_macro","include_input_to_file_id","pseudo_derive_attr_expansion"],"mod":["attr_macro","derive_macro","fn_macro","quote"]};

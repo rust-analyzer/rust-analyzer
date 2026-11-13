@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["comma_wrapper","complete_fn_param","fill_fn_params","is_simple_param","param_qualifier","params_from_stmt_list_scope","remove_duplicated","should_add_self_completions"]};

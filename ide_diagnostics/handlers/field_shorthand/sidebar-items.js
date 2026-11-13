@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_expr_field_shorthand","check_pat_field_shorthand","field_shorthand"]};

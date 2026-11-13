@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["check_valid_usages","find_path_type","find_usages","replace_named_generic_with_impl"]};

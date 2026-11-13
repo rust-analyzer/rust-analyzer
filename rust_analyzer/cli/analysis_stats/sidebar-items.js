@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["expr_syntax_range","full_name","location_csv_expr","location_csv_pat","pat_syntax_range","percentage","shuffle"],"struct":["PrettyItemStats","UsizeWithUnderscore"]};

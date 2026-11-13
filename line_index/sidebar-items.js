@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["WideEncoding"],"fn":["analyze_source_file","analyze_source_file_dispatch","analyze_source_file_generic","analyze_source_file_sse2"],"struct":["LineCol","LineIndex","TextRange","TextSize","WideChar","WideLineCol"]};

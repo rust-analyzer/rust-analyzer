@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TargetSpec"],"fn":["required_features"],"struct":["CargoTargetSpec","ProjectJsonTargetSpec"]};

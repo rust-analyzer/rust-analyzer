@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["introduce_named_type_parameter","non_default_bounds"]};

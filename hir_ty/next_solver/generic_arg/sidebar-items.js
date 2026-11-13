@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TermVid"],"fn":["error_for_param_kind","mk_param"],"struct":["GenericArg","GenericArgImpl","GenericArgs","GenericArgsStorage","StoredGenericArg","StoredGenericArgs","Term"],"trait":["GenericArgsBuilder"],"type":["GenericArgKind","TermKind"]};

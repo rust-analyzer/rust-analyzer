@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["range","size","traits"],"struct":["TextRange","TextSize"],"trait":["TextLen"]};

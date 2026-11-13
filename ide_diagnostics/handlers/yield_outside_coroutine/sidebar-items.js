@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["yield_outside_coroutine"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["TypeLikeConst"],"fn":["check_generic_args_len","substs_from_args_and_bindings","type_looks_like_const"],"struct":["PathDiagnosticCallback","PathLoweringContext"],"trait":["GenericArgsLowerer"],"type":["CallbackData"]};

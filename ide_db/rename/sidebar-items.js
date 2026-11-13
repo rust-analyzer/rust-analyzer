@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IdentifierKind","RenameDefinition"],"fn":["rename_field_constructors","rename_mod","rename_reference","source_edit_from_def","source_edit_from_name","source_edit_from_name_ref","source_edit_from_references"],"macro":[["bail",1],["format_err",1]],"struct":["RenameConfig","RenameError"],"type":["Result"]};

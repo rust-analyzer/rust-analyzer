@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["call_hierarchy","incoming_calls","outgoing_calls"],"struct":["CallHierarchyConfig","CallItem","CallLocations"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ConstOrTypeGeneric","Replacement"],"fn":["create_replacement","generic_args_to_const_and_type_generics","generic_param_list_to_const_and_type_generics","get_type_alias","inline","inline_type_alias","inline_type_alias_uses"],"struct":["ConstAndTypeMap","LifetimeMap"]};

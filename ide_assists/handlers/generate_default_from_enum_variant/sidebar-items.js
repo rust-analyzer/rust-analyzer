@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["default_fn","default_impl","existing_default_impl","generate_default_from_enum_variant"]};

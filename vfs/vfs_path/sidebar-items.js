@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["VfsPathRepr"],"struct":["VfsPath","VirtualPath"]};

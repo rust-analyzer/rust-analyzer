@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["highlight_def","highlight_method_call","highlight_method_call_by_name_ref","highlight_name","highlight_name_by_syntax","highlight_name_ref","highlight_name_ref_by_syntax","is_consumed_lvalue","keyword","name_like","parent_matches","parents_match","punctuation","token"]};

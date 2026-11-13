@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["debug_single","goto_location","interpret_single","rename","run_single","show_references","trigger_parameter_hints"]};

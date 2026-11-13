@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Maps syntax of various definitions to their semantic ids."><title>hir::semantics::source_to_def - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-203241e4.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="hir" data-themes="" data-resource-suffix="" data-rustdoc-version="1.100.0 (0ef1bc386 2026-11-09)" data-channel="1.100.0" data-search-js="search-b167f383.js" data-stringdex-js="stringdex-b5109af9.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../../static.files/main-1814ead3.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-9f56287d.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module source_to_def</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../../hir/index.html">hir</a><span class="version">0.0.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module source_<wbr>to_<wbr>def</a></h2><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#enums" title="Enums">Enums</a></li></ul></section><div id="rustdoc-modnav"><h2><a href="../index.html">In hir::<wbr>semantics</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../../index.html">hir</a>::<wbr><a href="../index.html">semantics</a></div><h1>Module <span>source_<wbr>to_<wbr>def</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../../src/hir/semantics/source_to_def.rs.html#1-772">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Maps <em>syntax</em> of various definitions to their semantic ids.</p>
+<p>This is a very interesting module, and, in some sense, can be considered the
+heart of the IDE parts of rust-analyzer.</p>
+<p>This module solves the following problem:</p>
+<blockquote>
+<p>Given a piece of syntax, find the corresponding semantic definition (def).</p>
+</blockquote>
+<p>This problem is a part of more-or-less every IDE feature implemented. Every
+IDE functionality (like goto to definition), conceptually starts with a
+specific cursor position in a file. Starting with this text offset, we first
+figure out what syntactic construct we are at: is this a pattern, an
+expression, an item definition.</p>
+<p>Knowing only the syntax gives us relatively little info. For example,
+looking at the syntax of the function we can realize that it is a part of an
+<code>impl</code> block, but we won’t be able to tell what trait function the current
+function overrides, and whether it does that correctly. For that, we need to
+go from [<code>ast::Fn</code>] to <a href="../../struct.Function.html" title="struct hir::Function"><code>crate::Function</code></a>, and that’s exactly what this
+module does.</p>
+<p>As syntax trees are values and don’t know their place of origin/identity,
+this module also requires <a href="../../type.InFile.html" title="type hir::InFile"><code>InFile</code></a> wrappers to understand which specific
+real or macro-expanded file the tree comes from.</p>
+<p>The actual algorithm to resolve syntax to def is curious in two aspects:</p>
+<ul>
+<li>It is recursive</li>
+<li>It uses the inverse algorithm (what is the syntax for this def?)</li>
+</ul>
+<p>Specifically, the algorithm goes like this:</p>
+<ol>
+<li>Find the syntactic container for the syntax. For example, field’s
+container is the struct, and the struct’s container is a module.</li>
+<li>Recursively get the def corresponding to container.</li>
+<li>Ask the container def for all child defs. These child defs contain
+the answer and answer’s siblings.</li>
+<li>For each child def, ask for its source.</li>
+<li>The child def whose source is the syntax node we’ve started with
+is the answer.</li>
+</ol>
+<p>It’s interesting that both Roslyn and Kotlin contain very similar code
+shape.</p>
+<p>Let’s take a look at Roslyn:</p>
+<p><a href="https://github.com/dotnet/roslyn/blob/36a0c338d6621cc5fe34b79d414074a95a6a489c/src/Compilers/CSharp/Portable/Compilation/SyntaxTreeSemanticModel.cs#L1403-L1429">https://github.com/dotnet/roslyn/blob/36a0c338d6621cc5fe34b79d414074a95a6a489c/src/Compilers/CSharp/Portable/Compilation/SyntaxTreeSemanticModel.cs#L1403-L1429</a>
+<a href="https://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/Compilation/SyntaxTreeSemanticModel.cs,1403">https://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/Compilation/SyntaxTreeSemanticModel.cs,1403</a></p>
+<p>The <code>GetDeclaredType</code> takes <code>Syntax</code> as input, and returns <code>Symbol</code> as
+output. First, it retrieves a <code>Symbol</code> for parent <code>Syntax</code>:</p>
+<ul>
+<li><a href="https://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/Compilation/SyntaxTreeSemanticModel.cs,1423">https://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/Compilation/SyntaxTreeSemanticModel.cs,1423</a></li>
+</ul>
+<p>Then, it iterates parent symbol’s children, looking for one which has the
+same text span as the original node:</p>
+<p><a href="https://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/Compilation/SyntaxTreeSemanticModel.cs,1786">https://sourceroslyn.io/#Microsoft.CodeAnalysis.CSharp/Compilation/SyntaxTreeSemanticModel.cs,1786</a></p>
+<p>Now, let’s look at Kotlin:</p>
+<p><a href="https://github.com/JetBrains/kotlin/blob/a288b8b00e4754a1872b164999c6d3f3b8c8994a/idea/idea-frontend-fir/idea-fir-low-level-api/src/org/jetbrains/kotlin/idea/fir/low/level/api/FirModuleResolveStateImpl.kt#L93-L125">https://github.com/JetBrains/kotlin/blob/a288b8b00e4754a1872b164999c6d3f3b8c8994a/idea/idea-frontend-fir/idea-fir-low-level-api/src/org/jetbrains/kotlin/idea/fir/low/level/api/FirModuleResolveStateImpl.kt#L93-L125</a></p>
+<p>This function starts with a syntax node (<code>KtExpression</code> is syntax, like all
+<code>Kt</code> nodes), and returns a def. It uses
+<code>getNonLocalContainingOrThisDeclaration</code> to get syntactic container for a
+current node. Then, <code>findSourceNonLocalFirDeclaration</code> gets <code>Fir</code> for this
+parent. Finally, <code>findElementIn</code> function traverses <code>Fir</code> children to find
+one with the same source we originally started with.</p>
+<p>One question is left though – where does the recursion stops? This happens
+when we get to the file syntax node, which doesn’t have a syntactic parent.
+In that case, we loop through all the crates that might contain this file
+and look for a module whose source is the given file.</p>
+<p>Note that the logic in this module is somewhat fundamentally imprecise –
+due to conditional compilation and <code>#[path]</code> attributes, there’s no
+injective mapping from syntax nodes to defs. This is not an edge case –
+more or less every item in a <code>lib.rs</code> is a part of two distinct crates: a
+library with <code>--cfg test</code> and a library without.</p>
+<p>At the moment, we don’t really handle this well and return the first answer
+that works. Ideally, we should first let the caller to pick a specific
+active crate for a given position, and then provide an API to resolve all
+syntax nodes against this specific crate.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.SourceToDefCache.html" title="struct hir::semantics::source_to_def::SourceToDefCache">Source<wbr>ToDef<wbr>Cache</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt><dt><a class="struct" href="struct.SourceToDefCtx.html" title="struct hir::semantics::source_to_def::SourceToDefCtx">Source<wbr>ToDef<wbr>Ctx</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl><h2 id="enums" class="section-header">Enums<a href="#enums" class="anchor">§</a></h2><dl class="item-table"><dt><a class="enum" href="enum.ChildContainer.html" title="enum hir::semantics::source_to_def::ChildContainer">Child<wbr>Container</a><span title="Restricted Visibility">&nbsp;🔒</span> </dt></dl></section></div></main></body></html>

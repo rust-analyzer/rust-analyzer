@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["add_keywords","complete_item_list","complete_item_list_in_expr","complete_keywords_after_const"],"mod":["trait_impl"]};

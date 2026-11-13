@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["merge","patch_json_for_outdated_configs"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["collect_used_generics","extract_type_alias"]};

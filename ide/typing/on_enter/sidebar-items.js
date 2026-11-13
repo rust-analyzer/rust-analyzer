@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["brace_contents_on_same_line","followed_by_comment","node_indent","on_enter","on_enter_in_braces","on_enter_in_comment"]};

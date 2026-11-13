@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["abs_path","annotation","assist_kind","file_id","file_position","file_range","file_range_uri","offset","text_range","vfs_path"]};

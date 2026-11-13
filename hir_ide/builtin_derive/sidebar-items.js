@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generic_params_count","impl_super_outlives","impl_trait","param_env","predicates"]};

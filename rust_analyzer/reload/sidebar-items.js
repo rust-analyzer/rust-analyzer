@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["BuildDataProgress","ProcMacroProgress","ProjectWorkspaceProgress"],"fn":["eq_ignore_underscore","should_refresh_for_change","ws_to_crate_graph"]};

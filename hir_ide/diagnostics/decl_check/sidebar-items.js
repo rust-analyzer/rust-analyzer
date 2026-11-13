@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["CaseType","IdentType"],"fn":["incorrect_case"],"mod":["case_conv"],"struct":["DeclValidator","IncorrectCase","Replacement"]};

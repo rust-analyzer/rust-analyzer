@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["EarlyKind"],"fn":["clean_stmt_block","container_of","convert_to_guarded_return","flat_let_chain","if_expr_to_guarded_return","is_early_block","is_never_else_branch","let_stmt_to_guarded_return"],"struct":["ElseBlock"]};

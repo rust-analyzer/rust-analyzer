@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["target_data_layout_query"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generics","parent_generic_def"],"struct":["Generics","ProvenanceSplit","SingleGenerics"]};
