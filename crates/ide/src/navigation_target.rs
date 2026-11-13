@@ -1113,6 +1113,22 @@ struct Foo;
     }
 
     #[test]
+    fn test_world_symbols_fold_non_ascii_case() {
+        let (analysis, _) = fixture::file(
+            r#"
+struct Übung;
+"#,
+        );
+
+        // The index is keyed by the lowercased name, so the query has to be lowercased the very
+        // same way for names that are not pure ASCII.
+        for query in ["Übung", "übung"] {
+            let navs = analysis.symbol_search(Query::new(query.to_owned()), !0).unwrap();
+            assert_eq!(navs.len(), 1, "no match for {query}");
+        }
+    }
+
+    #[test]
     fn test_ensure_hidden_symbols_are_not_returned() {
         let (analysis, _) = fixture::file(
             r#"

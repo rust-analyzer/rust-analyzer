@@ -2070,6 +2070,33 @@ fn main() {
     }
 
     #[test]
+    fn non_ascii_uppercase_name() {
+        check_assist(
+            auto_import,
+            r#"
+mod foo {
+    pub struct Übung;
+}
+
+fn main() {
+    Übung$0;
+}
+"#,
+            r#"
+use foo::Übung;
+
+mod foo {
+    pub struct Übung;
+}
+
+fn main() {
+    Übung;
+}
+"#,
+        );
+    }
+
+    #[test]
     fn foreign_enum_variant() {
         check_assist(
             auto_import,

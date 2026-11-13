@@ -1,6 +1,6 @@
 //! A map of all publicly exported items in a crate.
 
-use std::fmt;
+use std::{cmp::Ordering, fmt, iter};
 
 use base_db::{Crate, SourceDatabase};
 use fst::{Automaton, Streamer, raw::IndexedValue};
@@ -9,7 +9,7 @@ use itertools::Itertools;
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 use span::Edition;
-use stdx::format_to;
+use stdx::{cmp_lowercase, format_to, to_lowercase_chars};
 
 use crate::{
     AdtId, AssocItemId, AttrDefId, Complete, EnumId, FxIndexMap, ModuleDefId, ModuleId, TraitId,
@@ -96,22 +96,19 @@ impl ImportMap {
                     .map(move |(idx, info)| (item, info.name.as_str(), idx as u32))
             })
             .collect();
-        importables.sort_by(|(_, l_info, _), (_, r_info, _)| {
-            let lhs_chars = l_info.chars().map(|c| c.to_ascii_lowercase());
-            let rhs_chars = r_info.chars().map(|c| c.to_ascii_lowercase());
-            lhs_chars.cmp(rhs_chars)
-        });
+        importables.sort_by(|(_, l_info, _), (_, r_info, _)| cmp_lowercase(l_info, r_info));
         importables.dedup();
 
         // Build the FST, taking care not to insert duplicate values.
         let mut builder = fst::MapBuilder::memory();
-        let mut iter = importables
-            .iter()
-            .enumerate()
-            .dedup_by(|&(_, (_, lhs, _)), &(_, (_, rhs, _))| lhs.eq_ignore_ascii_case(rhs));
+        let mut iter =
+            importables.iter().enumerate().dedup_by(|&(_, (_, lhs, _)), &(_, (_, rhs, _))| {
+                cmp_lowercase(lhs, rhs) == Ordering::Equal
+            });
 
         let mut insert = |name: &str, start, end| {
-            builder.insert(name.to_ascii_lowercase(), ((start as u64) << 32) | end as u64).unwrap()
+            let key: String = to_lowercase_chars(name).collect();
+            builder.insert(key, ((start as u64) << 32) | end as u64).unwrap()
         };
 
         if let Some((mut last, (_, name, _))) = iter.next() {
@@ -353,32 +350,24 @@ impl SearchMode {
     pub fn check(self, query: &str, case_sensitive: bool, candidate: &str) -> bool {
         match self {
             SearchMode::Exact if case_sensitive => candidate == query,
-            SearchMode::Exact => candidate.eq_ignore_ascii_case(query),
+            SearchMode::Exact => to_lowercase_chars(candidate).eq(to_lowercase_chars(query)),
+            SearchMode::Prefix if case_sensitive => candidate.starts_with(query),
             SearchMode::Prefix => {
-                query.len() <= candidate.len() && {
-                    let prefix = &candidate[..query.len()];
-                    if case_sensitive {
-                        prefix == query
-                    } else {
-                        prefix.eq_ignore_ascii_case(query)
-                    }
-                }
+                let mut candidate = to_lowercase_chars(candidate);
+                to_lowercase_chars(query).all(|query_char| candidate.next() == Some(query_char))
             }
+            SearchMode::Fuzzy if case_sensitive => {
+                let mut candidate = candidate.chars();
+                query.chars().all(|query_char| candidate.any(|it| it == query_char))
+            }
+            // this only lowers case for the candidate such that a lowercase query
+            // matches an uppercase candiadte char, but not an uppercase query
+            // a lower case candidate char.
             SearchMode::Fuzzy => {
-                let mut name = candidate;
+                let mut candidate = candidate.chars();
                 query.chars().all(|query_char| {
-                    let m = if case_sensitive {
-                        name.match_indices(query_char).next()
-                    } else {
-                        name.match_indices([query_char, query_char.to_ascii_uppercase()]).next()
-                    };
-                    match m {
-                        Some((index, _)) => {
-                            name = name[index..].strip_prefix(|_: char| true).unwrap_or_default();
-                            true
-                        }
-                        None => false,
-                    }
+                    candidate
+                        .any(|it| it == query_char || it.to_lowercase().eq(iter::once(query_char)))
                 })
             }
         }
@@ -407,7 +396,7 @@ pub struct Query {
 
 impl Query {
     pub fn new(query: String) -> Self {
-        let lowercased = query.to_lowercase();
+        let lowercased = to_lowercase_chars(&query).collect();
         Self {
             query,
             lowercased,
@@ -1018,6 +1007,56 @@ pub mod fmt {
                 dep::Fmt (v)
                 dep::fmt (t)
                 dep::fmt::Display::fmt (a)
+            "#]],
+        );
+    }
+
+    #[test]
+    fn non_ascii_search_mode() {
+        let ra_fixture = r#"
+//- /main.rs crate:main deps:dep
+//- /dep.rs crate:dep
+pub struct Übung;
+pub struct ßäh;
+"#;
+
+        check_search(
+            ra_fixture,
+            "main",
+            Query::new("übung".to_owned()),
+            expect![[r#"
+                dep::Übung (t)
+                dep::Übung (v)
+            "#]],
+        );
+
+        check_search(
+            ra_fixture,
+            "main",
+            Query::new("ÜB".to_owned()).prefix(),
+            expect![[r#"
+                dep::Übung (t)
+                dep::Übung (v)
+            "#]],
+        );
+
+        check_search(
+            ra_fixture,
+            "main",
+            Query::new("ẞ".to_owned()).prefix(),
+            expect![[r#"
+                dep::ßäh (t)
+                dep::ßäh (v)
+            "#]],
+        );
+
+        check_search(
+            ra_fixture,
+            "main",
+            Query::new("üng".to_owned()).fuzzy(),
+            expect![[r#"
+                dep::Übung (t)
+                dep::Übung (v)
             "#]],
         );
     }

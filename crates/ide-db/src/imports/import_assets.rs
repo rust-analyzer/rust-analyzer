@@ -11,7 +11,7 @@ use itertools::Itertools;
 use parser::SyntaxKind;
 use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{SmallVec, smallvec};
-use stdx::never;
+use stdx::{never, to_lowercase_chars};
 use syntax::{
     AstNode, SyntaxNode,
     ast::{self, HasName, make},
@@ -728,16 +728,16 @@ fn validate_resolvable(
         let is_match = match candidate {
             NameToImport::Prefix(text, true) => name.as_str().starts_with(text),
             NameToImport::Prefix(text, false) => {
-                name.as_str().chars().zip(text.chars()).all(|(name_char, candidate_char)| {
-                    name_char.eq_ignore_ascii_case(&candidate_char)
-                })
+                let mut name_chars = to_lowercase_chars(name.as_str());
+                to_lowercase_chars(text).all(|c| name_chars.next() == Some(c))
             }
             NameToImport::Exact(text, true) => name.as_str() == text,
-            NameToImport::Exact(text, false) => name.as_str().eq_ignore_ascii_case(text),
+            NameToImport::Exact(text, false) => {
+                to_lowercase_chars(name.as_str()).eq(to_lowercase_chars(text))
+            }
             NameToImport::Fuzzy(text, true) => text.chars().all(|c| name.as_str().contains(c)),
-            NameToImport::Fuzzy(text, false) => text
-                .chars()
-                .all(|c| name.as_str().chars().any(|name_char| name_char.eq_ignore_ascii_case(&c))),
+            NameToImport::Fuzzy(text, false) => to_lowercase_chars(text)
+                .all(|c| to_lowercase_chars(name.as_str()).any(|name_char| name_char == c)),
         };
         if !is_match {
             return None;

@@ -40,6 +40,7 @@ use hir::{
 };
 use itertools::Itertools;
 use rayon::prelude::*;
+use stdx::{cmp_lowercase, to_lowercase_chars};
 
 use crate::RootDatabase;
 
@@ -109,7 +110,7 @@ pub struct Query {
 impl Query {
     pub fn new(query: String) -> Query {
         let (path_filter, item_query, anchor_to_crate) = Self::parse_path_query(&query);
-        let lowercased = item_query.to_lowercase();
+        let lowercased = to_lowercase_chars(&item_query).collect();
         Query {
             query: item_query,
             lowercased,
@@ -299,7 +300,11 @@ fn resolve_path_to_modules(
 
     // Helper for name comparison
     let names_match = |actual: &str, expected: &str| -> bool {
-        if case_sensitive { actual == expected } else { actual.eq_ignore_ascii_case(expected) }
+        if case_sensitive {
+            actual == expected
+        } else {
+            to_lowercase_chars(actual).eq(to_lowercase_chars(expected))
+        }
     };
 
     // Find crates matching the first segment
@@ -477,9 +482,7 @@ impl Hash for SymbolIndex<'_> {
 impl<'db> SymbolIndex<'db> {
     fn new(mut symbols: Box<[FileSymbol<'db>]>) -> SymbolIndex<'db> {
         fn cmp(lhs: &FileSymbol<'_>, rhs: &FileSymbol<'_>) -> Ordering {
-            let lhs_chars = lhs.name.as_str().chars().map(|c| c.to_ascii_lowercase());
-            let rhs_chars = rhs.name.as_str().chars().map(|c| c.to_ascii_lowercase());
-            lhs_chars.cmp(rhs_chars)
+            cmp_lowercase(lhs.name.as_str(), rhs.name.as_str())
         }
 
         symbols.par_sort_by(cmp);
@@ -499,7 +502,7 @@ impl<'db> SymbolIndex<'db> {
             let end = idx + 1;
             last_batch_start = end;
 
-            let key = symbols[start].name.as_str().to_ascii_lowercase();
+            let key: String = to_lowercase_chars(symbols[start].name.as_str()).collect();
             let value = SymbolIndex::range_to_map_value(start, end);
 
             builder.insert(key, value).unwrap();

@@ -2118,3 +2118,21 @@ fn baz() {
     "#,
     );
 }
+
+#[test]
+fn non_ascii_uppercase_name() {
+    check(
+        r#"
+mod foo {
+    pub struct Übung;
+}
+
+fn main() {
+    Übung$0
+}
+"#,
+        expect![[r#"
+            st Übung (use foo::Übung) Übung
+        "#]],
+    );
+}
