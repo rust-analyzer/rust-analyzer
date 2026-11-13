@@ -1,11 +1,12 @@
 use std::{iter::once, ops::RangeInclusive};
+use syntax::ast::HasName;
 
 use hir::{HasSource, ModuleSource};
 use ide_db::{
     FileId, FxHashMap, FxHashSet,
     assists::AssistId,
     defs::{Definition, NameClass, NameRefClass},
-    search::{FileReference, SearchScope},
+    search::{FileReference, ReferenceCategory, SearchScope},
 };
 use itertools::Itertools;
 use smallvec::SmallVec;
@@ -390,49 +391,138 @@ impl Module {
 
         for (file_id, refs) in node_def.usages(&ctx.sema).all() {
             let source_file = ctx.sema.parse(file_id);
-            let usages = refs.into_iter().filter_map(|FileReference { range, .. }| {
-                // handle normal usages
-                let name_ref = find_node_at_range::<ast::NameRef>(source_file.syntax(), range)?;
 
-                if out_of_sel(name_ref.syntax()) {
-                    let new_ref = format!("{mod_name}::{name_ref}");
-                    return Some((range, new_ref));
-                } else if let Some(use_) = name_ref.syntax().ancestors().find_map(ast::Use::cast) {
-                    // handle usages in use_stmts which is in_sel
-                    // check if `use` is top stmt in selection
-                    if use_.syntax().parent().is_some_and(|parent| parent == covering_node)
-                        && use_stmts_set.insert(use_.syntax().text_range().start())
+            let mut import_module_bindings = FxHashMap::default();
+            let mut import_block_bindings = Vec::new();
+
+            for reference in refs
+                .iter()
+                .filter(|reference| reference.category.contains(ReferenceCategory::IMPORT))
+            {
+                let Some(name_ref) =
+                    find_node_at_range::<ast::NameRef>(source_file.syntax(), reference.range)
+                else {
+                    continue;
+                };
+
+                let Some(use_tree) = name_ref.syntax().ancestors().find_map(ast::UseTree::cast)
+                else {
+                    continue;
+                };
+
+                let bound_name = if let Some(rename) = use_tree.rename() {
+                    let Some(name) = rename.name() else {
+                        // `as _` does not introduce a usable binding.
+                        continue;
+                    };
+
+                    name.syntax().text().to_string()
+                } else {
+                    name_ref.syntax().text().to_string()
+                };
+
+                if let Some(stmt_list) = name_ref.syntax().ancestors().find_map(ast::StmtList::cast)
+                {
+                    import_block_bindings.push((stmt_list.syntax().clone(), bound_name));
+                } else if let Some(scope) = ctx.sema.scope(name_ref.syntax()) {
+                    import_module_bindings
+                        .entry(scope.module().nearest_non_block_module(ctx.db()))
+                        .or_insert_with(FxHashSet::default)
+                        .insert(bound_name);
+                }
+            }
+
+            let usages =
+                refs.into_iter().filter_map(|FileReference { range, category, .. }| {
+                    // handle normal usages
+                    let name_ref = find_node_at_range::<ast::NameRef>(source_file.syntax(), range)?;
+                    let is_import = category.contains(ReferenceCategory::IMPORT);
+
+                    if out_of_sel(name_ref.syntax()) {
+                        let path = name_ref.syntax().ancestors().find_map(ast::Path::cast);
+
+                        let usage_name = name_ref.syntax().text().to_string();
+
+                        let covered_by_import = !is_import
+                            && path.is_some_and(|path| {
+                                if let Some(qualifier) = path.qualifier() {
+                                    ctx.sema.resolve_path(&qualifier).is_some_and(|resolution| {
+                matches!(
+                    resolution,
+                    hir::PathResolution::Def(hir::ModuleDef::Module(module))
+                        if import_module_bindings
+                            .get(&module.nearest_non_block_module(ctx.db()))
+                            .is_some_and(|names| names.contains(&usage_name))
+                )
+            })
+                                } else {
+                                    let covered_by_block =
+                                        name_ref.syntax().ancestors().any(|ancestor| {
+                                            import_block_bindings.iter().any(|(block, name)| {
+                                                block == &ancestor && name == &usage_name
+                                            })
+                                        });
+
+                                    let covered_by_module =
+                                        ctx.sema.scope(name_ref.syntax()).is_some_and(|scope| {
+                                            import_module_bindings
+                                                .get(
+                                                    &scope
+                                                        .module()
+                                                        .nearest_non_block_module(ctx.db()),
+                                                )
+                                                .is_some_and(|names| names.contains(&usage_name))
+                                        });
+
+                                    covered_by_block || covered_by_module
+                                }
+                            });
+
+                        if covered_by_import {
+                            return None;
+                        }
+
+                        let new_ref = format!("{mod_name}::{name_ref}");
+                        return Some((range, new_ref));
+                    } else if let Some(use_) =
+                        name_ref.syntax().ancestors().find_map(ast::Use::cast)
                     {
-                        let key = use_.syntax().text_range().start();
-                        let entry =
-                            use_stmts_to_be_inserted.entry(key).or_insert_with(|| use_.clone());
-                        let (editor, edit_root) = SyntaxEditor::with_ast_node(&*entry);
-                        let replacements: Vec<_> = {
-                            let make = editor.make();
-                            edit_root
-                                .syntax()
-                                .descendants()
-                                .filter_map(ast::NameRef::cast)
-                                .filter(|seg| seg.syntax().to_string() == name_ref.to_string())
-                                .filter_map(|seg| {
-                                    Some((
-                                        seg.syntax().parent()?,
-                                        make.path_from_text(&format!("{mod_name}::{seg}")),
-                                    ))
-                                })
-                                .collect()
-                        };
-                        if !replacements.is_empty() {
-                            for (parent, new_ref) in &replacements {
-                                editor.replace(parent, new_ref.syntax());
+                        // handle usages in use_stmts which is in_sel
+                        // check if `use` is top stmt in selection
+                        if use_.syntax().parent().is_some_and(|parent| parent == covering_node)
+                            && use_stmts_set.insert(use_.syntax().text_range().start())
+                        {
+                            let key = use_.syntax().text_range().start();
+                            let entry =
+                                use_stmts_to_be_inserted.entry(key).or_insert_with(|| use_.clone());
+                            let (editor, edit_root) = SyntaxEditor::with_ast_node(&*entry);
+                            let replacements: Vec<_> = {
+                                let make = editor.make();
+                                edit_root
+                                    .syntax()
+                                    .descendants()
+                                    .filter_map(ast::NameRef::cast)
+                                    .filter(|seg| seg.syntax().to_string() == name_ref.to_string())
+                                    .filter_map(|seg| {
+                                        Some((
+                                            seg.syntax().parent()?,
+                                            make.path_from_text(&format!("{mod_name}::{seg}")),
+                                        ))
+                                    })
+                                    .collect()
+                            };
+                            if !replacements.is_empty() {
+                                for (parent, new_ref) in &replacements {
+                                    editor.replace(parent, new_ref.syntax());
+                                }
+                                *entry =
+                                    ast::Use::cast(editor.finish().new_root().clone()).unwrap();
                             }
-                            *entry = ast::Use::cast(editor.finish().new_root().clone()).unwrap();
                         }
                     }
-                }
 
-                None
-            });
+                    None
+                });
             refs_in_files.entry(file_id.file_id(ctx.db())).or_default().extend(usages);
         }
     }
@@ -1911,5 +2001,266 @@ mod modname {
 }
             ",
         )
+    }
+    #[test]
+    fn test_extract_module_preserves_imported_name() {
+        check_assist(
+            extract_module,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::{First, Second};
+
+fn main() {
+    let _ = First {};
+    let _ = Second {};
+}
+
+//- /my_module.rs
+$0pub(crate) struct First {}$0
+
+pub(crate) struct Second {}
+"#,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::{modname::First, Second};
+
+fn main() {
+    let _ = First {};
+    let _ = Second {};
+}
+
+//- /my_module.rs
+mod modname {
+    pub(crate) struct First {}
+}
+
+pub(crate) struct Second {}
+"#,
+        );
+    }
+    #[test]
+    fn test_extract_module_keeps_qualified_usage_qualified() {
+        check_assist(
+            extract_module,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::First;
+
+fn main() {
+    let _ = crate::my_module::First {};
+}
+
+//- /my_module.rs
+$0pub(crate) struct First {}$0
+"#,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::modname::First;
+
+fn main() {
+    let _ = crate::my_module::modname::First {};
+}
+
+//- /my_module.rs
+mod modname {
+    pub(crate) struct First {}
+}
+"#,
+        );
+    }
+    #[test]
+    fn test_extract_module_import_only_preserves_usages_in_its_scope() {
+        check_assist(
+            extract_module,
+            r#"
+$0pub(crate) struct First {}$0
+
+mod child {
+    use super::First;
+
+    fn f() {
+        let _ = First {};
+    }
+}
+
+fn g() {
+    let _ = First {};
+}
+"#,
+            r#"
+mod modname {
+    pub(crate) struct First {}
+}
+
+mod child {
+    use super::modname::First;
+
+    fn f() {
+        let _ = First {};
+    }
+}
+
+fn g() {
+    let _ = modname::First {};
+}
+"#,
+        );
+    }
+    #[test]
+    fn test_extract_module_preserves_qualified_usage_through_import() {
+        check_assist(
+            extract_module,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::First;
+
+mod child {
+    fn f() {
+        let _ = super::First {};
+    }
+}
+
+//- /my_module.rs
+$0pub(crate) struct First {}$0
+"#,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::modname::First;
+
+mod child {
+    fn f() {
+        let _ = super::First {};
+    }
+}
+
+//- /my_module.rs
+mod modname {
+    pub(crate) struct First {}
+}
+"#,
+        );
+    }
+    #[test]
+    fn test_extract_module_import_alias_does_not_preserve_original_name() {
+        check_assist(
+            extract_module,
+            r#"
+$0pub(crate) struct First {}$0
+
+use self::First as Renamed;
+
+fn f() {
+    let _ = Renamed {};
+}
+
+mod child {
+    fn g() {
+        let _ = super::First {};
+    }
+}
+"#,
+            r#"
+mod modname {
+    pub(crate) struct First {}
+}
+
+use self::modname::First as Renamed;
+
+fn f() {
+    let _ = Renamed {};
+}
+
+mod child {
+    fn g() {
+        let _ = super::modname::First {};
+    }
+}
+"#,
+        );
+    }
+    #[test]
+    fn test_extract_module_preserves_import_in_item_containing_block() {
+        check_assist(
+            extract_module,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::First;
+
+fn main() {
+    struct Unrelated;
+
+    let _ = First {};
+}
+
+//- /my_module.rs
+$0pub(crate) struct First {}$0
+"#,
+            r#"
+//- /main.rs
+mod my_module;
+
+use crate::my_module::modname::First;
+
+fn main() {
+    struct Unrelated;
+
+    let _ = First {};
+}
+
+//- /my_module.rs
+mod modname {
+    pub(crate) struct First {}
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_extract_module_preserves_block_local_import_scope() {
+        check_assist(
+            extract_module,
+            r#"
+$0pub(crate) struct First {}$0
+
+fn a() {
+    use crate::First;
+
+    let _ = First {};
+}
+
+fn b() {
+    let _ = First {};
+}
+"#,
+            r#"
+mod modname {
+    pub(crate) struct First {}
+}
+
+fn a() {
+    use crate::modname::First;
+
+    let _ = First {};
+}
+
+fn b() {
+    let _ = modname::First {};
+}
+"#,
+        );
     }
 }
