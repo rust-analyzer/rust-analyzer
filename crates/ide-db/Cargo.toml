@@ -23,6 +23,7 @@ either.workspace = true
 itertools.workspace = true
 arrayvec.workspace = true
 memchr = "2.7.5"
+pulldown-cmark.workspace = true
 salsa.workspace = true
 triomphe.workspace = true
 nohash-hasher.workspace = true
