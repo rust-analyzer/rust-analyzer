@@ -3,10 +3,10 @@
 use hir::{EditionedFileId, HirFileId, InFile, Semantics, db::HirDatabase};
 use ide_db::{
     SymbolKind, defs::Definition, documentation::Documentation, range_mapper::RangeMapper,
-    rust_doc::is_rust_fence,
+    rust_doc::rust_fenced_code_lines,
 };
 use syntax::{
-    SyntaxNode, TextRange, TextSize,
+    SyntaxNode,
     ast::{self, IsString},
 };
 use triomphe::Arc;
@@ -78,9 +78,6 @@ pub(super) fn ra_fixture(
     Some(())
 }
 
-const RUSTDOC_FENCE_LENGTH: usize = 3;
-const RUSTDOC_FENCES: [&str; 2] = ["```", "~~~"];
-
 /// Injection of syntax highlighting of doctests and intra doc links.
 pub(super) fn doc_comment(
     hl: &mut Highlights,
@@ -124,37 +121,10 @@ pub(super) fn doc_comment(
     let mut inj = RangeMapper::default();
     inj.add_unmapped("fn doctest() {\n");
 
-    let mut is_codeblock = false;
-    let mut is_doctest = false;
-
     let mut has_doctests = false;
 
-    let mut docs_offset = TextSize::new(0);
-    for mut line in docs.docs().split('\n') {
-        let mut line_docs_offset = docs_offset;
-        docs_offset += TextSize::of(line) + TextSize::of("\n");
-
-        match RUSTDOC_FENCES.into_iter().find_map(|fence| line.find(fence)) {
-            Some(idx) => {
-                is_codeblock = !is_codeblock;
-                // Check whether code is rust by inspecting fence guards
-                let guards = &line[idx + RUSTDOC_FENCE_LENGTH..];
-                let is_rust = is_rust_fence(guards);
-                is_doctest = is_codeblock && is_rust;
-                continue;
-            }
-            None if !is_doctest => continue,
-            None => (),
-        }
-
-        // lines marked with `#` should be ignored in output, we skip the `#` char
-        if line.starts_with('#') {
-            line_docs_offset += TextSize::of("#");
-            line = &line["#".len()..];
-        }
-
-        let Some((InFile { file_id, value: mapped_range }, _)) =
-            docs.find_ast_range(TextRange::at(line_docs_offset, TextSize::of(line)))
+    for line in rust_fenced_code_lines(docs.docs()) {
+        let Some((InFile { file_id, value: mapped_range }, _)) = docs.find_ast_range(line.range)
         else {
             continue;
         };
@@ -163,7 +133,7 @@ pub(super) fn doc_comment(
         }
 
         has_doctests = true;
-        inj.add(line, mapped_range);
+        inj.add(line.text, mapped_range);
         inj.add_unmapped("\n");
     }
 

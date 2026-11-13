@@ -1,6 +1,7 @@
 //! This module defines an accumulator for completions which are going to be presented to user.
 
 pub(crate) mod attribute;
+pub(crate) mod doctest;
 pub(crate) mod dot;
 pub(crate) mod env_vars;
 pub(crate) mod expr;

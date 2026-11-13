@@ -25,7 +25,7 @@ mod use_tree;
 mod visibility;
 
 use base_db::SourceDatabase;
-use expect_test::Expect;
+use expect_test::{Expect, expect};
 use hir::db::HirDatabase;
 use hir::{PrefixKind, setup_tracing};
 use ide_db::{
@@ -402,5 +402,56 @@ Some multi-line comment$0
 "#,
         ),
         String::new(),
+    );
+}
+
+#[test]
+fn completions_in_doctest_code_block() {
+    check(
+        r#"
+fn helper() {}
+
+/// ```rust
+/// hel$0
+/// ```
+fn documented() {}
+"#,
+        expect![[r#"
+            fn documented() fn()
+            fn helper()     fn()
+            bt u32           u32
+            kw async
+            kw const
+            kw crate::
+            kw enum
+            kw extern
+            kw false
+            kw fn
+            kw for
+            kw if
+            kw if let
+            kw impl
+            kw impl for
+            kw let
+            kw letm
+            kw loop
+            kw match
+            kw mod
+            kw return
+            kw self::
+            kw static
+            kw struct
+            kw trait
+            kw true
+            kw type
+            kw union
+            kw unsafe
+            kw use
+            kw while
+            kw while let
+            sn macro_rules
+            sn pd
+            sn ppd
+        "#]],
     );
 }

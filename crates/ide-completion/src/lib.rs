@@ -194,6 +194,12 @@ pub fn completions(
     position: FilePosition,
     trigger_character: Option<char>,
 ) -> Option<Vec<CompletionItem>> {
+    if let Some(completions) =
+        completions::doctest::complete_doctest(db, config, position, trigger_character)
+    {
+        return Some(completions);
+    }
+
     let (ctx, analysis) = &CompletionContext::new(db, position, config, trigger_character)?;
     let mut completions = Completions::default();
 

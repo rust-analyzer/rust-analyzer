@@ -1,6 +1,7 @@
 //! Rustdoc specific doc comment handling
 
 use crate::documentation::Documentation;
+use syntax::{TextRange, TextSize};
 
 // stripped down version of https://github.com/rust-lang/rust/blob/392ba2ba1a7d6c542d2459fb8133bebf62a4a423/src/librustdoc/html/markdown.rs#L810-L933
 pub fn is_rust_fence(s: &str) -> bool {
@@ -32,6 +33,48 @@ pub fn is_rust_fence(s: &str) -> bool {
 }
 
 const RUSTDOC_FENCES: [&str; 2] = ["```", "~~~"];
+const RUSTDOC_FENCE_LENGTH: usize = 3;
+
+pub struct RustDocCodeLine<'a> {
+    pub range: TextRange,
+    pub text: &'a str,
+}
+
+pub fn rust_fenced_code_lines(docs: &str) -> Vec<RustDocCodeLine<'_>> {
+    let mut lines = Vec::new();
+    let mut is_codeblock = false;
+    let mut is_doctest = false;
+
+    let mut docs_offset = TextSize::new(0);
+    for mut line in docs.split('\n') {
+        let mut line_docs_offset = docs_offset;
+        docs_offset += TextSize::of(line) + TextSize::of("\n");
+
+        match RUSTDOC_FENCES.into_iter().find_map(|fence| line.find(fence)) {
+            Some(idx) => {
+                is_codeblock = !is_codeblock;
+                let guards = &line[idx + RUSTDOC_FENCE_LENGTH..];
+                is_doctest = is_codeblock && is_rust_fence(guards);
+                continue;
+            }
+            None if !is_doctest => continue,
+            None => (),
+        }
+
+        // Lines marked with `#` are hidden in rustdoc output; skip the marker itself.
+        if line.starts_with('#') {
+            line_docs_offset += TextSize::of("#");
+            line = &line["#".len()..];
+        }
+
+        lines.push(RustDocCodeLine {
+            range: TextRange::at(line_docs_offset, TextSize::of(line)),
+            text: line,
+        });
+    }
+
+    lines
+}
 
 pub fn format_docs(src: &Documentation<'_>) -> String {
     format_docs_(src.as_str())
@@ -80,6 +123,23 @@ fn code_line_ignored_by_rustdoc(line: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_rust_fenced_code_lines_extracts_rust_lines() {
+        let docs =
+            "before\n```rust\n# hidden\nvisible\n```\n```text\nignored\n```\n```\nimplicit\n```";
+        let lines = rust_fenced_code_lines(docs);
+        let actual = lines.into_iter().map(|line| (line.range, line.text)).collect::<Vec<_>>();
+
+        assert_eq!(
+            actual,
+            vec![
+                (TextRange::new(TextSize::new(16), TextSize::new(23)), " hidden"),
+                (TextRange::new(TextSize::new(24), TextSize::new(31)), "visible"),
+                (TextRange::new(TextSize::new(60), TextSize::new(68)), "implicit"),
+            ]
+        );
+    }
 
     #[test]
     fn test_format_docs_adds_rust() {
