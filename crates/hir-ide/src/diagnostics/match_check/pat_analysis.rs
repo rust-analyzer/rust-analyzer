@@ -11,7 +11,7 @@ use rustc_pattern_analysis::{
     constructor::{Constructor, ConstructorSet, VariantVisibility},
     usefulness::{PlaceValidity, UsefulnessReport, compute_match_usefulness},
 };
-use rustc_type_ir::inherent::IntoKind;
+use rustc_type_ir::{AliasTyKind, inherent::IntoKind};
 use smallvec::{SmallVec, smallvec};
 use stdx::never;
 
@@ -19,7 +19,7 @@ use crate::{
     db::HirDatabase,
     inhabitedness::{is_enum_variant_uninhabited_from, is_ty_uninhabited_from},
     next_solver::{
-        ParamEnv, Ty, TyKind,
+        AliasTy, ParamEnv, Ty, TyKind,
         infer::{InferCtxt, traits::ObligationCause},
     },
 };
@@ -98,11 +98,86 @@ impl<'a, 'db> MatchCheckCtx<'a, 'db> {
                 return Err(());
             }
         }
+        if arms.iter().any(|arm| self.pat_reaches_opaque(arm.pat, scrut_ty)) {
+            // Bail out if a pattern constructor would be specialized with an opaque type, most
+            // notably an opaque type we failed to reveal (one defined by another body, or a
+            // TAIT). Pattern types come from inference, which sees through opaques within the
+            // body that defines their hidden type, so they can disagree with the place types
+            // derived from `scrut_ty`. The usefulness analysis however assumes that a
+            // constructor derived from a pattern and the place type come from the same type, see
+            // `ctor_sub_tys`.
+            //
+            // Patterns that only bind or wildcard the opaque part stay analyzable, which matters
+            // because the constructors of the enclosing type are still known there.
+            return Err(());
+        }
 
         let place_validity = PlaceValidity::from_bool(known_valid_scrutinee.unwrap_or(true));
         // Measured to take ~100ms on modern hardware.
         let complexity_limit = 500000;
         compute_match_usefulness(self, arms, scrut_ty, place_validity, complexity_limit)
+    }
+
+    fn is_opaque(ty: Ty<'db>) -> bool {
+        matches!(ty.kind(), TyKind::Alias(AliasTy { kind: AliasTyKind::Opaque { .. }, .. }))
+    }
+
+    /// Whether a constructor in `pat` would be specialized with an opaque place type.
+    ///
+    /// Walks the pattern together with the place types derived from `place_ty`, mirroring
+    /// `ctor_sub_tys`: a wildcard does not specialize anything, so it stays safe even over an
+    /// opaque type, while a struct, variant or reference pattern needs the fields of the place
+    /// type.
+    fn pat_reaches_opaque(&self, pat: &DeconstructedPat<'a, 'db>, place_ty: Ty<'db>) -> bool {
+        match pat.ctor() {
+            Wildcard => false,
+            Or => pat.iter_fields().any(|field| self.pat_reaches_opaque(&field.pat, place_ty)),
+            Struct | Variant(_) | UnionField => {
+                if Self::is_opaque(place_ty) {
+                    return true;
+                }
+                let Some(field_tys) = self.place_field_tys(pat.ctor(), place_ty) else {
+                    // We cannot tell what the pattern descends into; be conservative.
+                    return true;
+                };
+                pat.iter_fields().any(|field| {
+                    field_tys
+                        .get(field.idx)
+                        .is_none_or(|ty| self.pat_reaches_opaque(&field.pat, *ty))
+                })
+            }
+            Ref => {
+                let TyKind::Ref(_, inner, _) = place_ty.kind() else {
+                    return true;
+                };
+                pat.iter_fields().any(|field| self.pat_reaches_opaque(&field.pat, inner))
+            }
+            // The remaining constructors do not specialize any sub-types, see `ctor_sub_tys`.
+            _ => false,
+        }
+    }
+
+    /// The place types of the fields a `ctor` applied to `place_ty` yields, if they are known.
+    fn place_field_tys(&self, ctor: &Constructor<Self>, place_ty: Ty<'db>) -> Option<Vec<Ty<'db>>> {
+        match place_ty.kind() {
+            TyKind::Tuple(args) => Some(args.iter().collect()),
+            TyKind::Adt(adt_def, _) => {
+                let adt = adt_def.def_id();
+                let known = matches!(
+                    (ctor, adt),
+                    (Variant(_), hir_def::AdtId::EnumId(_))
+                        | (Struct | UnionField, hir_def::AdtId::StructId(_))
+                        | (Struct | UnionField, hir_def::AdtId::UnionId(_))
+                );
+                if !known {
+                    return None;
+                }
+                let variant = Self::variant_id_for_adt(self.db, ctor, adt)?;
+                Some(self.list_variant_fields(place_ty, variant).map(|(_, ty)| ty).collect())
+            }
+            TyKind::Ref(_, inner, _) => Some(vec![inner]),
+            _ => None,
+        }
     }
 
     fn is_uninhabited(&self, ty: Ty<'db>) -> bool {

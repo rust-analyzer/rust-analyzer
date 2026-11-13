@@ -16,7 +16,7 @@ use intern::sym;
 use itertools::Itertools;
 use rustc_hash::FxHashSet;
 use rustc_pattern_analysis::constructor::Constructor;
-use rustc_type_ir::inherent::IntoKind;
+use rustc_type_ir::{AliasTyKind, TypeVisitableExt, inherent::IntoKind};
 use syntax::{
     AstNode,
     ast::{self, UnaryOp},
@@ -26,7 +26,7 @@ use tracing::debug;
 use typed_arena::Arena;
 
 use crate::{
-    Adjust, InferenceResult,
+    Adjust, ImplTraitId, InferenceResult,
     db::HirDatabase,
     diagnostics::match_check::{
         self,
@@ -34,7 +34,7 @@ use crate::{
     },
     display::{DisplayTarget, HirDisplay},
     next_solver::{
-        CallableIdWrapper, DbInterner, ParamEnv, Ty, TyKind, TypingMode,
+        AliasTy, CallableIdWrapper, DbInterner, ParamEnv, Ty, TyKind, TypingMode,
         infer::{DbInternerInferExt, InferCtxt},
     },
 };
@@ -196,9 +196,11 @@ impl<'db> ExprValidator<'db> {
     }
 
     fn validate_match(&mut self, match_expr: ExprId, scrutinee_expr: ExprId, arms: &[MatchArm]) {
-        let Some(scrut_ty) = self.infer.type_of_expr_with_adjust(scrutinee_expr) else {
+        let Some(unrevealed_scrut_ty) = self.infer.type_of_expr_with_adjust(scrutinee_expr) else {
             return;
         };
+        let scrut_ty = reveal_opaque_types(self.db(), self.infer, self.owner, unrevealed_scrut_ty);
+        let revealed = scrut_ty != unrevealed_scrut_ty;
         if scrut_ty.references_non_lt_error() {
             return;
         }
@@ -213,6 +215,14 @@ impl<'db> ExprValidator<'db> {
         for arm in arms {
             let pat_ty = self.infer.type_of_pat_with_adjust(arm.pat);
             if pat_ty.references_non_lt_error() {
+                return;
+            }
+
+            // If we revealed the opaque type and the pattern type disagrees with the revealed
+            // type, the program is ill-typed (or inference gave up), and analyzing it can only
+            // produce false diagnostics; skip the whole match instead.
+            if revealed && !same_ctor_shape(scrut_ty, pat_ty) {
+                cov_mark::hit!(validate_match_bailed_out);
                 return;
             }
 
@@ -351,6 +361,21 @@ impl<'db> ExprValidator<'db> {
         }
         let initializer = initializer?;
         let ty = self.infer.type_of_expr_with_adjust(initializer)?;
+        let revealed_ty = reveal_opaque_types(self.db(), self.infer, self.owner, ty);
+        // Revealing can expose an ill-typed program (the pattern disagrees with the hidden
+        // type), which trips a different assertion in the usefulness analysis ("trying to
+        // compare incompatible constructors"), so check that we are still looking at the same
+        // thing before handing the type over.
+        //
+        // The comparison deliberately ignores regions: the revealed hidden type and the pattern
+        // type can differ in their region only (`Option<&'{erased} ()>` vs
+        // `Option<&'{region error} ()>`), which is not a type mismatch.
+        if revealed_ty != ty
+            && !same_ctor_shape(revealed_ty, self.infer.type_of_pat_with_adjust(pat))
+        {
+            return None;
+        }
+        let ty = revealed_ty;
         if ty.references_non_lt_error() {
             return None;
         }
@@ -697,6 +722,73 @@ pub fn record_pattern_missing_fields<'db>(
         return None;
     }
     Some((variant_def, missed_fields))
+}
+
+/// Whether `a` and `b` describe the same thing as far as constructor computation is concerned.
+///
+/// Regions are ignored: the hidden type stored for an opaque can carry an erased region while
+/// the pattern type carries an inference error region, which does not make them different types.
+fn same_ctor_shape<'db>(a: Ty<'db>, b: Ty<'db>) -> bool {
+    match (a.kind(), b.kind()) {
+        (TyKind::Adt(a_def, _), TyKind::Adt(b_def, _)) => a_def == b_def,
+        (TyKind::Tuple(a_args), TyKind::Tuple(b_args)) => a_args.len() == b_args.len(),
+        (TyKind::Ref(_, a_ty, a_mut), TyKind::Ref(_, b_ty, b_mut)) => {
+            a_mut == b_mut && same_ctor_shape(a_ty, b_ty)
+        }
+        (TyKind::Array(a_ty, _), TyKind::Array(b_ty, _)) => same_ctor_shape(a_ty, b_ty),
+        (TyKind::Slice(a_ty), TyKind::Slice(b_ty)) => same_ctor_shape(a_ty, b_ty),
+        (a_kind, b_kind) => std::mem::discriminant(&a_kind) == std::mem::discriminant(&b_kind),
+    }
+}
+
+/// Replaces every opaque alias in `ty` that this body may see through with its hidden type.
+///
+/// This mirrors rustc, which reveals opaque types within the item that defines their hidden
+/// type. Nested opaques are handled too, so `Option<impl Sized>` becomes `Option<()>`.
+fn reveal_opaque_types<'db>(
+    db: &'db dyn HirDatabase,
+    infer: &'db InferenceResult<'db>,
+    owner: DefWithBodyId,
+    ty: Ty<'db>,
+) -> Ty<'db> {
+    // `fold_tys` visits nested types first, so an opaque inside e.g. `Option<..>` is replaced
+    // before its parent is visited.
+    let interner = DbInterner::new_with(db, owner.krate(db));
+    crate::next_solver::fold::fold_tys(interner, ty, |ty| {
+        hidden_type_of_opaque(db, infer, owner, ty).unwrap_or(ty)
+    })
+}
+
+/// The hidden type of `ty`, if `ty` is an opaque alias that `owner` is allowed to see through.
+fn hidden_type_of_opaque<'db>(
+    db: &'db dyn HirDatabase,
+    infer: &'db InferenceResult<'db>,
+    owner: DefWithBodyId,
+    ty: Ty<'db>,
+) -> Option<Ty<'db>> {
+    let TyKind::Alias(AliasTy { kind: AliasTyKind::Opaque { def_id }, .. }) = ty.kind() else {
+        return None;
+    };
+    // TAIT hidden types are not part of the per-body inference result (they are computed for
+    // the whole module in `hir_ty::opaques::tait_hidden_types`), and rustc does not reveal them
+    // outside their defining body either, so they are left alone.
+    let ImplTraitId::ReturnTypeImplTrait(func, _) = def_id.0.loc(db) else {
+        return None;
+    };
+    // Only the item that defines the hidden type may reveal it. `type_of_opaque` can also hold
+    // entries merged from nested bodies, hence the explicit check.
+    let DefWithBodyId::FunctionId(owner_func) = owner else {
+        return None;
+    };
+    if func != owner_func {
+        return None;
+    }
+    let hidden = infer.type_of_opaque.get(&def_id.0)?;
+    // If inference did not finish, the hidden type can still contain inference variables. Using
+    // it would mean running the analysis on a state the type checker has not committed to, which
+    // risks a false diagnostic; stay silent instead.
+    let hidden = hidden.as_ref();
+    (!hidden.has_infer()).then_some(hidden)
 }
 
 fn types_of_subpatterns_do_match(pat: PatId, body: &Body, infer: &InferenceResult<'_>) -> bool {

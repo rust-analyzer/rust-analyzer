@@ -335,3 +335,207 @@ fn minicore_smoke_test() {
     eprintln!("Checking all minicore flags");
     check(MiniCore::from_flags(MiniCore::available_flags(MiniCore::RAW_SOURCE)))
 }
+
+/// Regression test for #22987: pattern types come from inference, which sees through opaque
+/// types in their defining body, while the scrutinee type is taken as written. The usefulness
+/// analysis assumes both come from the same type and otherwise hits a `never!`.
+#[test]
+fn opaque_scrutinee_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized
+fn let_stmt<'a: 'b, 'b: 'a>() -> impl Sized {
+    let () = let_stmt::<'b, 'a>();
+}
+
+fn match_expr<'a: 'b, 'b: 'a>() -> impl Sized {
+    match match_expr::<'b, 'a>() {
+        () => {}
+    }
+}
+"#,
+    );
+}
+
+/// The same disagreement can appear further down the type tree, where it trips different
+/// assertions inside the analysis.
+#[test]
+fn opaque_inside_adt_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn recursive() -> Option<impl Sized> {
+    match recursive() {
+        Some(()) => recursive(),
+        None => recursive(),
+    }
+}
+
+fn exhaustive() -> Option<impl Sized> {
+    match exhaustive() {
+        Some(_) => Some(()),
+        None => Some(()),
+    }
+}
+"#,
+    );
+}
+
+/// Only the body that defines the hidden type may see through an opaque type, so this one stays
+/// opaque on our side and has to be skipped rather than analyzed.
+#[test]
+fn opaque_from_other_body_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn rpit() -> Option<impl Sized> { Some(()) }
+fn tester() {
+    match rpit() {
+        Some(()) => {}
+        None => {}
+    }
+}
+"#,
+    );
+}
+
+/// An ill-typed program: the pattern type and the hidden type disagree.
+#[test]
+fn ill_typed_opaque_scrutinee_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized
+enum E { A, B }
+fn rpit<'a: 'b, 'b: 'a>() -> impl Sized {
+    let E::A = rpit::<'b, 'a>();
+}
+"#,
+    );
+}
+
+/// A recursive opaque has a self-referential hidden type, which inference gives up on.
+#[test]
+fn self_referential_opaque_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn f() -> Option<impl Sized> {
+    let Some(_) = f();
+    Some(f())
+}
+"#,
+    );
+}
+
+/// Synthetic control: nothing opaque is involved, so the diagnostic must stay.
+#[test]
+fn non_exhaustive_let_still_reported() {
+    check_diagnostics(
+        r#"
+//- minicore: option
+fn f(o: Option<u8>) {
+    let Some(_x) = o;
+      //^^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+}
+"#,
+    );
+}
+
+/// Bailing out everywhere would fix the panic but lose this diagnostic, so revealing the hidden
+/// type has to keep working.
+#[test]
+fn revealed_opaque_keeps_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized
+enum E { A, B }
+fn rpit<'a: 'b, 'b: 'a>() -> impl Sized {
+    let E::A = rpit::<'b, 'a>();
+      //^^^^ 💡 error: non-exhaustive pattern: `B` not covered
+    E::A
+}
+"#,
+    );
+}
+
+#[test]
+fn revealed_opaque_inside_adt_keeps_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn h() -> Option<impl Sized> {
+    let Some(()) = h();
+      //^^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+    Some(())
+}
+"#,
+    );
+}
+
+/// The hidden type carries an erased region while the pattern type carries an inference error
+/// region, so comparing the revealed type with the pattern type for equality drops the
+/// diagnostic. This is what `same_ctor_shape` is for.
+#[test]
+fn revealed_opaque_with_region_keeps_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn g<'a>(x: &'a ()) -> Option<impl Sized + 'a> {
+    let Some(_) = g(x);
+      //^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+    Some(x)
+}
+"#,
+    );
+}
+
+/// The match counterpart of `ill_typed_opaque_scrutinee_does_not_crash`: the revealed type and
+/// the pattern type disagree, so analyzing them together would produce a false diagnostic.
+#[test]
+fn ill_typed_match_on_opaque_does_not_crash() {
+    check_diagnostics(
+        r#"
+//- minicore: sized
+enum E { A, B }
+fn rpit<'a: 'b, 'b: 'a>() -> impl Sized {
+    match rpit::<'b, 'a>() {
+        E::A => {}
+    }
+}
+"#,
+    );
+}
+
+/// An opaque type that is never descended into does not prevent the analysis: the constructors
+/// of the enclosing type are still known, so the missing arm is reported (rustc reports E0004
+/// here as well).
+#[test]
+fn opaque_in_field_position_keeps_match_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn rpit() -> Option<impl Sized> { Some(()) }
+fn tester() {
+    match rpit() {
+        //^^^^^^ error: missing match arm: `None` not covered
+        Some(_) => {}
+    }
+}
+"#,
+    );
+}
+
+/// The same for the `let` path.
+#[test]
+fn opaque_in_field_position_keeps_let_diagnostic() {
+    check_diagnostics(
+        r#"
+//- minicore: sized, option
+fn rpit() -> Option<impl Sized> { Some(()) }
+fn tester() {
+    let Some(_) = rpit();
+      //^^^^^^^ 💡 error: non-exhaustive pattern: `None` not covered
+}
+"#,
+    );
+}
