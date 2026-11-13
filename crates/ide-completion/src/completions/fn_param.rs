@@ -1,7 +1,7 @@
 //! See [`complete_fn_param`].
 
 use hir::HirDisplay;
-use ide_db::FxHashMap;
+use ide_db::{FxHashMap, text_edit::TextEdit};
 use itertools::Either;
 use syntax::{
     AstNode, Direction, SmolStr, SyntaxKind, TextRange, TextSize, ToSmolStr, algo,
@@ -40,17 +40,17 @@ pub(crate) fn complete_fn_param(
         } else {
             format_smolstr!("{qualifier}{label}")
         };
-        let mk_item = |insert_text: &str, range: TextRange| {
+        let mk_item = |edit, range: TextRange| {
             let mut item =
                 CompletionItem::new(CompletionItemKind::Binding, range, label, ctx.edition);
-            if insert_text != label {
-                item.insert_text(insert_text);
-            }
+            item.text_edit(edit);
             item
         };
         let item = match &comma_wrapper {
-            Some((fmt, range)) => mk_item(&fmt(&insert), *range),
-            None => mk_item(&insert, ctx.source_range()),
+            Some((fmt, range)) => mk_item(fmt(&insert), *range),
+            None => {
+                mk_item(TextEdit::replace(ctx.source_range(), insert.into()), ctx.source_range())
+            }
         };
         // Completion lookup is omitted intentionally here.
         // See the full discussion: https://github.com/rust-lang/rust-analyzer/issues/12073
@@ -196,7 +196,9 @@ fn should_add_self_completions(
     }
 }
 
-fn comma_wrapper(ctx: &CompletionContext<'_, '_>) -> Option<(impl Fn(&str) -> SmolStr, TextRange)> {
+fn comma_wrapper(
+    ctx: &CompletionContext<'_, '_>,
+) -> Option<(impl Fn(&str) -> TextEdit, TextRange)> {
     let param =
         ctx.original_token.parent_ancestors().find(|node| node.kind() == SyntaxKind::PARAM)?;
 
@@ -205,21 +207,44 @@ fn comma_wrapper(ctx: &CompletionContext<'_, '_>) -> Option<(impl Fn(&str) -> Sm
         let t = algo::skip_whitespace_token(t, Direction::Next)?;
         t.kind()
     };
-    let prev_token_kind = {
-        let t = param.first_token()?.prev_token()?;
-        let t = algo::skip_whitespace_token(t, Direction::Prev)?;
-        t.kind()
+    let prev_param = param.prev_sibling().and_then(ast::Param::cast);
+
+    let needs_comma_before = prev_param
+        .as_ref()
+        .and_then(|it| {
+            algo::skip_trivia_token(it.syntax().last_token()?.next_token()?, Direction::Next)
+        })
+        .is_some_and(|it| it.kind() != SyntaxKind::COMMA);
+    let needs_comma_after = match next_token_kind {
+        SyntaxKind::COMMA => false,
+        SyntaxKind::R_PAREN | SyntaxKind::PIPE => param
+            .next_sibling_or_token()
+            .and_then(|it| it.into_token())
+            .is_some_and(|it| it.text().contains("\n")),
+        _ => true,
     };
 
-    let has_trailing_comma =
-        matches!(next_token_kind, SyntaxKind::COMMA | SyntaxKind::R_PAREN | SyntaxKind::PIPE);
-    let trailing = if has_trailing_comma { "" } else { "," };
+    let insert_comma_before = prev_param.filter(|_| needs_comma_before).map(|prev_param| {
+        let needs_space_before =
+            prev_param.syntax().next_sibling_or_token().is_none_or(|it| !it.kind().is_trivia());
+        (prev_param.syntax().text_range().end(), if needs_space_before { ", " } else { "," })
+    });
 
-    let has_leading_comma =
-        matches!(prev_token_kind, SyntaxKind::COMMA | SyntaxKind::L_PAREN | SyntaxKind::PIPE);
-    let leading = if has_leading_comma { "" } else { ", " };
+    let trailing = if needs_comma_after { "," } else { "" };
+    let range = param.text_range();
 
-    Some((move |label: &_| format_smolstr!("{leading}{label}{trailing}"), param.text_range()))
+    Some((
+        move |label: &_| {
+            let insert_text = format!("{label}{trailing}");
+            let mut edit = TextEdit::builder();
+            if let Some((offset, comma)) = insert_comma_before {
+                edit.insert(offset, comma.to_owned());
+            }
+            edit.replace(range, insert_text);
+            edit.finish()
+        },
+        range,
+    ))
 }
 
 fn is_simple_param(param: &ast::Param) -> bool {

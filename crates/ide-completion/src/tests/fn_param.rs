@@ -1,52 +1,151 @@
 use expect_test::expect;
 
-use crate::tests::{check, check_with_trigger_character};
+use crate::tests::{check, check_edit, check_with_trigger_character};
 
 #[test]
 fn only_param() {
-    check(
+    check_edit(
+        "file_id: usize",
         r#"
 fn foo(file_id: usize) {}
 fn bar(file_id: usize) {}
 fn baz(file$0) {}
 "#,
-        expect![[r#"
-            bn file_id: usize
-            kw mut
-            kw ref
-        "#]],
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(file_id: usize) {}
+"#,
+    );
+
+    check_edit(
+        "file_id: usize",
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(/*...*/ file$0) {}
+"#,
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(/*...*/ file_id: usize) {}
+"#,
     );
 }
 
 #[test]
 fn last_param() {
-    check(
+    check_edit(
+        "file_id: usize",
         r#"
 fn foo(file_id: usize) {}
 fn bar(file_id: usize) {}
 fn baz(foo: (), file$0) {}
 "#,
-        expect![[r#"
-            bn file_id: usize
-            kw mut
-            kw ref
-        "#]],
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(foo: (), file_id: usize) {}
+"#,
+    );
+
+    check_edit(
+        "file_id: usize",
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    foo: ()
+    file$0
+) {}
+"#,
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    foo: (),
+    file_id: usize,
+) {}
+"#,
+    );
+
+    check_edit(
+        "file_id: usize",
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    foo: (),
+    file$0
+) {}
+"#,
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    foo: (),
+    file_id: usize,
+) {}
+"#,
+    );
+
+    check_edit(
+        "file_id: usize",
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    foo: (),
+    // comment
+    file$0
+) {}
+"#,
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    foo: (),
+    // comment
+    file_id: usize,
+) {}
+"#,
     );
 }
 
 #[test]
 fn first_param() {
-    check(
+    check_edit(
+        "file_id: usize",
         r#"
 fn foo(file_id: usize) {}
 fn bar(file_id: usize) {}
 fn baz(file$0 id: u32) {}
 "#,
-        expect![[r#"
-            bn file_id: usize
-            kw mut
-            kw ref
-        "#]],
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(file_id: usize, id: u32) {}
+"#,
+    );
+
+    check_edit(
+        "file_id: usize",
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    file$0
+    id: u32
+) {}
+"#,
+        r#"
+fn foo(file_id: usize) {}
+fn bar(file_id: usize) {}
+fn baz(
+    file_id: usize,
+    id: u32
+) {}
+"#,
     );
 }
 
@@ -210,6 +309,22 @@ trait A {
 
 #[test]
 fn in_trait_after_self() {
+    check_edit(
+        "file_id: usize",
+        r#"
+trait A {
+    fn foo(file_id: usize) {}
+    fn new(self, $0) {}
+}
+"#,
+        r#"
+trait A {
+    fn foo(file_id: usize) {}
+    fn new(self, file_id: usize) {}
+}
+"#,
+    );
+
     check(
         r#"
 trait A {
