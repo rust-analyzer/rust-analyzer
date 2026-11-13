@@ -24,6 +24,83 @@ struct Struct;
 }
 
 #[test]
+fn insert_in_module_indent() {
+    cov_mark::check!(insert_group);
+    check(
+        "foo::bar",
+        r#"
+mod tests {
+    $0use xxx;
+}
+"#,
+        r#"
+mod tests {
+    use foo::bar;
+    use xxx;
+}
+"#,
+        ImportGranularity::Crate,
+    );
+
+    cov_mark::check!(insert_group_last);
+    check(
+        "foo::bar",
+        r#"
+mod tests {
+    $0use aaa;
+}
+"#,
+        r#"
+mod tests {
+    use aaa;
+    use foo::bar;
+}
+"#,
+        ImportGranularity::Crate,
+    );
+
+    cov_mark::check!(insert_group_new_group);
+    check_none(
+        "std::fmt",
+        r#"
+mod tests {
+    $0use foo::bar::A;
+    use foo::bar::D;
+}
+"#,
+        r#"
+mod tests {
+    use std::fmt;
+
+    use foo::bar::A;
+    use foo::bar::D;
+}
+"#,
+    );
+
+    cov_mark::check!(insert_first_of_module);
+    check_none(
+        "baz::Baz",
+        r#"
+mod foo {
+    mod bar {
+        const _: Baz$0 = ();
+    }
+}
+"#,
+        r#"
+mod foo {
+    mod bar {
+        use baz::Baz;
+
+        const _: Baz = ();
+    }
+}
+"#,
+    );
+}
+
+#[test]
 fn respects_cfg_attr_fn_body() {
     check(
         r"bar::Bar",
@@ -474,11 +551,15 @@ fn insert_empty_module() {
     check(
         "foo::bar",
         r"
-mod x {$0}
+mod indent {
+    mod x {$0}
+}
 ",
         r"
-mod x {
-    use foo::bar;
+mod indent {
+    mod x {
+        use foo::bar;
+    }
 }
 ",
         ImportGranularity::Item,
@@ -550,6 +631,7 @@ fn main() {}",
 
 #[test]
 fn inserts_after_single_line_inner_comments() {
+    cov_mark::check_count!(insert_empty_inner_attr, 2);
     check_none(
         "foo::bar::Baz",
         "//! Single line inner comments do not allow any code before them.",
