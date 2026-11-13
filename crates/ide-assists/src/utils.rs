@@ -238,24 +238,7 @@ pub fn add_trait_assoc_items_to_impl(
     original_items
         .iter()
         .map(|InFile { file_id, value: original_item }| {
-            let mut cloned_item = {
-                if let Some(macro_file) = file_id.macro_file() {
-                    let span_map = macro_file.expansion_span_map(sema.db);
-                    let item_prettified = prettify_macro_expansion(
-                        sema.db,
-                        original_item.syntax().clone(),
-                        span_map,
-                        target_scope.krate().into(),
-                    );
-                    if let Some(formatted) = ast::AssocItem::cast(item_prettified) {
-                        return formatted;
-                    } else {
-                        stdx::never!("formatted `AssocItem` could not be cast back to `AssocItem`");
-                    }
-                }
-                original_item
-            }
-            .reset_indent();
+            let mut cloned_item = original_item.reset_indent();
 
             if let Some(source_scope) = sema.scope(original_item.syntax()) {
                 // FIXME: Paths in nested macros are not handled well. See
@@ -264,6 +247,8 @@ pub fn add_trait_assoc_items_to_impl(
                     PathTransform::trait_impl(target_scope, &source_scope, trait_, impl_.clone());
                 cloned_item = ast::AssocItem::cast(transform.apply(cloned_item.syntax())).unwrap();
             }
+            let cloned_item =
+                pretty_node_inside_macro(cloned_item, sema, *file_id, target_scope.krate());
             let (editor, cloned_item) = SyntaxEditor::with_ast_node(&cloned_item);
             cloned_item.remove_attrs_and_docs(&editor);
             ast::AssocItem::cast(editor.finish().new_root().clone()).unwrap()
@@ -274,10 +259,7 @@ pub fn add_trait_assoc_items_to_impl(
             // we requested required or defaulted methods, and not whether the method actually has a body.
             ast::AssocItem::Fn(fn_) if default_mode == DefaultMethods::No => {
                 let (fn_editor, fn_) = SyntaxEditor::with_ast_node(&fn_);
-                let fill_expr: ast::Expr = match config.expr_fill_default {
-                    ExprFillDefaultMode::Todo | ExprFillDefaultMode::Default => make.expr_todo(),
-                    ExprFillDefaultMode::Underscore => make.expr_underscore().into(),
-                };
+                let fill_expr: ast::Expr = expr_fill_default(config);
                 let new_body = make.block_expr(None::<ast::Stmt>, Some(fill_expr));
                 fn_.replace_or_insert_body(&fn_editor, new_body);
                 let new_fn_ = fn_editor.finish().new_root().clone();
@@ -295,6 +277,31 @@ pub fn add_trait_assoc_items_to_impl(
         })
         .map(|item| AstNodeEdit::indent(&item, new_indent_level))
         .collect()
+}
+
+pub(crate) fn pretty_node_inside_macro<T: AstNode>(
+    node: T,
+    sema: &Semantics<'_, RootDatabase>,
+    file_id: hir::HirFileId,
+    target_krate: impl Into<ide_db::base_db::Crate>,
+) -> T {
+    match file_id.macro_file() {
+        Some(file_id) => {
+            // Don't call `prettify_macro_expansion()` outside the actual assist action; see inline_macro assist
+            let pretty_node = prettify_macro_expansion(
+                sema.db,
+                node.syntax().clone(),
+                file_id.expansion_span_map(sema.db),
+                target_krate.into(),
+            );
+            let Some(new_node) = T::cast(pretty_node) else {
+                stdx::never!("prettify_macro_expansion changes node kind");
+                return node;
+            };
+            new_node
+        }
+        None => node,
+    }
 }
 
 pub(crate) fn vis_offset(node: &SyntaxNode) -> TextSize {

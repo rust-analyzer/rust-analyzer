@@ -10,7 +10,7 @@ use syntax::{
 
 use crate::{
     AssistContext, AssistId, AssistKind, Assists, GroupLabel,
-    utils::{convert_param_list_to_arg_list, find_struct_impl},
+    utils::{convert_param_list_to_arg_list, find_struct_impl, pretty_node_inside_macro},
 };
 
 // Assist: generate_delegate_methods
@@ -121,6 +121,8 @@ pub(crate) fn generate_delegate_methods(
                         let source_scope = ctx.sema.scope(v.syntax());
                         let target_scope = ctx.sema.scope(strukt.syntax());
                         if let (Some(s), Some(t)) = (source_scope, target_scope) {
+                            let v =
+                                pretty_node_inside_macro(v, &ctx.sema, source.file_id, t.krate());
                             ast::Fn::cast(
                                 PathTransform::generic_transformation(&t, &s).apply(v.syntax()),
                             )
@@ -669,7 +671,7 @@ impl<'a, T> Bar<'a, T> {
 //- /bar.rs
 macro_rules! test_method {
     () => {
-        pub fn test(self, b: Bar) -> Self {
+        pub fn test(self, b: &mut Bar) -> Self {
             self
         }
     };
@@ -696,7 +698,7 @@ struct Foo {
 }
 
 impl Foo {
-    $0pub fn test(self,b:bar::Bar) ->bar::Bar {
+    $0pub fn test(self,b: &mut bar::Bar) -> bar::Bar {
         self.bar.test(b)
     }
 }

@@ -4,7 +4,7 @@ use syntax::{
     SyntaxKind::{self, *},
     SyntaxNode, SyntaxToken, T, WalkEvent,
     ast::syntax_factory::SyntaxFactory,
-    syntax_editor::{Position, SyntaxEditor},
+    syntax_editor::{Element, Position, SyntaxEditor},
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,8 +31,8 @@ pub fn prettify_macro_expansion(
     let mut dollar_crate_replacements = Vec::new();
     let (editor, syn) = SyntaxEditor::new(syn);
 
-    let before = Position::before;
-    let after = Position::after;
+    let before = before_non_wrap;
+    let after = after_non_wrap;
 
     let do_indent = |pos: fn(_) -> Position, token: &SyntaxToken, indent| {
         (pos(token.clone()), PrettifyWsKind::Indent(indent))
@@ -56,9 +56,9 @@ pub fn prettify_macro_expansion(
                     _ => false,
                 };
                 if (!is_last_child && is_non_last_newline) || is_always_newline {
-                    mods.push((Position::after(node.clone()), PrettifyWsKind::Indent(indent)));
+                    mods.push((after_non_wrap(node.clone()), PrettifyWsKind::Indent(indent)));
                     if node.parent().is_some() {
-                        mods.push((Position::after(node), PrettifyWsKind::Newline));
+                        mods.push((after_non_wrap(node), PrettifyWsKind::Newline));
                     }
                 }
                 continue;
@@ -184,6 +184,25 @@ pub fn prettify_macro_expansion(
     editor.finish().new_root().clone()
 }
 
+fn before_non_wrap(elem: impl Element) -> Position {
+    let mut elem = elem.syntax_element();
+    while elem.prev_sibling_or_token().is_none()
+        && let Some(parent) = elem.parent()
+    {
+        elem = parent.into();
+    }
+    Position::before(elem)
+}
+fn after_non_wrap(elem: impl Element) -> Position {
+    let mut elem = elem.syntax_element();
+    while elem.next_sibling_or_token().is_none()
+        && let Some(parent) = elem.parent()
+    {
+        elem = parent.into();
+    }
+    Position::after(elem)
+}
+
 fn is_text(k: SyntaxKind) -> bool {
     // Consider all keywords in all editions.
     k.is_any_identifier() || k.is_literal() || k == UNDERSCORE
@@ -195,17 +214,12 @@ mod tests {
     use expect_test::{Expect, expect};
 
     #[expect(deprecated)]
-    fn check_pretty(#[rust_analyzer::rust_fixture] ra_fixture: &str, expect: Expect) {
+    fn pretty_input(#[rust_analyzer::rust_fixture] ra_fixture: &str) -> SyntaxNode {
         let ra_fixture = stdx::trim_indent(ra_fixture);
         let source_file = syntax::ast::SourceFile::parse(&ra_fixture, span::Edition::CURRENT);
         let syn = remove_whitespaces(&source_file.syntax_node());
 
-        let pretty = prettify_macro_expansion(syn, &mut |_, _| None, |_| ());
-        let mut pretty = pretty.to_string();
-        if pretty.contains('\n') {
-            pretty.push('\n');
-        }
-        expect.assert_eq(&pretty);
+        return prettify_macro_expansion(syn, &mut |_, _| None, |_| ());
 
         fn remove_whitespaces(node: &SyntaxNode) -> SyntaxNode {
             let (editor, node) = SyntaxEditor::new(node.clone());
@@ -217,6 +231,20 @@ mod tests {
             });
             editor.finish().new_root().clone()
         }
+    }
+
+    fn check_pretty(#[rust_analyzer::rust_fixture] ra_fixture: &str, expect: Expect) {
+        let pretty = pretty_input(ra_fixture);
+        let mut pretty = pretty.to_string();
+        if pretty.contains('\n') {
+            pretty.push('\n');
+        }
+        expect.assert_eq(&pretty);
+    }
+
+    fn check_pretty_ast(#[rust_analyzer::rust_fixture] ra_fixture: &str, expect: Expect) {
+        let pretty = pretty_input(ra_fixture);
+        expect.assert_eq(&format!("{pretty:#?}"));
     }
 
     #[test]
@@ -483,6 +511,43 @@ mod tests {
                         _ => {},
                     };
                 };
+            "#]],
+        );
+    }
+
+    #[test]
+    fn test_insert_outside_node() {
+        check_pretty_ast(
+            r#"
+            pub fn foo() -> i32 {}
+            "#,
+            expect![[r#"
+                SOURCE_FILE@0..22
+                  FN@0..22
+                    VISIBILITY@0..3
+                      PUB_KW@0..3 "pub"
+                    WHITESPACE@3..4 " "
+                    FN_KW@4..6 "fn"
+                    WHITESPACE@6..7 " "
+                    NAME@7..10
+                      IDENT@7..10 "foo"
+                    PARAM_LIST@10..12
+                      L_PAREN@10..11 "("
+                      R_PAREN@11..12 ")"
+                    WHITESPACE@12..13 " "
+                    RET_TYPE@13..19
+                      THIN_ARROW@13..15 "->"
+                      WHITESPACE@15..16 " "
+                      PATH_TYPE@16..19
+                        PATH@16..19
+                          PATH_SEGMENT@16..19
+                            NAME_REF@16..19
+                              IDENT@16..19 "i32"
+                    WHITESPACE@19..20 " "
+                    BLOCK_EXPR@20..22
+                      STMT_LIST@20..22
+                        L_CURLY@20..21 "{"
+                        R_CURLY@21..22 "}"
             "#]],
         );
     }

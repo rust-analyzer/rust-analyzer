@@ -503,20 +503,11 @@ fn pretty_pat_inside_macro(
     pat: Option<ast::Pat>,
     sema: &hir::Semantics<'_, RootDatabase>,
 ) -> Option<ast::Pat> {
-    let pretty = |pat| {
-        let db = sema.db;
-        let scope = sema.scope(&pat)?;
-        let file_id = scope.file_id().macro_file()?;
-        // Don't call `prettify_macro_expansion()` outside the actual assist action; see inline_macro assist
-        let pretty_node = hir::prettify_macro_expansion(
-            db,
-            pat,
-            file_id.expansion_span_map(db),
-            scope.module().krate(db).into(),
-        );
-        ast::Pat::cast(pretty_node)
+    let pretty = |pat: ast::Pat| {
+        let scope = sema.scope(pat.syntax())?;
+        Some(crate::utils::pretty_node_inside_macro(pat, sema, scope.file_id(), scope.krate()))
     };
-    pat.map(|pat| pretty(pat.syntax().clone()).unwrap_or(pat))
+    pat.map(|pat| pretty(pat.clone()).unwrap_or(pat))
 }
 
 #[cfg(test)]

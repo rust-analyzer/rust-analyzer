@@ -9,7 +9,7 @@ use ide_db::{
     imports::insert_use::remove_use_tree_if_simple,
     path_transform::PathTransform,
     search::{FileReference, FileReferenceNode, SearchScope},
-    syntax_helpers::{node_ext::expr_as_name_ref, prettify_macro_expansion},
+    syntax_helpers::node_ext::expr_as_name_ref,
 };
 use itertools::{Itertools, izip};
 use syntax::{
@@ -25,6 +25,7 @@ use syntax::{
 use crate::{
     AssistId,
     assist_context::{AssistContext, Assists},
+    utils::pretty_node_inside_macro,
 };
 
 // Assist: inline_into_callers
@@ -516,21 +517,9 @@ fn inline<'db>(
         let expr: &ast::Expr = expr;
 
         let mut insert_let_stmt = || {
-            let param_ty = param_ty.clone().map(|param_ty| {
-                let file_id = sema.hir_file_for(param_ty.syntax());
-                if let Some(macro_file) = file_id.macro_file() {
-                    let span_map = macro_file.expansion_span_map(sema.db);
-                    let param_ty_prettified = prettify_macro_expansion(
-                        sema.db,
-                        param_ty.syntax().clone(),
-                        span_map,
-                        *krate,
-                    );
-                    ast::Type::cast(param_ty_prettified).unwrap_or(param_ty)
-                } else {
-                    param_ty
-                }
-            });
+            let param_ty = param_ty
+                .clone()
+                .map(|param_ty| pretty_node_inside_macro(param_ty, sema, file_id, *krate));
 
             let ty = sema.type_of_expr(expr).filter(TypeInfo::has_adjustment).and(param_ty);
 
@@ -639,12 +628,9 @@ fn inline<'db>(
     {
         body = new_body;
     }
-    if let Some(macro_file) = file_id.macro_file() {
+    if file_id.is_macro() {
         cov_mark::hit!(inline_call_defined_in_macro);
-        let span_map = macro_file.expansion_span_map(sema.db);
-        let body_prettified =
-            prettify_macro_expansion(sema.db, body.syntax().clone(), span_map, *krate);
-        body = ast::BlockExpr::cast(body_prettified).unwrap();
+        body = pretty_node_inside_macro(body, sema, file_id, *krate);
     }
 
     fn reindent<T: AstNodeEdit>(value: T) -> T {
