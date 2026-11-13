@@ -55,7 +55,7 @@ pub(crate) fn complete_use_path(
                         if let (Some(attrs), Some(defining_crate)) =
                             (def.attrs(ctx.db), def.krate(ctx.db))
                             && (!ctx.check_stability(Some(&attrs))
-                                || ctx.is_doc_hidden(&attrs, defining_crate))
+                                || ctx.is_doc_hidden(&attrs, &name, defining_crate))
                         {
                             continue;
                         }

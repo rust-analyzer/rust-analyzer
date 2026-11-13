@@ -602,18 +602,18 @@ impl<'db> CompletionContext<'_, 'db> {
     }
 
     /// Checks if an item is visible and not `doc(hidden)` at the completion site.
-    pub(crate) fn def_is_visible(&self, item: &ScopeDef<'db>) -> Visible {
+    pub(crate) fn def_is_visible(&self, item: &ScopeDef<'db>, under_name: &Name) -> Visible {
         match item {
             ScopeDef::ModuleDef(def) => match def {
-                hir::ModuleDef::Module(it) => self.is_visible(it),
-                hir::ModuleDef::Function(it) => self.is_visible(it),
-                hir::ModuleDef::Adt(it) => self.is_visible(it),
-                hir::ModuleDef::EnumVariant(it) => self.is_visible(it),
-                hir::ModuleDef::Const(it) => self.is_visible(it),
-                hir::ModuleDef::Static(it) => self.is_visible(it),
-                hir::ModuleDef::Trait(it) => self.is_visible(it),
-                hir::ModuleDef::TypeAlias(it) => self.is_visible(it),
-                hir::ModuleDef::Macro(it) => self.is_visible(it),
+                hir::ModuleDef::Module(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::Function(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::Adt(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::EnumVariant(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::Const(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::Static(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::Trait(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::TypeAlias(it) => self.is_visible(it, under_name),
+                hir::ModuleDef::Macro(it) => self.is_visible(it, under_name),
                 hir::ModuleDef::BuiltinType(_) => Visible::Yes,
             },
             ScopeDef::GenericParam(_)
@@ -626,13 +626,13 @@ impl<'db> CompletionContext<'_, 'db> {
     }
 
     /// Checks if an item is visible, not `doc(hidden)` and stable at the completion site.
-    pub(crate) fn is_visible<I>(&self, item: &I) -> Visible
+    pub(crate) fn is_visible<I>(&self, item: &I, under_name: &Name) -> Visible
     where
         I: hir::HasVisibility + hir::HasAttrs + hir::HasCrate + Copy,
     {
         let vis = item.visibility(self.db);
         let attrs = item.attrs(self.db);
-        self.is_visible_impl(&vis, &attrs, item.krate(self.db))
+        self.is_visible_impl(&vis, &attrs, under_name, item.krate(self.db))
     }
 
     pub(crate) fn doc_aliases<I>(&self, item: &I) -> Vec<SmolStr>
@@ -644,11 +644,11 @@ impl<'db> CompletionContext<'_, 'db> {
     }
 
     /// Check if an item is `#[doc(hidden)]`.
-    pub(crate) fn is_item_hidden(&self, item: &hir::ItemInNs) -> bool {
+    pub(crate) fn is_item_hidden(&self, item: &hir::ItemInNs, under_name: &Name) -> bool {
         let attrs = item.attrs(self.db);
         let krate = item.krate(self.db);
         match (attrs, krate) {
-            (Some(attrs), Some(krate)) => self.is_doc_hidden(&attrs, krate),
+            (Some(attrs), Some(krate)) => self.is_doc_hidden(&attrs, under_name, krate),
             _ => false,
         }
     }
@@ -672,13 +672,14 @@ impl<'db> CompletionContext<'_, 'db> {
             || self.krate.is_unstable_feature_enabled(self.db, &unstable_feature)
     }
 
-    pub(crate) fn check_stability_and_hidden<I>(&self, item: I) -> bool
+    pub(crate) fn check_stability_and_hidden<I>(&self, item: I, under_name: &Name) -> bool
     where
         I: hir::HasAttrs + hir::HasCrate,
     {
         let defining_crate = item.krate(self.db);
         let attrs = item.attrs(self.db);
-        self.check_stability(Some(&attrs)) && !self.is_doc_hidden(&attrs, defining_crate)
+        self.check_stability(Some(&attrs))
+            && !self.is_doc_hidden(&attrs, under_name, defining_crate)
     }
 
     /// Whether the given trait is an operator trait or not.
@@ -724,7 +725,7 @@ impl<'db> CompletionContext<'_, 'db> {
     pub(crate) fn process_all_names(&self, f: &mut dyn FnMut(Name, ScopeDef<'db>, Vec<SmolStr>)) {
         let _p = tracing::info_span!("CompletionContext::process_all_names").entered();
         self.scope.process_all_names(&mut |name, def| {
-            if self.is_scope_def_hidden(def) {
+            if self.is_scope_def_hidden(def, &name) {
                 return;
             }
             let doc_aliases = self.doc_aliases_in_scope(def);
@@ -737,9 +738,9 @@ impl<'db> CompletionContext<'_, 'db> {
         self.scope.process_all_names(f);
     }
 
-    fn is_scope_def_hidden(&self, scope_def: ScopeDef<'db>) -> bool {
+    fn is_scope_def_hidden(&self, scope_def: ScopeDef<'db>, name: &Name) -> bool {
         if let (Some(attrs), Some(krate)) = (scope_def.attrs(self.db), scope_def.krate(self.db)) {
-            return self.is_doc_hidden(&attrs, krate);
+            return self.is_doc_hidden(&attrs, name, krate);
         }
 
         false
@@ -749,6 +750,7 @@ impl<'db> CompletionContext<'_, 'db> {
         &self,
         vis: &hir::Visibility,
         attrs: &hir::AttrsWithOwner,
+        under_name: &Name,
         defining_crate: hir::Crate,
     ) -> Visible {
         if !self.check_stability(Some(attrs)) {
@@ -767,16 +769,21 @@ impl<'db> CompletionContext<'_, 'db> {
             };
         }
 
-        if self.is_doc_hidden(attrs, defining_crate) { Visible::No } else { Visible::Yes }
+        if self.is_doc_hidden(attrs, under_name, defining_crate) {
+            Visible::No
+        } else {
+            Visible::Yes
+        }
     }
 
     pub(crate) fn is_doc_hidden(
         &self,
         attrs: &hir::AttrsWithOwner,
+        under_name: &Name,
         defining_crate: hir::Crate,
     ) -> bool {
         // `doc(hidden)` items are only completed within the defining crate.
-        self.krate != defining_crate && attrs.is_doc_hidden()
+        self.krate != defining_crate && attrs.is_doc_hidden(self.db, under_name, self.module)
     }
 
     pub(crate) fn doc_aliases_in_scope(&self, scope_def: ScopeDef<'db>) -> Vec<SmolStr> {

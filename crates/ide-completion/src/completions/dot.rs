@@ -69,7 +69,7 @@ pub(crate) fn complete_dot(
                 has_parens,
             );
             complete_methods(ctx, &future_output, &traits_in_scope, |func| {
-                acc.add_method(ctx, &dot_access, func, Some(await_str.clone()), None)
+                acc.add_method(ctx, &dot_access, func, Some(await_str.clone()))
             });
         }
     }
@@ -83,7 +83,7 @@ pub(crate) fn complete_dot(
         has_parens,
     );
     complete_methods(ctx, receiver_ty, &traits_in_scope, |func| {
-        acc.add_method(ctx, dot_access, func, None, None)
+        acc.add_method(ctx, dot_access, func, None)
     });
 
     if ctx.config.enable_auto_iter && !receiver_ty.strip_references().impls_iterator(ctx.db) {
@@ -121,7 +121,7 @@ pub(crate) fn complete_dot(
                 if func.name(ctx.db) == hir::sym::into_iter {
                     return;
                 }
-                acc.add_method(ctx, &dot_access, func, Some(iter_sym.clone()), None)
+                acc.add_method(ctx, &dot_access, func, Some(iter_sym.clone()))
             });
         }
     }
@@ -178,7 +178,7 @@ pub(crate) fn complete_undotted_self(
         false,
     );
     complete_methods(ctx, ty, &ctx.traits_in_scope(), |func| {
-        acc.add_method(ctx, fake_dot_access, func, Some(SmolStr::new_static(param_name)), None)
+        acc.add_method(ctx, fake_dot_access, func, Some(SmolStr::new_static(param_name)))
     });
 }
 
@@ -242,7 +242,7 @@ fn complete_methods(
                 let do_complete = match &same_name {
                     hash_map::Entry::Vacant(_) => true,
                     hash_map::Entry::Occupied(same_func) => {
-                        match self.ctx.is_visible(same_func.get()) {
+                        match self.ctx.is_visible(same_func.get(), same_func.key()) {
                             crate::context::Visible::Yes => false,
                             crate::context::Visible::Editable => true,
                             crate::context::Visible::No => true,

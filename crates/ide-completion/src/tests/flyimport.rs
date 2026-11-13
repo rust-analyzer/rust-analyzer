@@ -2118,3 +2118,26 @@ fn baz() {
     "#,
     );
 }
+
+#[test]
+fn reexport_of_doc_hidden_legacy_macro() {
+    check(
+        r#"
+//- /foo.rs crate:foo
+pub mod bar {
+    #[macro_export]
+    #[doc(hidden)]
+    macro_rules! __my_macro {
+        () => {};
+    }
+    pub use __my_macro as my_macro;
+}
+
+//- /bar.rs crate:bar deps:foo
+my_macro$0! {}
+    "#,
+        expect![[r#"
+            ma my_macro (use foo::bar::my_macro) macro_rules! my_macro
+        "#]],
+    );
+}

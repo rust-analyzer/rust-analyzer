@@ -190,6 +190,15 @@ impl ModPath {
     ) -> impl fmt::Display + 'a {
         Display { db, path: self, edition: Some(edition) }
     }
+
+    pub fn last_name(&self) -> Name {
+        self.segments.last().cloned().unwrap_or_else(|| match self.kind {
+            PathKind::DollarCrate(_) | PathKind::Abs | PathKind::Plain => Name::missing(),
+            PathKind::SELF => Name::new_symbol_root(sym::self_),
+            PathKind::Super(_) => Name::new_symbol_root(sym::super_),
+            PathKind::Crate => Name::new_symbol_root(sym::crate_),
+        })
+    }
 }
 
 impl Extend<Name> for ModPath {

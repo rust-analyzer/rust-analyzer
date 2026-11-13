@@ -40,11 +40,10 @@ pub(crate) fn render_method(
     ctx: RenderContext<'_, '_>,
     dot_access: &DotAccess<'_>,
     receiver: Option<SmolStr>,
-    local_name: Option<hir::Name>,
     func: hir::Function,
 ) -> Builder {
     let _p = tracing::info_span!("render_method").entered();
-    render(ctx, local_name, func, FuncKind::Method(dot_access, receiver))
+    render(ctx, None, func, FuncKind::Method(dot_access, receiver))
 }
 
 fn render(

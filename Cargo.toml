@@ -175,7 +175,6 @@ unicode-properties = "=0.1.5"
 unused_dependencies = "allow"
 
 [workspace.lints.rust]
-# remember to update RUSTFLAGS in ci.yml if you add something here
 
 elided_lifetimes_in_paths = "warn"
 explicit_outlives_requirements = "warn"
@@ -235,3 +234,8 @@ print_stderr = "warn"
 
 rc_buffer = "warn"
 str_to_string = "warn"
+
+[workspace.lints.rustdoc]
+
+# We treat the codebase as one big unit, private links are fine.
+private-intra-doc-links = "allow"

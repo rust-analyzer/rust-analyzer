@@ -58,19 +58,26 @@ impl Feature {
 }
 
 fn is_valid_feature_name(feature: &str) -> Result<(), String> {
+    let mut in_code = false;
     'word: for word in feature.split_whitespace() {
-        for short in ["to", "and"] {
+        for short in ["to", "and", "of"] {
             if word == short {
                 continue 'word;
             }
         }
-        for short in ["To", "And"] {
+        for short in ["To", "And", "Of"] {
             if word == short {
                 return Err(format!("Don't capitalize {word:?}"));
             }
         }
-        if !word.starts_with(char::is_uppercase) {
+        if word.starts_with('`') {
+            in_code = true;
+        }
+        if !in_code && !word.starts_with(char::is_uppercase) {
             return Err(format!("Capitalize {word:?}"));
+        }
+        if word.ends_with('`') {
+            in_code = false;
         }
     }
     Ok(())

@@ -271,8 +271,9 @@ fn import_on_the_fly<'db>(
         .filter(ns_filter)
         .filter(|import| {
             let original_item = &import.original_item;
-            !ctx.is_item_hidden(&import.item_to_import)
-                && !ctx.is_item_hidden(original_item)
+            let name = import.import_path.last_name();
+            !ctx.is_item_hidden(&import.item_to_import, &name)
+                && !ctx.is_item_hidden(original_item, &name)
                 && ctx.check_stability(original_item.attrs(ctx.db).as_ref())
         })
         .filter(|import| filter_excluded_flyimport(ctx, import))
@@ -323,8 +324,9 @@ fn import_on_the_fly_pat_<'db>(
         .filter(ns_filter)
         .filter(|import| {
             let original_item = &import.original_item;
-            !ctx.is_item_hidden(&import.item_to_import)
-                && !ctx.is_item_hidden(original_item)
+            let name = import.import_path.last_name();
+            !ctx.is_item_hidden(&import.item_to_import, &name)
+                && !ctx.is_item_hidden(original_item, &name)
                 && ctx.check_stability(original_item.attrs(ctx.db).as_ref())
         })
         .sorted_by(|a, b| {
@@ -368,8 +370,9 @@ fn import_on_the_fly_method<'db>(
     import_assets
         .search_for_imports(&ctx.sema, cfg, ctx.config.insert_use.prefix_kind)
         .filter(|import| {
-            !ctx.is_item_hidden(&import.item_to_import)
-                && !ctx.is_item_hidden(&import.original_item)
+            let name = import.import_path.last_name();
+            !ctx.is_item_hidden(&import.item_to_import, &name)
+                && !ctx.is_item_hidden(&import.original_item, &name)
         })
         .filter(|import| filter_excluded_flyimport(ctx, import))
         .sorted_by(|a, b| {

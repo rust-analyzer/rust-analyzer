@@ -4,7 +4,7 @@ use std::slice;
 
 pub(crate) use gen_trait_fn_body::gen_trait_fn_body;
 use hir::{
-    HasAttrs as HirHasAttrs, HasCrate, HirDisplay, InFile, ModuleDef, PathResolution, Semantics,
+    HasAttrs as _, HasCrate, HirDisplay, InFile, ModuleDef, PathResolution, Semantics,
     db::HirDatabase,
 };
 use ide_db::{
@@ -178,7 +178,7 @@ pub fn filter_assoc_items(
         .copied()
         .filter(|(assoc_item, is_required)| {
             if ignore_items == IgnoreAssocItems::DocHiddenAttrPresent
-                && assoc_item.attrs(sema.db).is_doc_hidden()
+                && assoc_item.is_doc_hidden(sema.db)
             {
                 if let hir::AssocItem::Function(f) = assoc_item
                     && !f.has_body(sema.db)

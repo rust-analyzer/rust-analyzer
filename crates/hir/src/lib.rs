@@ -1153,6 +1153,10 @@ impl EnumVariant {
     pub fn is_unstable(self, db: &dyn HirDatabase) -> bool {
         AttrFlags::query(db, self.id.into()).contains(AttrFlags::IS_UNSTABLE)
     }
+
+    pub fn is_doc_hidden(self, db: &dyn HirDatabase) -> bool {
+        AttrFlags::query(db, self.id.into()).contains(AttrFlags::IS_DOC_HIDDEN)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -2487,6 +2491,10 @@ impl Macro {
                 as_name_opt(source.value.name())
             }
             MacroId::MacroRulesId(id) => {
+                if let Some((reexport_name, _)) = self.legacy_macros_reexport(db) {
+                    return reexport_name;
+                }
+
                 let loc = id.lookup(db);
                 let source = loc.source(db);
                 as_name_opt(source.value.name())
@@ -2592,6 +2600,50 @@ impl Macro {
     pub fn preferred_brace_style(&self, db: &dyn HirDatabase) -> Option<MacroBraces> {
         let attrs = self.attrs(db);
         MacroBraces::extract(attrs.attrs)
+    }
+
+    // Feature: Detection of Exported `macro_rules!`
+    //
+    // `macro_rules!` macros can only be publicly exported via `#[macro_export]` and at the crate root.
+    // For proper scoping, a common practice is to mark the macro `#[doc(hidden)]`, then have a public reexport
+    // where you want to export the macro. rust-analyzer generally supports this practice and detects the correct
+    // way to call the macro, however as a crate author you must make sure two conditions are fulfilled:
+    //
+    //  1. The reexport is *exactly in the same module* as the macro. If this condition is not fulfilled,
+    //     rust-analyzer will fail to detect the reexport and consider the macro hidden. Of course, you can then
+    //     reexport the reexport wherever you like.
+    //  2. For best experience, the reexport should be renaming. That is, declare the macro with a different name
+    //     than you want (a common practice is to call it `__<my_macro>`) then rename it in the reexport, like
+    //     `pub use __my_macro as my_macro`. If you do not do this, rust-analyzer will still find the reexport,
+    //     but it will also consider the macro not hidden at the crate root.
+
+    /// Legacy (`macro_rules!`) macros cannot have proper namespacing resolution in Rust (more precisely, they
+    /// cannot have it across crates). Therefore, it is a common practice to make a macro `#[doc(hidden)]`
+    /// and put `pub use __macro as macro` in the same module. In such cases, this function will return
+    /// the reexport.
+    fn legacy_macros_reexport(
+        &self,
+        db: &dyn HirDatabase,
+    ) -> Option<(Name, hir_def::per_ns::MacrosItem)> {
+        let MacroId::MacroRulesId(makro) = self.id else {
+            return None;
+        };
+        if !AttrFlags::query(db, makro.into())
+            .contains(AttrFlags::IS_DOC_HIDDEN | AttrFlags::IS_MACRO_EXPORT)
+        {
+            return None;
+        }
+        let loc = makro.loc(db);
+        let def_map = loc.container.def_map(db);
+        if loc.container == def_map.crate_root(db) {
+            // `#[macro_export]` macros defined at the crate root cannot have a reexport,
+            // it'll cause conflicts with the builtin export.
+            return None;
+        }
+        let scope = &def_map[loc.container].scope;
+        let (reexport_name, reexport) =
+            scope.macros().find(|(_, reexport)| reexport.def == self.id)?;
+        Some((reexport_name.clone(), reexport))
     }
 }
 
@@ -2984,6 +3036,10 @@ impl AssocItem {
             Self::TypeAlias(v) => Some(v),
             _ => None,
         }
+    }
+
+    pub fn is_doc_hidden(&self, db: &dyn HirDatabase) -> bool {
+        self.attrs(db).is_doc_hidden_raw()
     }
 }
 

@@ -498,7 +498,7 @@ impl ExtendedVariant {
     fn should_be_hidden(self, db: &RootDatabase, krate: Crate) -> bool {
         match self {
             ExtendedVariant::Variant { variant: var, .. } => {
-                var.attrs(db).is_doc_hidden() && var.module(db).krate(db) != krate
+                var.is_doc_hidden(db) && var.module(db).krate(db) != krate
             }
             _ => false,
         }

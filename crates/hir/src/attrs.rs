@@ -112,9 +112,40 @@ impl AttrsWithOwner {
         self.attrs.contains(AttrFlags::IS_DOC_NOTABLE_TRAIT)
     }
 
+    /// Never call this for macros.
     #[inline]
-    pub fn is_doc_hidden(&self) -> bool {
+    pub(crate) fn is_doc_hidden_raw(&self) -> bool {
         self.attrs.contains(AttrFlags::IS_DOC_HIDDEN)
+    }
+
+    /// This checks whether this item is `#[doc(hidden)]`. However macros are special in this regard:
+    /// we want to treat usages of non-hidden reexports of hidden macros as non-hidden, see [`Macro::legacy_macros_reexport()`].
+    /// We don't have a real semantic way to distinguish between them, so we use the name as an indication.
+    pub fn is_doc_hidden(
+        &self,
+        db: &dyn HirDatabase,
+        under_name: &Name,
+        in_module: Module,
+    ) -> bool {
+        if !self.is_doc_hidden_raw() {
+            return false;
+        }
+
+        if let AttrsOwner::AttrDef(AttrDefId::MacroId(makro)) = self.owner
+            && let Some((reexport_name, reexport)) =
+                (Macro { id: makro }).legacy_macros_reexport(db)
+            && *under_name == reexport_name
+            && reexport.vis.is_visible_from(db, in_module.id)
+        {
+            // Two things are noticeable here:
+            //  1. We don't check whether the reexport has `#[doc(hidden)]`, because we have no easy and performant way
+            //     to check attributes of reexports.
+            //  2. If the reexport has the same name as the macro, we always treat it as non-hidden. We do so because
+            //     it's common to use the same name.
+            return false;
+        }
+
+        true
     }
 
     #[inline]

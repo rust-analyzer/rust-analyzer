@@ -230,7 +230,7 @@ impl Completions {
         resolution: hir::ScopeDef<'db>,
         doc_aliases: Vec<syntax::SmolStr>,
     ) {
-        let is_private_editable = match ctx.def_is_visible(&resolution) {
+        let is_private_editable = match ctx.def_is_visible(&resolution, &local_name) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -251,7 +251,7 @@ impl Completions {
         local_name: hir::Name,
         resolution: hir::ScopeDef<'db>,
     ) {
-        let is_private_editable = match ctx.def_is_visible(&resolution) {
+        let is_private_editable = match ctx.def_is_visible(&resolution, &local_name) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -300,7 +300,7 @@ impl Completions {
         mac: hir::Macro,
         local_name: hir::Name,
     ) {
-        let is_private_editable = match ctx.is_visible(&mac) {
+        let is_private_editable = match ctx.is_visible(&mac, &local_name) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -321,7 +321,7 @@ impl Completions {
         func: hir::Function,
         local_name: Option<hir::Name>,
     ) {
-        let is_private_editable = match ctx.is_visible(&func) {
+        let is_private_editable = match ctx.is_visible(&func, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -342,9 +342,8 @@ impl Completions {
         dot_access: &DotAccess<'_>,
         func: hir::Function,
         receiver: Option<SmolStr>,
-        local_name: Option<hir::Name>,
     ) {
-        let is_private_editable = match ctx.is_visible(&func) {
+        let is_private_editable = match ctx.is_visible(&func, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -354,7 +353,6 @@ impl Completions {
             RenderContext::new(ctx).private_editable(is_private_editable).doc_aliases(doc_aliases),
             dot_access,
             receiver,
-            local_name,
             func,
         )
         .add_to(self, ctx.db);
@@ -367,7 +365,7 @@ impl Completions {
         func: hir::Function,
         import: LocatedImport,
     ) {
-        let is_private_editable = match ctx.is_visible(&func) {
+        let is_private_editable = match ctx.is_visible(&func, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -380,14 +378,13 @@ impl Completions {
                 .import_to_add(Some(import)),
             dot_access,
             None,
-            None,
             func,
         )
         .add_to(self, ctx.db);
     }
 
     pub(crate) fn add_const(&mut self, ctx: &CompletionContext<'_, '_>, konst: hir::Const) {
-        let is_private_editable = match ctx.is_visible(&konst) {
+        let is_private_editable = match ctx.is_visible(&konst, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -403,7 +400,7 @@ impl Completions {
         ctx: &CompletionContext<'_, '_>,
         type_alias: hir::TypeAlias,
     ) {
-        let is_private_editable = match ctx.is_visible(&type_alias) {
+        let is_private_editable = match ctx.is_visible(&type_alias, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -432,7 +429,7 @@ impl Completions {
         variant: hir::EnumVariant,
         path: hir::ModPath,
     ) {
-        if !ctx.check_stability_and_hidden(variant) {
+        if !ctx.check_stability_and_hidden(variant, &Name::missing()) {
             return;
         }
         if let Some(builder) = render_variant_lit(RenderContext::new(ctx), path_ctx, variant, path)
@@ -447,7 +444,7 @@ impl Completions {
         path_ctx: &PathCompletionCtx<'_>,
         variant: hir::EnumVariant,
     ) {
-        if !ctx.check_stability_and_hidden(variant) {
+        if !ctx.check_stability_and_hidden(variant, &Name::missing()) {
             return;
         }
         let local_name = variant.name(ctx.db);
@@ -472,7 +469,7 @@ impl Completions {
         field: hir::Field,
         ty: &hir::Type<'_>,
     ) {
-        let is_private_editable = match ctx.is_visible(&field) {
+        let is_private_editable = match ctx.is_visible(&field, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -495,7 +492,7 @@ impl Completions {
         strukt: hir::Struct,
         path: hir::ModPath,
     ) {
-        let is_private_editable = match ctx.is_visible(&strukt) {
+        let is_private_editable = match ctx.is_visible(&strukt, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -517,7 +514,7 @@ impl Completions {
         path: Option<hir::ModPath>,
         local_name: Option<hir::Name>,
     ) {
-        let is_private_editable = match ctx.is_visible(&un) {
+        let is_private_editable = match ctx.is_visible(&un, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
@@ -572,7 +569,7 @@ impl Completions {
         variant: hir::EnumVariant,
         local_name: hir::Name,
     ) {
-        if !ctx.check_stability_and_hidden(variant) {
+        if !ctx.check_stability_and_hidden(variant, &Name::missing()) {
             return;
         }
         let path = local_name.into();
@@ -592,7 +589,7 @@ impl Completions {
         variant: hir::EnumVariant,
         path: hir::ModPath,
     ) {
-        if !ctx.check_stability_and_hidden(variant) {
+        if !ctx.check_stability_and_hidden(variant, &Name::missing()) {
             return;
         }
         self.add_opt(render_variant_pat(
@@ -611,7 +608,7 @@ impl Completions {
         strukt: hir::Struct,
         local_name: Option<hir::Name>,
     ) {
-        let is_private_editable = match ctx.is_visible(&strukt) {
+        let is_private_editable = match ctx.is_visible(&strukt, &Name::missing()) {
             Visible::Yes => false,
             Visible::Editable => true,
             Visible::No => return,
