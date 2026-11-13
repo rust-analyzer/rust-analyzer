@@ -475,7 +475,7 @@ impl<'a, 'db> MirLowerCtx<'a, 'db> {
                                 kind: OperandKind::Constant {
                                     konst: Const::new_param(
                                         self.interner(),
-                                        ParamConst { id: p, index },
+                                        ParamConst { id_fixme: p, index },
                                     )
                                     .store(),
                                     ty: self.db.const_param_ty(p).store(),

@@ -1,7 +1,7 @@
 //! Things related to generics in the next-trait-solver.
 
 use hir_def::{
-    GenericDefId, GenericParamId, TypeParamId,
+    GenericDefId, GenericParamId,
     hir::generics::{GenericParamDataRef, LifetimeParamData},
 };
 
@@ -39,7 +39,6 @@ pub(crate) fn generics<'db>(interner: DbInterner<'db>, def: SolverDefId<'db>) ->
                 )]
                 Generics {
                     generics: crate::generics::Generics::empty(generic_def),
-                    additional_param: None,
                     consider_late_bound: false,
                 }
             };
@@ -53,8 +52,6 @@ pub(crate) fn generics<'db>(interner: DbInterner<'db>, def: SolverDefId<'db>) ->
 #[derive(Debug)]
 pub struct Generics<'db> {
     generics: crate::generics::Generics<'db>,
-    /// This is used for builtin derives, specifically `CoercePointee`.
-    additional_param: Option<GenericParamId>,
     consider_late_bound: bool,
 }
 
@@ -64,44 +61,24 @@ impl<'db> Generics<'db> {
         def: GenericDefId,
         consider_late_bound: bool,
     ) -> Generics<'db> {
-        Generics {
-            generics: crate::generics::generics(db, def),
-            additional_param: None,
-            consider_late_bound,
-        }
-    }
-
-    pub(crate) fn from_generic_def_plus_one(
-        db: &'db dyn HirDatabase,
-        def: GenericDefId,
-        additional_param: TypeParamId,
-        consider_late_bound: bool,
-    ) -> Generics<'db> {
-        Generics {
-            generics: crate::generics::generics(db, def),
-            additional_param: Some(additional_param.into()),
-            consider_late_bound,
-        }
+        Generics { generics: crate::generics::generics(db, def), consider_late_bound }
     }
 
     pub(super) fn iter(
         &self,
     ) -> impl Iterator<Item = (GenericParamId, Option<&LifetimeParamData>)> {
-        self.generics
-            .iter(self.consider_late_bound)
-            .map(|(id, data)| {
-                if let GenericParamDataRef::LifetimeParamData(lt_param) = data {
-                    (id, Some(lt_param))
-                } else {
-                    (id, None)
-                }
-            })
-            .chain(self.additional_param.map(|param| (param, None)))
+        self.generics.iter(self.consider_late_bound).map(|(id, data)| {
+            if let GenericParamDataRef::LifetimeParamData(lt_param) = data {
+                (id, Some(lt_param))
+            } else {
+                (id, None)
+            }
+        })
     }
 }
 
 impl<'db> rustc_type_ir::inherent::GenericsOf<DbInterner<'db>> for Generics<'db> {
     fn count(&self) -> usize {
-        self.generics.len(self.consider_late_bound) + usize::from(self.additional_param.is_some())
+        self.generics.len(self.consider_late_bound)
     }
 }

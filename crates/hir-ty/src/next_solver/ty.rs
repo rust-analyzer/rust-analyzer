@@ -3,8 +3,8 @@
 use std::ops::ControlFlow;
 
 use hir_def::{
-    AdtId, HasModule, TypeParamId,
-    hir::generics::{GenericParams, TypeOrConstParamData, TypeParamProvenance},
+    AdtId, GenericDefId, GenericParamId, HasModule, TypeParamId,
+    hir::generics::{GenericParamDataRef, TypeParamData, TypeParamProvenance},
 };
 use hir_def::{TraitId, type_ref::Rawness};
 use intern::{Interned, InternedRef, impl_internable};
@@ -105,7 +105,7 @@ impl<'db> Ty<'db> {
     }
 
     pub fn new_param(interner: DbInterner<'db>, id: TypeParamId, index: u32) -> Self {
-        Ty::new(interner, TyKind::Param(ParamTy { id, index }))
+        Ty::new(interner, TyKind::Param(ParamTy { id_fixme: id, index }))
     }
 
     pub fn new_placeholder(interner: DbInterner<'db>, placeholder: PlaceholderType<'db>) -> Self {
@@ -751,8 +751,13 @@ impl<'db> Ty<'db> {
     }
 
     // FIXME: Should this be here?
-    pub fn impl_trait_bounds(self, db: &'db dyn HirDatabase) -> Option<Vec<Clause<'db>>> {
+    pub fn impl_trait_bounds(
+        self,
+        db: &'db dyn HirDatabase,
+        def: Option<GenericDefId>,
+    ) -> Option<Vec<Clause<'db>>> {
         let interner = DbInterner::new_no_crate(db);
+        let mut generics = None;
 
         match self.kind() {
             TyKind::Alias(AliasTy { kind: AliasTyKind::Opaque { def_id }, args, .. }) => Some(
@@ -764,27 +769,27 @@ impl<'db> Ty<'db> {
                     .collect(),
             ),
             TyKind::Param(param) => {
-                // FIXME: We shouldn't use `param.id` here.
-                let generic_params = GenericParams::of(db, param.id.parent());
-                let param_data = &generic_params[param.id.local_id()];
-                match param_data {
-                    TypeOrConstParamData::TypeParamData(p) => match p.provenance {
-                        TypeParamProvenance::ArgumentImplTrait => {
-                            let predicates = GenericPredicates::query_all(db, param.id.parent())
-                                .iter_identity()
-                                .map(Unnormalized::skip_norm_wip)
-                                .filter(|wc| match wc.kind().skip_binder() {
-                                    ClauseKind::Trait(tr) => tr.self_ty() == self,
-                                    ClauseKind::Projection(pred) => pred.self_ty() == self,
-                                    ClauseKind::TypeOutlives(pred) => pred.0 == self,
-                                    _ => false,
-                                })
-                                .collect::<Vec<_>>();
+                let def = def?;
+                let (generics, predicates) = generics.get_or_insert_with(|| {
+                    (crate::generics::generics(db, def), GenericPredicates::query(db, def))
+                });
+                let param_data = param.param_data(generics).1;
+                match param_data.provenance {
+                    TypeParamProvenance::ArgumentImplTrait => {
+                        let predicates = predicates
+                            .all_predicates()
+                            .iter_identity()
+                            .map(Unnormalized::skip_norm_wip)
+                            .filter(|wc| match wc.kind().skip_binder() {
+                                ClauseKind::Trait(tr) => tr.self_ty() == self,
+                                ClauseKind::Projection(pred) => pred.self_ty() == self,
+                                ClauseKind::TypeOutlives(pred) => pred.0 == self,
+                                _ => false,
+                            })
+                            .collect::<Vec<_>>();
 
-                            Some(predicates)
-                        }
-                        _ => None,
-                    },
+                        Some(predicates)
+                    }
                     _ => None,
                 }
             }
@@ -1443,13 +1448,33 @@ pub struct ParamTy {
     // FIXME: I'm not pleased with this. Ideally a `Param` should only know its index - the defining item
     // is known from the `EarlyBinder`. This should also be beneficial for memory usage. But code currently
     // assumes it can get the definition from `Param` alone - so that's what we got.
-    pub id: TypeParamId,
+    pub id_fixme: TypeParamId,
     pub index: u32,
 }
 
 impl ParamTy {
     pub fn to_ty<'db>(self, interner: DbInterner<'db>) -> Ty<'db> {
-        Ty::new_param(interner, self.id, self.index)
+        Ty::new_param(interner, self.id_fixme, self.index)
+    }
+
+    pub fn param_data<'db>(
+        self,
+        generics: &crate::generics::Generics<'db>,
+    ) -> (TypeParamId, &'db TypeParamData) {
+        match generics.iter(false).nth(self.index as usize) {
+            Some((GenericParamId::TypeParamId(id), GenericParamDataRef::TypeParamData(data))) => {
+                (id, data)
+            }
+            it => panic!(
+                "expected a type param for def {:?} at index {}, found {it:?}",
+                generics.def(),
+                self.index,
+            ),
+        }
+    }
+
+    pub fn param_id(self, db: &dyn HirDatabase, def: GenericDefId) -> TypeParamId {
+        self.param_data(&crate::generics::generics(db, def)).0
     }
 }
 

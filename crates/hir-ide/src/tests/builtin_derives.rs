@@ -81,27 +81,6 @@ struct WithGenerics<'a, T: Trait, const N: usize>(&'a [T; N]);
 }
 
 #[test]
-fn coerce_pointee_trait_ref() {
-    check_trait_refs(
-        r#"
-//- minicore: derive, coerce_pointee
-use core::marker::CoercePointee;
-
-#[derive(CoercePointee)]
-struct Simple<T: ?Sized>(*const T);
-
-#[derive(CoercePointee)]
-struct MultiGenericParams<'a, T, #[pointee] U: ?Sized, const N: usize>(*const U);
-        "#,
-        expect![[r#"
-                Simple<#0>: CoerceUnsized<[Simple<#1>]>
-                Simple<#0>: DispatchFromDyn<[Simple<#1>]>
-                MultiGenericParams<#0, #1, #2, #3>: CoerceUnsized<[MultiGenericParams<#0, #1, #4, #3>]>
-                MultiGenericParams<#0, #1, #2, #3>: DispatchFromDyn<[MultiGenericParams<#0, #1, #4, #3>]>"#]],
-    );
-}
-
-#[test]
 fn reborrow_trait_ref() {
     check_trait_refs(
         r#"
@@ -217,49 +196,6 @@ struct Marker<'a, T: Trait, const N: usize>(&'a mut [T; N]);
                 Clause(Binder { value: TraitPredicate(#1: Trait, polarity:Positive), bound_vars: [] })
                 Clause(Binder { value: ConstArgHasType(#2, usize), bound_vars: [] })
                 Clause(Binder { value: TraitPredicate(#1: Sized, polarity:Positive), bound_vars: [] })
-
-            "#]],
-    );
-}
-
-#[test]
-fn coerce_pointee_predicates() {
-    check_predicates(
-        r#"
-//- minicore: derive, coerce_pointee
-use core::marker::CoercePointee;
-
-#[derive(CoercePointee)]
-struct Simple<T: ?Sized>(*const T);
-
-trait Trait<T> {}
-
-#[derive(CoercePointee)]
-struct MultiGenericParams<'a, T, #[pointee] U: ?Sized, const N: usize>(*const U)
-where
-    T: Trait<U>,
-    U: Trait<U>;
-        "#,
-        expect![[r#"
-                Clause(Binder { value: TraitPredicate(#0: Unsize<[#1]>, polarity:Positive), bound_vars: [] })
-
-                Clause(Binder { value: TraitPredicate(#0: Unsize<[#1]>, polarity:Positive), bound_vars: [] })
-
-                Clause(Binder { value: TraitPredicate(#1: Trait<[#2]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#2: Trait<[#2]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: ConstArgHasType(#3, usize), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#1: Sized, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#1: Trait<[#4]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#4: Trait<[#4]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#2: Unsize<[#4]>, polarity:Positive), bound_vars: [] })
-
-                Clause(Binder { value: TraitPredicate(#1: Trait<[#2]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#2: Trait<[#2]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: ConstArgHasType(#3, usize), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#1: Sized, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#1: Trait<[#4]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#4: Trait<[#4]>, polarity:Positive), bound_vars: [] })
-                Clause(Binder { value: TraitPredicate(#2: Unsize<[#4]>, polarity:Positive), bound_vars: [] })
 
             "#]],
     );

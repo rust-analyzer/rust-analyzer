@@ -50,8 +50,8 @@ use std::{hash::Hash, ops::ControlFlow};
 use base_db::SourceDatabase;
 use hir_def::{
     CallableDefId, ConstId, DefWithBodyId, EnumVariantId, ExpressionStoreOwnerId, FunctionId,
-    GenericDefId, HasModule, LifetimeParamId, ModuleId, StaticId, TypeAliasId, TypeOrConstParamId,
-    TypeParamId,
+    GenericDefId, GenericParamId, HasModule, LifetimeParamId, ModuleId, StaticId, TypeAliasId,
+    TypeOrConstParamId, TypeParamId,
     expr_store::{Body, ExpressionStore},
     hir::{BindingId, ExprId, ExprOrPatId, ExprOrPatIdPacked, PatId},
     resolver::{HasResolver, Resolver, TypeNs},
@@ -459,7 +459,7 @@ pub fn callable_sig_from_fn_trait<'db>(
 }
 
 struct ParamCollector {
-    params: FxHashSet<TypeOrConstParamId>,
+    params: Vec<bool>,
 }
 
 impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector {
@@ -467,7 +467,7 @@ impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector {
 
     fn visit_ty(&mut self, ty: Ty<'db>) -> Self::Result {
         if let TyKind::Param(param) = ty.kind() {
-            self.params.insert(param.id.into());
+            self.params[param.index as usize] = true;
         }
 
         ty.super_visit_with(self);
@@ -475,7 +475,7 @@ impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector {
 
     fn visit_const(&mut self, konst: Const<'db>) -> Self::Result {
         if let ConstKind::Param(param) = konst.kind() {
-            self.params.insert(param.id.into());
+            self.params[param.index as usize] = true;
         }
 
         konst.super_visit_with(self);
@@ -483,13 +483,27 @@ impl<'db> rustc_type_ir::TypeVisitor<DbInterner<'db>> for ParamCollector {
 }
 
 /// Returns unique params for types and consts contained in `value`.
-pub fn collect_params<'db, T>(value: &T) -> Vec<TypeOrConstParamId>
+pub fn collect_params<'db, T>(
+    db: &'db dyn HirDatabase,
+    def: GenericDefId,
+    value: &T,
+) -> Vec<TypeOrConstParamId>
 where
     T: ?Sized + rustc_type_ir::TypeVisitable<DbInterner<'db>>,
 {
-    let mut collector = ParamCollector { params: FxHashSet::default() };
+    let generics = crate::generics::generics(db, def);
+    let mut collector = ParamCollector { params: vec![false; generics.len(false)] };
     value.visit_with(&mut collector);
-    Vec::from_iter(collector.params)
+    generics
+        .iter_id(false)
+        .zip(collector.params)
+        .filter(|(_, used)| *used)
+        .filter_map(|(param, _)| match param {
+            GenericParamId::TypeParamId(it) => Some(it.into()),
+            GenericParamId::ConstParamId(it) => Some(it.into()),
+            GenericParamId::LifetimeParamId(_) => None,
+        })
+        .collect()
 }
 
 /// A `Span` represents some location in lowered code - a type, expression or pattern.

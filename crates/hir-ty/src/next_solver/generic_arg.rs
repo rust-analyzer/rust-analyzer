@@ -745,11 +745,11 @@ impl<'db> rustc_type_ir::inherent::GenericArgs<DbInterner<'db>> for GenericArgs<
 pub fn mk_param<'db>(interner: DbInterner<'db>, index: u32, id: GenericParamId) -> GenericArg<'db> {
     match id {
         GenericParamId::LifetimeParamId(id) => {
-            Region::new_early_param(interner, EarlyParamRegion { index, id }).into()
+            Region::new_early_param(interner, EarlyParamRegion { index, id_fixme: id }).into()
         }
         GenericParamId::TypeParamId(id) => Ty::new_param(interner, id, index).into(),
         GenericParamId::ConstParamId(id) => {
-            Const::new_param(interner, ParamConst { index, id }).into()
+            Const::new_param(interner, ParamConst { index, id_fixme: id }).into()
         }
     }
 }

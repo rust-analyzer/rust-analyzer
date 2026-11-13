@@ -1588,7 +1588,7 @@ impl Function {
         let interner = DbInterner::new_no_crate(db);
         let sig = db.callable_item_signature(id.into()).instantiate_identity().skip_norm_wip();
         let ret_ty = interner.instantiate_bound_regions_with_erased(sig).output();
-        for pred in ret_ty.impl_trait_bounds(db).into_iter().flatten() {
+        for pred in ret_ty.impl_trait_bounds(db, Some(id.into())).into_iter().flatten() {
             let clause = interner.instantiate_bound_regions_with_erased(pred.kind());
             if let ClauseKind::Projection(projection) = clause
                 && let Some(output_ty) = projection.term.as_type()
@@ -5657,7 +5657,7 @@ impl<'db> Type<'db> {
     }
 
     pub fn as_impl_traits(&self, db: &'db dyn HirDatabase) -> Option<impl Iterator<Item = Trait>> {
-        self.ty.skip_binder().impl_trait_bounds(db).map(|it| {
+        self.ty.skip_binder().impl_trait_bounds(db, self.generic_def_id(db)).map(|it| {
             it.into_iter().filter_map(|pred| match pred.kind().skip_binder() {
                 ClauseKind::Trait(trait_ref) => Some(Trait::from(trait_ref.def_id().0)),
                 _ => None,
@@ -5687,6 +5687,7 @@ impl<'db> Type<'db> {
         struct Visitor<'db, F> {
             db: &'db dyn HirDatabase,
             owner: TypeOwnerId,
+            generic_def: Option<GenericDefId>,
             callback: F,
             visited: FxHashSet<Ty<'db>>,
         }
@@ -5703,7 +5704,7 @@ impl<'db> Type<'db> {
 
                 (self.callback)(Type { owner: self.owner, ty: EarlyBinder::bind(ty) });
 
-                if let Some(bounds) = ty.impl_trait_bounds(self.db) {
+                if let Some(bounds) = ty.impl_trait_bounds(self.db, self.generic_def) {
                     bounds.visit_with(self);
                 }
 
@@ -5711,8 +5712,13 @@ impl<'db> Type<'db> {
             }
         }
 
-        let mut visitor =
-            Visitor { db, owner: self.owner, callback, visited: FxHashSet::default() };
+        let mut visitor = Visitor {
+            db,
+            owner: self.owner,
+            generic_def: self.generic_def_id(db),
+            callback,
+            visited: FxHashSet::default(),
+        };
         self.ty.skip_binder().visit_with(&mut visitor);
     }
     /// Check if type unifies with another type.
@@ -5756,16 +5762,27 @@ impl<'db> Type<'db> {
         hir_ide::could_coerce(db, env, &tys)
     }
 
-    pub fn as_type_param(&self, _db: &'db dyn HirDatabase) -> Option<TypeParam> {
+    pub fn as_type_param(&self, db: &'db dyn HirDatabase) -> Option<TypeParam> {
         match self.ty.skip_binder().kind() {
-            TyKind::Param(param) => Some(TypeParam { id: param.id }),
+            TyKind::Param(param) => {
+                Some(TypeParam { id: param.param_id(db, self.generic_def_id(db)?) })
+            }
             _ => None,
+        }
+    }
+
+    pub fn generic_def_id(&self, db: &dyn HirDatabase) -> Option<GenericDefId> {
+        match self.owner {
+            TypeOwnerId::GenericDefId(def) => Some(def),
+            TypeOwnerId::BuiltinDeriveImplId(def) => Some(def.loc(db).adt.into()),
+            TypeOwnerId::NoParams(_) => None,
         }
     }
 
     /// Returns unique `GenericParam`s contained in this type.
     pub fn generic_params(&self, db: &'db dyn HirDatabase) -> FxHashSet<GenericParam> {
-        hir_ide::collect_params(&self.ty.skip_binder())
+        let Some(def) = self.generic_def_id(db) else { return FxHashSet::default() };
+        hir_ide::collect_params(db, def, &self.ty.skip_binder())
             .into_iter()
             .map(|id| TypeOrConstParam { id }.split(db).either_into())
             .collect()

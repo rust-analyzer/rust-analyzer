@@ -313,7 +313,7 @@ pub(crate) fn path_to_const<'a, 'db>(
             if forbid_params_after.is_some_and(|forbid_after| index >= forbid_after) {
                 return Err(CreateConstError::UsedForbiddenParam);
             }
-            return Ok(Const::new_param(interner, ParamConst { id: param, index }));
+            return Ok(Const::new_param(interner, ParamConst { id_fixme: param, index }));
         }
         // These are not valid as consts.
         // FIXME: Report an error?
