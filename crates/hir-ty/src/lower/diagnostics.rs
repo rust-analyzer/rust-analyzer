@@ -37,6 +37,10 @@ pub enum PathGenericsSource {
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum PathLoweringDiagnostic {
+    ExpectedTrait {
+        segment: u32,
+        def: GenericDefId,
+    },
     GenericArgsProhibited {
         segment: u32,
         reason: GenericArgsProhibitedReason,

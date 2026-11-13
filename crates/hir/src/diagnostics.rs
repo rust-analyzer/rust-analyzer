@@ -140,6 +140,7 @@ diagnostics![AnyDiagnostic<'db> ->
     CastToUnsized<'db>,
     ExpectedArrayOrSlicePat<'db>,
     ExpectedFunction<'db>,
+    ExpectedTrait,
     ExplicitDropMethodUse,
     FruInDestructuringAssignment,
     MissingBody,
@@ -665,6 +666,12 @@ pub struct IncorrectGenericsOrder {
 pub struct GenericDefaultRefersToSelf {
     /// The `Self` segment.
     pub segment: InFile<AstPtr<ast::PathSegment>>,
+}
+
+#[derive(Debug)]
+pub struct ExpectedTrait {
+    pub segment: InFile<AstPtr<ast::PathSegment>>,
+    pub def: GenericDef,
 }
 
 #[derive(Debug)]
@@ -1998,6 +2005,11 @@ impl<'db> AnyDiagnostic<'db> {
         path: InFile<ast::Path>,
     ) -> Option<AnyDiagnostic<'db>> {
         Some(match *diag {
+            PathLoweringDiagnostic::ExpectedTrait { segment, def } => {
+                let segment = hir_segment_to_ast_segment(&path.value, segment)?;
+                let segment = path.with_value(AstPtr::new(&segment));
+                ExpectedTrait { segment, def: def.into() }.into()
+            }
             PathLoweringDiagnostic::GenericArgsProhibited { segment, reason } => {
                 let segment = hir_segment_to_ast_segment(&path.value, segment)?;
 

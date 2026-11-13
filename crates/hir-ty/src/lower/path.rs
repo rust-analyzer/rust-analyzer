@@ -636,6 +636,15 @@ impl<'a, 'b, 'db> PathLoweringContext<'a, 'b, 'db> {
     ) -> GenericArgs<'db> {
         let old_lifetime_elision = self.ctx.lifetime_elision;
 
+        if self.current_or_prev_segment.args_and_bindings.is_some_and(|args| args.has_self_type)
+            && !matches!(def, GenericDefId::TraitId(_))
+        {
+            self.on_diagnostic(PathLoweringDiagnostic::ExpectedTrait {
+                segment: self.current_segment_u32(),
+                def,
+            });
+        }
+
         if let Some(args) = self.current_or_prev_segment.args_and_bindings
             && args.parenthesized != GenericArgsParentheses::No
         {
@@ -1238,7 +1247,7 @@ pub(crate) fn substs_from_args_and_bindings<'db>(
         // A qualified path `<T as Trait>::Assoc` where `Trait` resolved to something without a
         // `Self` parameter, e.g. a struct. `check_generic_args_len()` skips the self type
         // unconditionally, so drop it here too instead of matching it against a real parameter.
-        // FIXME: Report a diagnostic here, rustc emits `E0404: expected trait, found struct`.
+        // The path lowerer reports the non-trait definition before lowering its arguments.
         args.next();
     }
 
