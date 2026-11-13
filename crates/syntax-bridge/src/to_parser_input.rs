@@ -52,11 +52,12 @@ pub fn to_parser_input(
                         };
                         res.push(kind, ctx_edition(lit.span.ctx));
 
-                        if kind == FLOAT_NUMBER && !lit.text().ends_with('.') {
-                            // Tag the token as joint if it is float with a fractional part
-                            // we use this jointness to inform the parser about what token split
-                            // event to emit when we encounter a float literal in a field access
-                            res.was_joint();
+                        if kind == FLOAT_NUMBER {
+                            let text = lit.text();
+                            // A float is joint when it does not end with `.`.
+                            if !text.ends_with('.') {
+                                res.was_joint();
+                            }
                         }
                     }
                     tt::Leaf::Ident(ident) => {

@@ -508,6 +508,10 @@ mod ok {
         run_and_expect_no_errors("test_data/parser/inline/ok/offset_of_parens.rs");
     }
     #[test]
+    fn offset_of_tuple_fields() {
+        run_and_expect_no_errors("test_data/parser/inline/ok/offset_of_tuple_fields.rs");
+    }
+    #[test]
     fn or_pattern() { run_and_expect_no_errors("test_data/parser/inline/ok/or_pattern.rs"); }
     #[test]
     fn param_list() { run_and_expect_no_errors("test_data/parser/inline/ok/param_list.rs"); }

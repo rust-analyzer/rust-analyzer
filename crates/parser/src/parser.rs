@@ -6,7 +6,7 @@ use drop_bomb::DropBomb;
 
 use crate::{
     Edition,
-    SyntaxKind::{self, EOF, ERROR, TOMBSTONE},
+    SyntaxKind::{self, EOF, ERROR, INT_NUMBER, TOMBSTONE},
     T, TokenSet,
     event::Event,
     input::Input,
@@ -18,6 +18,17 @@ use crate::{
 #[inline]
 fn fwd_parent(offset: u32) -> NonZeroU32 {
     NonZeroU32::new(offset).expect("forward-parent offset must be non-zero")
+}
+
+/// Tracks an in-flight split of a `FLOAT_NUMBER` into synthetic
+/// `INT_NUMBER` / `DOT` / `INT_NUMBER` tokens. At most one split is active.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FloatSplitStage {
+    // Discriminants track the number of synthetic tokens remaining.
+    None = 0,
+    BeforeFirstInt = 3,
+    BeforeDot = 2,
+    BeforeSecondInt = 1,
 }
 
 /// `Parser` struct provides the low-level API for
@@ -37,6 +48,8 @@ pub(crate) struct Parser<'t> {
     /// into this vec, keeping `Event` itself a flat 8-byte enum.
     errors: Vec<String>,
     steps: Cell<u32>,
+    float_split_stage: FloatSplitStage,
+    float_split_ends_in_dot: bool,
 }
 
 const PARSER_STEP_LIMIT: usize = if cfg!(debug_assertions) { 150_000 } else { 15_000_000 };
@@ -49,6 +62,8 @@ impl<'t> Parser<'t> {
             events: Vec::with_capacity(2 * inp.len()),
             errors: Vec::new(),
             steps: Cell::new(0),
+            float_split_stage: FloatSplitStage::None,
+            float_split_ends_in_dot: false,
         }
     }
 
@@ -72,7 +87,43 @@ impl<'t> Parser<'t> {
         assert!((steps as usize) < PARSER_STEP_LIMIT, "the parser seems stuck");
         self.steps.set(steps + 1);
 
-        self.inp.kind(self.pos + n)
+        self.logical_kind(n)
+    }
+
+    /// Kind at lookahead `n`, honoring an in-flight float split.
+    /// Does not touch the stuck-detection `steps` counter.
+    fn logical_kind(&self, n: usize) -> SyntaxKind {
+        match n.checked_sub(self.float_split_suffix_len()) {
+            Some(n) => self.inp.kind(self.pos + n),
+            None => self.float_split_synthetic_kind(n),
+        }
+    }
+
+    /// Length of the remaining synthetic token suffix, or 0 if no split is active.
+    fn float_split_suffix_len(&self) -> usize {
+        self.float_split_stage as usize - usize::from(self.float_split_ends_in_dot)
+    }
+
+    #[cold]
+    fn float_split_synthetic_kind(&self, n: usize) -> SyntaxKind {
+        match self.float_split_stage {
+            FloatSplitStage::None => unreachable!(),
+            FloatSplitStage::BeforeFirstInt => match n {
+                0 => INT_NUMBER,
+                1 => T![.],
+                2 if !self.float_split_ends_in_dot => INT_NUMBER,
+                _ => unreachable!(),
+            },
+            FloatSplitStage::BeforeDot => match n {
+                0 => T![.],
+                1 if !self.float_split_ends_in_dot => INT_NUMBER,
+                _ => unreachable!(),
+            },
+            FloatSplitStage::BeforeSecondInt => {
+                assert_eq!(n, 0);
+                INT_NUMBER
+            }
+        }
     }
 
     /// Checks if the current token is `kind`.
@@ -108,7 +159,7 @@ impl<'t> Parser<'t> {
             T![<<=] => self.at_composite3(n, T![<], T![<], T![=]),
             T![>>=] => self.at_composite3(n, T![>], T![>], T![=]),
 
-            _ => self.inp.kind(self.pos + n) == kind,
+            _ => self.logical_kind(n) == kind,
         }
     }
 
@@ -161,12 +212,18 @@ impl<'t> Parser<'t> {
     }
 
     fn at_composite2(&self, n: usize, k1: SyntaxKind, k2: SyntaxKind) -> bool {
+        let Some(n) = n.checked_sub(self.float_split_suffix_len()) else {
+            return false;
+        };
         self.inp.kind(self.pos + n) == k1
             && self.inp.kind(self.pos + n + 1) == k2
             && self.inp.is_joint(self.pos + n)
     }
 
     fn at_composite3(&self, n: usize, k1: SyntaxKind, k2: SyntaxKind, k3: SyntaxKind) -> bool {
+        let Some(n) = n.checked_sub(self.float_split_suffix_len()) else {
+            return false;
+        };
         self.inp.kind(self.pos + n) == k1
             && self.inp.kind(self.pos + n + 1) == k2
             && self.inp.kind(self.pos + n + 2) == k3
@@ -212,33 +269,20 @@ impl<'t> Parser<'t> {
         self.do_bump(kind, 1);
     }
 
-    /// Advances the parser by one token
-    pub(crate) fn split_float(&mut self, mut marker: Marker) -> (bool, Marker) {
+    /// Begin splitting the current `FLOAT_NUMBER` into synthetic
+    /// `INT_NUMBER` / `DOT` / optional `INT_NUMBER` tokens.
+    pub(crate) fn split_float(&mut self) {
+        assert_eq!(
+            self.float_split_stage,
+            FloatSplitStage::None,
+            "cannot split more than one float at a time"
+        );
         assert!(self.at(SyntaxKind::FLOAT_NUMBER));
-        // we have parse `<something>.`
-        // `<something>`.0.1
-        // here we need to insert an extra event
-        //
-        // `<something>`. 0. 1;
-        // here we need to change the follow up parse, the return value will cause us to emulate a dot
-        // the actual splitting happens later
         let ends_in_dot = !self.inp.is_joint(self.pos);
-        if !ends_in_dot {
-            let new_marker = self.start();
-            let idx = marker.pos as usize;
-            match &mut self.events[idx] {
-                Event::Start { forward_parent, kind } => {
-                    *kind = SyntaxKind::FIELD_EXPR;
-                    *forward_parent = Some(fwd_parent(new_marker.pos - marker.pos));
-                }
-                _ => unreachable!(),
-            }
-            marker.bomb.defuse();
-            marker = new_marker;
-        };
+        self.float_split_ends_in_dot = ends_in_dot;
+        self.float_split_stage = FloatSplitStage::BeforeFirstInt;
         self.pos += 1;
         self.push_event(Event::FloatSplitHack { ends_in_dot });
-        (ends_in_dot, marker)
     }
 
     /// Advances the parser by one token, remapping its kind.
@@ -305,9 +349,30 @@ impl<'t> Parser<'t> {
     }
 
     fn do_bump(&mut self, kind: SyntaxKind, n_raw_tokens: u8) {
-        self.pos += n_raw_tokens as usize;
+        if self.float_split_stage == FloatSplitStage::None {
+            self.pos += n_raw_tokens as usize;
+            self.steps.set(0);
+            self.push_event(Event::Token { kind, n_raw_tokens });
+            return;
+        }
+
+        assert_eq!(kind, self.logical_kind(0), "bump kind must match synthetic token");
+        // Ignore caller `n_raw_tokens`: synthetic pieces are not Input slots.
         self.steps.set(0);
-        self.push_event(Event::Token { kind, n_raw_tokens });
+        self.push_event(Event::Token { kind, n_raw_tokens: 0 });
+
+        self.float_split_stage = match self.float_split_stage {
+            FloatSplitStage::None => unreachable!(),
+            FloatSplitStage::BeforeFirstInt => FloatSplitStage::BeforeDot,
+            FloatSplitStage::BeforeDot if !self.float_split_ends_in_dot => {
+                FloatSplitStage::BeforeSecondInt
+            }
+            FloatSplitStage::BeforeDot | FloatSplitStage::BeforeSecondInt => FloatSplitStage::None,
+        };
+
+        if self.float_split_stage == FloatSplitStage::None {
+            self.float_split_ends_in_dot = false;
+        }
     }
 
     fn push_event(&mut self, event: Event) {

@@ -128,8 +128,6 @@ pub(super) fn process(mut events: Vec<Event>, mut errors: Vec<String>) -> Output
             }
             Event::FloatSplitHack { ends_in_dot } => {
                 res.float_split_hack(ends_in_dot);
-                let ev = mem::replace(&mut events[i + 1], Event::tombstone());
-                assert!(matches!(ev, Event::Finish), "{ev:?}");
             }
             Event::Error { err } => {
                 // Move the string out of the side table; each index is visited

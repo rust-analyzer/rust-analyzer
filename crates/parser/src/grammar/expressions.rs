@@ -603,13 +603,10 @@ fn field_expr<const FLOAT_RECOVERY: bool>(
     if p.at_ts(PATH_NAME_REF_OR_INDEX_KINDS) {
         name_ref_mod_path_or_index(p);
     } else if p.at(FLOAT_NUMBER) {
-        return match p.split_float(m) {
-            (true, m) => {
-                let lhs = m.complete(p, FIELD_EXPR);
-                postfix_dot_expr::<true>(p, lhs)
-            }
-            (false, m) => Ok(m.complete(p, FIELD_EXPR)),
-        };
+        p.split_float();
+        name_ref_mod_path_or_index(p);
+        let lhs = m.complete(p, FIELD_EXPR);
+        return postfix_dot_expr::<false>(p, lhs);
     } else {
         p.error("expected field name or number");
     }

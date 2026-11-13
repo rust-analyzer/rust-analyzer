@@ -270,7 +270,19 @@ fn builtin_expr(p: &mut Parser<'_>) -> Option<CompletedMarker> {
         // fn foo() {
         //     builtin#offset_of(Foo, (bar.baz.0));
         // }
+
+        // test offset_of_tuple_fields
+        // fn foo() {
+        //     builtin#offset_of(ComplexTup, 0.1);
+        //     builtin#offset_of(ComplexTup, 0.1.1.1);
+        //     builtin#offset_of(ComplexTup, 0. 1);
+        //     builtin#offset_of(ComplexTup, 0 .1.1.1);
+        // }
         while !p.at(EOF) && !p.at(T![')']) {
+            // `0.1` is one FLOAT_NUMBER; split so the name/DOT loop sees INT/DOT/INT.
+            if p.at(FLOAT_NUMBER) {
+                p.split_float();
+            }
             name_ref_mod_path_or_index(p);
             if !p.at(T![')']) {
                 p.expect(T![.]);
