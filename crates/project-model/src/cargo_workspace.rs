@@ -141,6 +141,8 @@ pub struct CargoConfig {
     pub invocation_strategy: InvocationStrategy,
     /// Optional path to use instead of `target` when building
     pub target_dir_config: TargetDirectoryConfig,
+    /// Optional path to use instead of `target` when building
+    pub build_dir_config: TargetDirectoryConfig,
     /// Gate `#[test]` behind `#[cfg(test)]`
     pub set_test: bool,
     /// Load the project without any dependencies

@@ -794,6 +794,15 @@ config_data! {
         /// Automatically refresh project info via `cargo metadata` on
         /// `Cargo.toml` or `.cargo/config.toml` changes.
         cargo_autoreload: bool           = true,
+        /// Optional path to a rust-analyzer specific build directory.
+        /// Since cargo's build-directory defaults to the target-directory, it should only
+        /// be needed to set this if a custom build-directory is configured.
+        /// Otherwise setting `cargo.targetDir` is sufficient to prevent rust-analyzer from
+        /// locking the `Cargo.lock`.
+        ///
+        /// Set to `true` to use a subdirectory of the existing build directory or
+        /// set to a path relative to the workspace to use that path.
+        cargo_buildDir | rust_analyzerBuildDir: Option<TargetDirectory> = None,
         /// Run build scripts (`build.rs`) for more precise code analysis.
         cargo_buildScripts_enable: bool  = true,
         /// Specifies the invocation strategy to use when running the build scripts command.
@@ -2498,6 +2507,7 @@ impl Config {
             extra_args: self.cargo_extraArgs(source_root).clone(),
             extra_env: self.cargo_extraEnv(source_root).clone(),
             target_dir_config: self.target_dir_from_config(source_root),
+            build_dir_config: self.build_dir_from_config(source_root),
             set_test: *self.cfg_setTest(source_root),
             no_deps: *self.cargo_noDeps(source_root),
             metadata_extra_args: self.cargo_metadataExtraArgs(source_root).clone(),
@@ -2590,6 +2600,7 @@ impl Config {
             extra_test_bin_args: self.runnables_extraTestBinaryArgs(source_root).clone(),
             extra_env: self.extra_env(source_root).clone(),
             target_dir_config: self.target_dir_from_config(source_root),
+            build_dir_config: self.build_dir_from_config(source_root),
             set_test: true,
             config_path: self.cargo_config_path(source_root),
         }
@@ -2650,6 +2661,7 @@ impl Config {
                     extra_env: self.check_extra_env(source_root),
                     config_path: self.cargo_config_path(source_root),
                     target_dir_config: self.target_dir_from_config(source_root),
+                    build_dir_config: self.build_dir_from_config(source_root),
                     set_test: *self.cfg_setTest(source_root),
                 },
                 ansi_color_output: self.color_diagnostic_output(),
@@ -2663,6 +2675,14 @@ impl Config {
 
     fn target_dir_from_config(&self, source_root: Option<SourceRootId>) -> TargetDirectoryConfig {
         match &self.cargo_targetDir(source_root) {
+            Some(TargetDirectory::UseSubdirectory(true)) => TargetDirectoryConfig::UseSubdirectory,
+            Some(TargetDirectory::UseSubdirectory(false)) | None => TargetDirectoryConfig::None,
+            Some(TargetDirectory::Directory(dir)) => TargetDirectoryConfig::Directory(dir.clone()),
+        }
+    }
+
+    fn build_dir_from_config(&self, source_root: Option<SourceRootId>) -> TargetDirectoryConfig {
+        match &self.cargo_buildDir(source_root) {
             Some(TargetDirectory::UseSubdirectory(true)) => TargetDirectoryConfig::UseSubdirectory,
             Some(TargetDirectory::UseSubdirectory(false)) | None => TargetDirectoryConfig::None,
             Some(TargetDirectory::Directory(dir)) => TargetDirectoryConfig::Directory(dir.clone()),

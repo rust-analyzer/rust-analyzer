@@ -88,6 +88,7 @@ impl WorkspaceBuildScripts {
             &allowed_features,
             workspace.manifest_path(),
             workspace.target_directory().as_ref(),
+            workspace.build_directory().map(AbsPath::as_ref),
             current_dir,
             sysroot,
             toolchain,
@@ -105,12 +106,15 @@ impl WorkspaceBuildScripts {
     ) -> io::Result<Vec<WorkspaceBuildScripts>> {
         assert_eq!(config.invocation_strategy, InvocationStrategy::Once);
 
+        let working_dir: &Utf8Path = working_directory.as_ref();
+
         let (_guard, cmd) = Self::build_command(
             config,
             &Default::default(),
             // These are not gonna be used anyways, so just construct a dummy here
             &ManifestPath::try_from(working_directory.clone()).unwrap(),
-            working_directory.as_ref(),
+            working_dir,
+            Some(working_dir),
             working_directory,
             &Sysroot::empty(),
             None,
@@ -437,6 +441,7 @@ impl WorkspaceBuildScripts {
         allowed_features: &FxHashSet<String>,
         manifest_path: &ManifestPath,
         target_dir: &Utf8Path,
+        build_dir: Option<&Utf8Path>,
         current_dir: &AbsPath,
         sysroot: &Sysroot,
         toolchain: Option<&semver::Version>,
@@ -463,6 +468,9 @@ impl WorkspaceBuildScripts {
                 if let Some(target_dir) = config.target_dir_config.target_dir(Some(target_dir)) {
                     cmd.arg("--target-dir");
                     cmd.arg(target_dir.as_ref());
+                }
+                if let Some(build_dir) = config.build_dir_config.target_dir(build_dir) {
+                    cmd.env("CARGO_BUILD_BUILD_DIR", build_dir.as_ref());
                 }
 
                 toolchain::cargo_use_targets(toolchain, &mut cmd, config.target.as_slice());

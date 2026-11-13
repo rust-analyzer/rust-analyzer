@@ -53,6 +53,7 @@ pub(crate) struct CargoOptions {
     pub(crate) extra_env: FxHashMap<String, Option<String>>,
     pub(crate) config_path: Option<AbsPathBuf>,
     pub(crate) target_dir_config: TargetDirectoryConfig,
+    pub(crate) build_dir_config: TargetDirectoryConfig,
 }
 
 #[derive(Clone, Debug)]
@@ -68,6 +69,7 @@ impl CargoOptions {
         &self,
         cmd: &mut Command,
         ws_target_dir: Option<&Utf8Path>,
+        ws_build_dir: Option<&Utf8Path>,
         package_repr: Option<&str>,
         toolchain_version: Option<&semver::Version>,
     ) {
@@ -113,6 +115,9 @@ impl CargoOptions {
         }
         if let Some(target_dir) = self.target_dir_config.target_dir(ws_target_dir) {
             cmd.arg("--target-dir").arg(target_dir.as_ref());
+        }
+        if let Some(build_dir) = self.build_dir_config.target_dir(ws_build_dir) {
+            cmd.env("CARGO_BUILD_BUILD_DIR", build_dir.as_ref());
         }
     }
 }
@@ -966,6 +971,7 @@ impl FlycheckActor {
                 cargo_options.apply_on_command(
                     &mut cmd,
                     self.ws_target_dir.as_ref().map(Utf8PathBuf::as_path),
+                    self.ws_build_dir.as_ref().map(Utf8PathBuf::as_path),
                     package_repr,
                     self.toolchain_version.as_ref(),
                 );
@@ -1186,6 +1192,7 @@ mod tests {
                 extra_env: FxHashMap::default(),
                 config_path: None,
                 target_dir_config: TargetDirectoryConfig::default(),
+                build_dir_config: TargetDirectoryConfig::default(),
             },
             ansi_color_output: true,
         };

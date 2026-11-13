@@ -883,6 +883,26 @@
             {
                 "title": "Cargo",
                 "properties": {
+                    "rust-analyzer.cargo.buildDir": {
+                        "markdownDescription": "Optional path to a rust-analyzer specific build directory.\nSince cargo's build-directory defaults to the target-directory, it should only\nbe needed to set this if a custom build-directory is configured.\nOtherwise setting `cargo.targetDir` is sufficient to prevent rust-analyzer from\nlocking the `Cargo.lock`.\n\nSet to `true` to use a subdirectory of the existing build directory or\nset to a path relative to the workspace to use that path.",
+                        "default": null,
+                        "anyOf": [
+                            {
+                                "type": "null"
+                            },
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "string"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "title": "Cargo",
+                "properties": {
                     "rust-analyzer.cargo.buildScripts.enable": {
                         "markdownDescription": "Run build scripts (`build.rs`) for more precise code analysis.",
                         "default": true,

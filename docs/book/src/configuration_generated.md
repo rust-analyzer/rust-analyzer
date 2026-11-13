@@ -56,6 +56,20 @@ Automatically refresh project info via `cargo metadata` on
 `Cargo.toml` or `.cargo/config.toml` changes.
 
 
+## rust-analyzer.cargo.buildDir {#cargo.buildDir}
+
+Default: `null`
+
+Optional path to a rust-analyzer specific build directory.
+Since cargo's build-directory defaults to the target-directory, it should only
+be needed to set this if a custom build-directory is configured.
+Otherwise setting `cargo.targetDir` is sufficient to prevent rust-analyzer from
+locking the `Cargo.lock`.
+
+Set to `true` to use a subdirectory of the existing build directory or
+set to a path relative to the workspace to use that path.
+
+
 ## rust-analyzer.cargo.buildScripts.enable {#cargo.buildScripts.enable}
 
 Default: `true`

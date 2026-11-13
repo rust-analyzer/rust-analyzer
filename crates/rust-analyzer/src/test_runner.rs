@@ -106,6 +106,7 @@ impl CargoTestHandle {
         options: CargoOptions,
         root: &AbsPath,
         ws_target_dir: Option<&Utf8Path>,
+        ws_build_dir: Option<&Utf8Path>,
         test_target: TestTarget,
         sender: Sender<CargoTestMessage>,
         toolchain_version: Option<&semver::Version>,
@@ -135,6 +136,7 @@ impl CargoTestHandle {
         options.apply_on_command(
             &mut cmd,
             ws_target_dir,
+            ws_build_dir,
             Some(&test_target.package),
             toolchain_version,
         );
