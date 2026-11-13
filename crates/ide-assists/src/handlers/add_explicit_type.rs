@@ -3,7 +3,10 @@ use hir::HirDisplay;
 use ide_db::syntax_helpers::node_ext::walk_ty;
 use syntax::ast::{self, AstNode, LetStmt, Param};
 
-use crate::{AssistContext, AssistId, Assists};
+use crate::{
+    AssistContext, AssistId, Assists,
+    utils::{cover_edit_range, original_range_in},
+};
 
 // Assist: add_explicit_type
 //
@@ -21,10 +24,16 @@ use crate::{AssistContext, AssistId, Assists};
 // }
 // ```
 pub(crate) fn add_explicit_type(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Option<()> {
-    let syntax_node = ctx.find_node_at_offset::<Either<LetStmt, Param>>()?;
+    let syntax_node = ctx.find_node_at_offset_with_descend::<Either<LetStmt, Param>>()?;
     let (ascribed_ty, expr, pat) = if let Either::Left(let_stmt) = syntax_node {
         let cursor_in_range = {
-            let eq_range = let_stmt.eq_token()?.text_range();
+            let let_range = original_range_in(ctx.file_id(), &ctx.sema, let_stmt.syntax())?;
+            let first = cover_edit_range(ctx.source_file().syntax(), let_range).start().clone();
+            let eq_range = std::iter::successors(Some(first), |it| it.next_sibling_or_token())
+                .take_while(|it| let_range.contains_range(it.text_range()))
+                .find(|it| it.kind() == syntax::T![=])?
+                .text_range();
+
             ctx.offset() < eq_range.start()
         };
         if !cursor_in_range {
@@ -44,7 +53,7 @@ pub(crate) fn add_explicit_type(acc: &mut Assists, ctx: &AssistContext<'_, '_>) 
     };
 
     let module = ctx.sema.scope(pat.syntax())?.module();
-    let pat_range = pat.syntax().text_range();
+    let pat_range = ctx.sema.original_range_opt(pat.syntax())?.range;
 
     // Don't enable the assist if there is a type ascription without any placeholders
     if let Some(ty) = &ascribed_ty {
@@ -78,7 +87,7 @@ pub(crate) fn add_explicit_type(acc: &mut Assists, ctx: &AssistContext<'_, '_>) 
         pat_range,
         |builder| match ascribed_ty {
             Some(ascribed_ty) => {
-                builder.replace(ascribed_ty.syntax().text_range(), inferred_type);
+                builder.replace(ctx.sema.original_range(ascribed_ty.syntax()).range, inferred_type);
             }
             None => {
                 builder.insert(pat_range.end(), format!(": {inferred_type}"));
@@ -270,6 +279,46 @@ fn f() {
             r#"
 fn f() {
     let x: *const [i32] = &[3];
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn add_explicit_type_in_macro() {
+        check_assist(
+            add_explicit_type,
+            r#"
+//- proc_macros: identity
+#[proc_macros::identity]
+fn f() {
+    let $0x = 3;
+}
+"#,
+            r#"
+#[proc_macros::identity]
+fn f() {
+    let x: i32 = 3;
+}
+"#,
+        );
+
+        check_assist(
+            add_explicit_type,
+            r#"
+macro_rules! identity { ($($t:tt)*) => { $($t)* }; }
+fn f() {
+    identity! {
+        let $0x = 3;
+    }
+}
+"#,
+            r#"
+macro_rules! identity { ($($t:tt)*) => { $($t)* }; }
+fn f() {
+    identity! {
+        let x: i32 = 3;
+    }
 }
 "#,
         );
