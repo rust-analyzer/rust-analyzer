@@ -750,7 +750,7 @@ where
                 if let TyKind::FnDef(def_id, _) = a.kind() {
                     // Intrinsics are not coercible to function pointers
                     if let CallableDefId::FunctionId(def_id) = def_id.0 {
-                        if FunctionSignature::is_intrinsic(self.db(), def_id) {
+                        if FunctionSignature::of(self.db(), def_id).is_intrinsic() {
                             return Err(TypeError::IntrinsicCast);
                         }
 

@@ -304,7 +304,7 @@ impl EnumSignature {
         }
     }
 }
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct ConstFlags: u8 {
         const HAS_BODY = 1 << 1;
@@ -367,7 +367,7 @@ impl ConstSignature {
     }
 }
 
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct StaticFlags: u8 {
         const HAS_BODY = 1 << 1;
@@ -443,7 +443,19 @@ impl StaticSignature {
     }
 }
 
-bitflags::bitflags! {
+impl StaticSignature {
+    #[inline]
+    pub fn is_extern(&self) -> bool {
+        self.flags.contains(StaticFlags::EXTERN)
+    }
+
+    #[inline]
+    pub fn is_mut(&self) -> bool {
+        self.flags.contains(StaticFlags::MUTABLE)
+    }
+}
+
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct ImplFlags: u8 {
         const NEGATIVE = 1 << 1;
@@ -507,9 +519,14 @@ impl ImplSignature {
     pub fn is_default(&self) -> bool {
         self.flags.contains(ImplFlags::DEFAULT)
     }
+
+    #[inline]
+    pub fn is_unsafe(&self) -> bool {
+        self.flags.contains(ImplFlags::UNSAFE)
+    }
 }
 
-bitflags::bitflags! {
+bitflags! {
     #[derive(Debug, Clone, Copy, Eq, PartialEq, Default)]
     pub struct TraitFlags: u16 {
         const RUSTC_HAS_INCOHERENT_INHERENT_IMPLS = 1 << 1;
@@ -582,6 +599,18 @@ impl TraitSignature {
         let (store, source_map, generic_params) = lower_trait(db, loc.container, source, id);
 
         (Arc::new(TraitSignature { store, generic_params, flags, name }), source_map)
+    }
+}
+
+impl TraitSignature {
+    #[inline]
+    pub fn is_auto(&self) -> bool {
+        self.flags.contains(TraitFlags::AUTO)
+    }
+
+    #[inline]
+    pub fn is_unsafe(&self) -> bool {
+        self.flags.contains(TraitFlags::UNSAFE)
     }
 }
 
@@ -781,9 +810,8 @@ impl FunctionSignature {
         AttrFlags::legacy_const_generic_indices(db, id).as_deref()
     }
 
-    pub fn is_intrinsic(db: &dyn SourceDatabase, id: FunctionId) -> bool {
-        let data = FunctionSignature::of(db, id);
-        data.flags.contains(FnFlags::RUSTC_INTRINSIC)
+    pub fn is_intrinsic(&self) -> bool {
+        self.flags.contains(FnFlags::RUSTC_INTRINSIC)
     }
 }
 

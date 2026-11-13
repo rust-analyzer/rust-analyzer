@@ -19,8 +19,8 @@ use hir_def::{
     hir::{ClosureKind as HirClosureKind, CoroutineKind as HirCoroutineKind, ExprId, PatId},
     lang_item::LangItems,
     signatures::{
-        EnumFlags, EnumSignature, FnFlags, FunctionSignature, ImplFlags, ImplSignature,
-        StructFlags, StructSignature, TraitFlags, TraitSignature, UnionSignature,
+        EnumFlags, EnumSignature, FunctionSignature, ImplSignature, StructFlags, StructSignature,
+        TraitFlags, TraitSignature, UnionSignature,
     },
 };
 use rustc_abi::ExternAbi;
@@ -1638,16 +1638,11 @@ impl<'db> Interner for DbInterner<'db> {
             return ImplPolarity::Positive;
         };
         let impl_data = ImplSignature::of(self.db(), impl_id);
-        if impl_data.flags.contains(ImplFlags::NEGATIVE) {
-            ImplPolarity::Negative
-        } else {
-            ImplPolarity::Positive
-        }
+        if impl_data.is_negative() { ImplPolarity::Negative } else { ImplPolarity::Positive }
     }
 
     fn trait_is_auto(self, trait_: Self::TraitId) -> bool {
-        let trait_data = TraitSignature::of(self.db(), trait_.0);
-        trait_data.flags.contains(TraitFlags::AUTO)
+        TraitSignature::of(self.db(), trait_.0).is_auto()
     }
 
     fn trait_is_alias(self, trait_: Self::TraitId) -> bool {
@@ -1872,7 +1867,7 @@ impl<'db> Interner for DbInterner<'db> {
             CallableDefId::FunctionId(id) => id,
             _ => return false,
         };
-        FunctionSignature::of(self.db(), id).flags.contains(FnFlags::CONST)
+        FunctionSignature::of(self.db(), id).is_const()
     }
 
     fn impl_is_const(self, _def_id: Self::ImplId) -> bool {
@@ -1927,7 +1922,7 @@ impl<'db> Interner for DbInterner<'db> {
     }
 
     fn trait_is_unsafe(self, trait_: Self::TraitId) -> bool {
-        TraitSignature::of(self.db(), trait_.0).flags.contains(TraitFlags::UNSAFE)
+        TraitSignature::of(self.db(), trait_.0).is_unsafe()
     }
 
     fn impl_self_is_guaranteed_unsized(self, _def_id: Self::ImplId) -> bool {

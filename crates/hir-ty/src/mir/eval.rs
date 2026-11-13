@@ -12,7 +12,7 @@ use hir_def::{
     lang_item::LangItems,
     layout::{TagEncoding, Variants},
     resolver::{HasResolver, ValueNs},
-    signatures::{EnumSignature, StaticFlags, StaticSignature, StructFlags, StructSignature},
+    signatures::{EnumSignature, StaticSignature, StructFlags, StructSignature},
 };
 use hir_expand::{InFile, mod_path::path};
 use la_arena::ArenaMap;
@@ -2890,7 +2890,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
             return Ok(*o);
         };
         let static_data = StaticSignature::of(self.db, st);
-        let result = if !static_data.flags.contains(StaticFlags::EXTERN) {
+        let result = if !static_data.is_extern() {
             let allocation = self.db.const_eval_static(st).map_err(|e| {
                 MirEvalError::ConstEvalError(static_data.name.as_str().to_owned(), Box::new(e))
             })?;

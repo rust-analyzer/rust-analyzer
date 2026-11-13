@@ -43,9 +43,7 @@ impl<'a, 'db> Evaluator<'a, 'db> {
 
         let function_data = FunctionSignature::of(self.db, def);
         let attrs = AttrFlags::query(self.db, def.into());
-        let is_intrinsic = FunctionSignature::is_intrinsic(self.db, def);
-
-        if is_intrinsic {
+        if function_data.is_intrinsic() {
             return self.exec_intrinsic(
                 function_data.name.as_str(),
                 args,
