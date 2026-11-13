@@ -37,6 +37,10 @@ impl<'a> LexedStr<'a> {
     pub fn new(edition: Edition, text: &'a str) -> LexedStr<'a> {
         let _p = tracing::info_span!("LexedStr::new").entered();
         let mut conv = Converter::new(edition, text);
+        if text.starts_with('\u{feff}') {
+            conv.push(WHITESPACE, '\u{feff}'.len_utf8(), Vec::new());
+        }
+
         if let Ok(script) = crate::frontmatter::ScriptSource::parse(text) {
             if let Some(shebang) = script.shebang_span() {
                 conv.push(SHEBANG, shebang.end - shebang.start, Vec::new());
