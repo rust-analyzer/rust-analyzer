@@ -238,16 +238,21 @@ export class Ctx implements RustAnalyzerExtensionApi {
                 debug: run,
             };
 
-            let rawInitializationOptions = this.config.cfg;
+            // `vscode-languageclient` reuses `initializationOptions` when it restarts the
+            // server after a crash, so pass a function that recomputes them from the
+            // current configuration on every (re)initialization.
+            const initializationOptions = () => {
+                let rawInitializationOptions = this.config.cfg;
 
-            if (this.workspace.kind === "Detached Files") {
-                rawInitializationOptions = {
-                    detachedFiles: this.workspace.files.map((file) => file.uri.fsPath),
-                    ...rawInitializationOptions,
-                };
-            }
+                if (this.workspace.kind === "Detached Files") {
+                    rawInitializationOptions = {
+                        detachedFiles: this.workspace.files.map((file) => file.uri.fsPath),
+                        ...rawInitializationOptions,
+                    };
+                }
 
-            const initializationOptions = prepareVSCodeConfig(rawInitializationOptions);
+                return prepareVSCodeConfig(rawInitializationOptions);
+            };
 
             this._client = await createClient(
                 this.traceOutputChannel,
