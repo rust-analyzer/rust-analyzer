@@ -40,6 +40,7 @@
 
 mod anchored_path;
 pub mod file_set;
+mod line_endings;
 pub mod loader;
 mod path_interner;
 mod vfs_path;
@@ -48,6 +49,7 @@ use std::{fmt, hash::BuildHasherDefault, mem};
 
 use crate::path_interner::PathInterner;
 
+pub use crate::line_endings::LineEndings;
 pub use crate::{
     anchored_path::{AnchoredPath, AnchoredPathBuf},
     vfs_path::VfsPath,
@@ -123,23 +125,23 @@ impl ChangedFile {
     /// Returns `true` if the change is [`Create`](ChangeKind::Create) or
     /// [`Delete`](Change::Delete).
     pub fn is_created_or_deleted(&self) -> bool {
-        matches!(self.change, Change::Create(_, _) | Change::Delete)
+        matches!(self.change, Change::Create(_, _, _) | Change::Delete)
     }
 
     /// Returns `true` if the change is [`Create`](ChangeKind::Create).
     pub fn is_created(&self) -> bool {
-        matches!(self.change, Change::Create(_, _))
+        matches!(self.change, Change::Create(_, _, _))
     }
 
     /// Returns `true` if the change is [`Modify`](ChangeKind::Modify).
     pub fn is_modified(&self) -> bool {
-        matches!(self.change, Change::Modify(_, _))
+        matches!(self.change, Change::Modify(_, _, _))
     }
 
     pub fn kind(&self) -> ChangeKind {
         match self.change {
-            Change::Create(_, _) => ChangeKind::Create,
-            Change::Modify(_, _) => ChangeKind::Modify,
+            Change::Create(_, _, _) => ChangeKind::Create,
+            Change::Modify(_, _, _) => ChangeKind::Modify,
             Change::Delete => ChangeKind::Delete,
         }
     }
@@ -149,9 +151,9 @@ impl ChangedFile {
 #[derive(Eq, PartialEq, Debug)]
 pub enum Change {
     /// The file was (re-)created
-    Create(Vec<u8>, u64),
+    Create(Vec<u8>, u64, Option<LineEndings>),
     /// The file was modified
-    Modify(Vec<u8>, u64),
+    Modify(Vec<u8>, u64, Option<LineEndings>),
     /// The file was deleted
     Delete,
 }
@@ -217,26 +219,39 @@ impl Vfs {
         let _p = span!(Level::INFO, "Vfs::set_file_contents").entered();
         let file_id = self.alloc_file_id(path);
         let state: FileState = self.get(file_id);
+
+        let normalize_line_endings = |v: Vec<u8>| {
+            str::from_utf8(&v)
+                .ok()
+                .map(|text| LineEndings::normalize(text.to_owned()))
+                .map(|(text, ln)| (text.into_bytes(), Some(ln)))
+                .unwrap_or_else(|| (v, None))
+        };
+
         let change = match (state, contents) {
             (FileState::Deleted, None) => return false,
             (FileState::Deleted, Some(v)) => {
+                let (v, line_endings) = normalize_line_endings(v);
                 let hash = hash_once::<FxHasher>(&*v);
-                Change::Create(v, hash)
+                Change::Create(v, hash, line_endings)
             }
             (FileState::Exists(_), None) => Change::Delete,
             (FileState::Exists(hash), Some(v)) => {
+                let (v, line_endings) = normalize_line_endings(v);
                 let new_hash = hash_once::<FxHasher>(&*v);
                 if new_hash == hash {
                     return false;
                 }
-                Change::Modify(v, new_hash)
+                Change::Modify(v, new_hash, line_endings)
             }
             (FileState::Excluded, _) => return false,
         };
 
         let mut set_data = |change_kind| {
             self.data[file_id.0 as usize] = match change_kind {
-                &Change::Create(_, hash) | &Change::Modify(_, hash) => FileState::Exists(hash),
+                &Change::Create(_, hash, _) | &Change::Modify(_, hash, _) => {
+                    FileState::Exists(hash)
+                }
                 Change::Delete => FileState::Deleted,
             };
         };
@@ -251,26 +266,29 @@ impl Vfs {
                     // newer `Delete` wins
                     (change, Delete) => *change = Delete,
                     // merge `Create` with `Create` or `Modify`
-                    (Create(prev, old_hash), Create(new, new_hash) | Modify(new, new_hash)) => {
+                    (
+                        Create(prev, old_hash, _),
+                        Create(new, new_hash, _) | Modify(new, new_hash, _),
+                    ) => {
                         *prev = new;
                         *old_hash = new_hash;
                     }
                     // collapse identical `Modify`es
-                    (Modify(prev, old_hash), Modify(new, new_hash)) => {
+                    (Modify(prev, old_hash, _), Modify(new, new_hash, _)) => {
                         *prev = new;
                         *old_hash = new_hash;
                     }
                     // equivalent to `Modify`
-                    (change @ Delete, Create(new, new_hash)) => {
-                        *change = Modify(new, new_hash);
+                    (change @ Delete, Create(new, new_hash, line_endings)) => {
+                        *change = Modify(new, new_hash, line_endings);
                     }
                     // shouldn't occur, but collapse into `Create`
-                    (change @ Delete, Modify(new, new_hash)) => {
+                    (change @ Delete, Modify(new, new_hash, line_endings)) => {
                         stdx::never!();
-                        *change = Create(new, new_hash);
+                        *change = Create(new, new_hash, line_endings);
                     }
                     // shouldn't occur, but keep the Create
-                    (prev @ Modify(_, _), new @ Create(_, _)) => *prev = new,
+                    (prev @ Modify(_, _, _), new @ Create(_, _, _)) => *prev = new,
                 }
                 set_data(&o.get().change);
             }

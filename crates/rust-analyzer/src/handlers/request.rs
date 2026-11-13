@@ -30,7 +30,7 @@ use serde_json::json;
 use stdx::{format_to, never};
 use syntax::{TextRange, TextSize};
 use triomphe::Arc;
-use vfs::{AbsPath, AbsPathBuf, FileId, VfsPath};
+use vfs::{AbsPath, AbsPathBuf, FileId, LineEndings, VfsPath};
 
 use crate::{
     config::{
@@ -38,7 +38,6 @@ use crate::{
     },
     diagnostics::convert_diagnostic,
     global_state::{FetchWorkspaceRequest, GlobalState, GlobalStateSnapshot},
-    line_index::LineEndings,
     lsp::{
         LspError, completion_item_hash,
         ext::{

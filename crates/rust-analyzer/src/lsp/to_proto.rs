@@ -24,12 +24,12 @@ use itertools::Itertools;
 use paths::{Utf8Component, Utf8Prefix};
 use semver::VersionReq;
 use serde_json::to_value;
-use vfs::AbsPath;
+use vfs::{AbsPath, LineEndings};
 
 use crate::{
     config::{CallInfoConfig, ClientCommandsConfig, Config},
     global_state::GlobalStateSnapshot,
-    line_index::{LineEndings, LineIndex, PositionEncoding},
+    line_index::{LineIndex, PositionEncoding},
     lsp::{
         LspError, completion_item_hash,
         ext::ShellRunnableArgs,

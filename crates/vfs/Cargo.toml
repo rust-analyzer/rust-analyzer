@@ -16,6 +16,7 @@ doctest = false
 rustc-hash.workspace = true
 tracing.workspace = true
 fst = "0.4.7"
+memchr = "2.7.5"
 indexmap.workspace = true
 nohash-hasher.workspace = true
 crossbeam-channel.workspace = true

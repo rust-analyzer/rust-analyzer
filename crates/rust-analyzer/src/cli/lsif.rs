@@ -13,13 +13,13 @@ use project_model::{CargoConfig, ProjectManifest, ProjectWorkspace, RustLibSourc
 use rustc_hash::FxHashMap;
 use stdx::format_to;
 use vendored as lsif;
-use vfs::{AbsPathBuf, Vfs};
+use vfs::{AbsPathBuf, LineEndings, Vfs};
 
 mod vendored;
 
 use crate::{
     cli::flags,
-    line_index::{LineEndings, LineIndex, PositionEncoding},
+    line_index::{LineIndex, PositionEncoding},
     lsp::to_proto,
     version::version,
 };

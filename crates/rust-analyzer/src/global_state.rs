@@ -29,14 +29,14 @@ use rustc_hash::{FxHashMap, FxHashSet};
 use stdx::thread;
 use tracing::{Level, span, trace};
 use triomphe::Arc;
-use vfs::{AbsPathBuf, AnchoredPathBuf, ChangeKind, Vfs, VfsPath};
+use vfs::{AbsPathBuf, AnchoredPathBuf, ChangeKind, LineEndings, Vfs, VfsPath};
 
 use crate::{
     config::{Config, ConfigChange, ConfigErrors, RatomlFileKind},
     diagnostics::{CheckFixes, DiagnosticCollection},
     discover,
     flycheck::{FlycheckHandle, FlycheckMessage, PackageSpecifier},
-    line_index::{LineEndings, LineIndex},
+    line_index::LineIndex,
     lsp::{from_proto, to_proto::url_from_abs_path},
     lsp_ext,
     main_loop::Task,
@@ -410,15 +410,10 @@ impl GlobalState {
                         self.diagnostics.clear_native_for(file.file_id);
                     }
 
-                    let text = if let vfs::Change::Create(v, _) | vfs::Change::Modify(v, _) =
-                        file.change
+                    let text = if let vfs::Change::Create(v, _, line_endings)
+                    | vfs::Change::Modify(v, _, line_endings) = file.change
                     {
-                        String::from_utf8(v).ok().map(|text| {
-                            // FIXME: Consider doing normalization in the `vfs` instead? That allows
-                            // getting rid of some locking
-                            let (text, line_endings) = LineEndings::normalize(text);
-                            (text, line_endings)
-                        })
+                        String::from_utf8(v).ok().zip(line_endings)
                     } else {
                         None
                     };

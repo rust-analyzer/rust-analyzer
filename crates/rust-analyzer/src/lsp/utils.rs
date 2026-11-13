@@ -4,10 +4,11 @@ use std::{mem, ops::Range, vec};
 use lsp_server::Notification;
 use lsp_types::{MessageActionItem, Request};
 use triomphe::Arc;
+use vfs::LineEndings;
 
 use crate::{
     global_state::GlobalState,
-    line_index::{LineEndings, LineIndex, PositionEncoding},
+    line_index::{LineIndex, PositionEncoding},
     lsp::{LspError, from_proto},
     lsp_ext,
 };

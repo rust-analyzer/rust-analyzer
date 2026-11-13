@@ -12,12 +12,12 @@ use load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use rustc_hash::{FxHashMap, FxHashSet};
 use scip::types::{self as scip_types, SymbolInformation};
 use tracing::error;
-use vfs::FileId;
+use vfs::{FileId, LineEndings};
 
 use crate::{
     cli::flags,
     config::ConfigChange,
-    line_index::{LineEndings, LineIndex, PositionEncoding},
+    line_index::{LineIndex, PositionEncoding},
 };
 
 impl flags::Scip {
