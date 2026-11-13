@@ -24,11 +24,22 @@ pub mod transport;
 use paths::{AbsPath, AbsPathBuf};
 use semver::Version;
 use span::{ErasedFileAstId, FIXUP_ERASED_FILE_AST_ID_MARKER, Span};
-use std::{fmt, io, sync::Arc, time::SystemTime};
+use std::{
+    ffi::OsString,
+    fmt, io,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 
 use crate::{
-    bidirectional_protocol::SubCallback, pool::ProcMacroServerPool, process::ProcMacroServerProcess,
+    bidirectional_protocol::SubCallback,
+    pool::{ProcMacroServerPool, ProcessFactory},
+    process::{ProcMacroServerProcess, ProcessWatchdog},
 };
+
+/// How long a single proc-macro expansion may take before the server process is killed
+/// and restarted.
+pub const DEFAULT_EXPANSION_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// The versions of the server protocol
 pub mod version {
@@ -109,7 +120,7 @@ impl MacroDylib {
 /// we share a single expander process for all macros within a workspace.
 #[derive(Debug, Clone)]
 pub struct ProcMacro {
-    pool: ProcMacroServerPool,
+    pool: Arc<ProcMacroServerPool>,
     dylib_path: Arc<AbsPathBuf>,
     name: Box<str>,
     kind: ProcMacroKind,
@@ -150,19 +161,40 @@ impl ProcMacroClient {
         process_path: &AbsPath,
         env: impl IntoIterator<
             Item = (impl AsRef<std::ffi::OsStr>, &'a Option<impl 'a + AsRef<std::ffi::OsStr>>),
-        > + Clone,
+        >,
         version: Option<&Version>,
         num_process: usize,
+        expansion_timeout: Option<Duration>,
     ) -> io::Result<ProcMacroClient> {
-        let pool_size = num_process;
-        let mut workers = Vec::with_capacity(pool_size);
-        for _ in 0..pool_size {
-            let worker = ProcMacroServerProcess::spawn(process_path, env.clone(), version)?;
-            workers.push(worker);
-        }
+        let process_path = process_path.to_owned();
+        let env: Arc<[(OsString, Option<OsString>)]> = env
+            .into_iter()
+            .map(|(key, value)| {
+                (
+                    key.as_ref().to_os_string(),
+                    value.as_ref().map(|value| value.as_ref().to_os_string()),
+                )
+            })
+            .collect();
+        let version = version.cloned();
+        let watchdog = expansion_timeout
+            .map(|timeout| io::Result::Ok((ProcessWatchdog::spawn()?, timeout)))
+            .transpose()?;
+        let spawn: ProcessFactory = Box::new({
+            let process_path = process_path.clone();
+            move || {
+                ProcMacroServerProcess::spawn(
+                    &process_path,
+                    env.iter().map(|(key, value)| (key, value)),
+                    version.as_ref(),
+                    watchdog.clone(),
+                )
+            }
+        });
+        let workers = (0..num_process).map(|_| spawn()).collect::<io::Result<Vec<_>>>()?;
 
-        let pool = ProcMacroServerPool::new(workers);
-        Ok(ProcMacroClient { pool: Arc::new(pool), path: process_path.to_owned() })
+        let pool = Arc::new(ProcMacroServerPool::new(workers, spawn));
+        Ok(ProcMacroClient { pool, path: process_path })
     }
 
     /// Invokes `spawn` and returns a client connected to the resulting read and write handles.
@@ -176,20 +208,30 @@ impl ProcMacroClient {
             Box<dyn process::ProcessExit>,
             Box<dyn io::Write + Send + Sync>,
             Box<dyn io::BufRead + Send + Sync>,
-        )> + Clone,
+        )> + Clone
+        + Send
+        + Sync
+        + 'static,
         version: Option<&Version>,
         num_process: usize,
+        expansion_timeout: Option<Duration>,
     ) -> io::Result<ProcMacroClient> {
-        let pool_size = num_process;
-        let mut workers = Vec::with_capacity(pool_size);
-        for _ in 0..pool_size {
-            let worker =
-                ProcMacroServerProcess::run(spawn.clone(), version, || "<unknown>".to_owned())?;
-            workers.push(worker);
-        }
+        let version = version.cloned();
+        let watchdog = expansion_timeout
+            .map(|timeout| io::Result::Ok((ProcessWatchdog::spawn()?, timeout)))
+            .transpose()?;
+        let spawn: ProcessFactory = Box::new(move || {
+            ProcMacroServerProcess::run(
+                spawn.clone(),
+                version.as_ref(),
+                || "<unknown>".to_owned(),
+                watchdog.clone(),
+            )
+        });
+        let workers = (0..num_process).map(|_| spawn()).collect::<io::Result<Vec<_>>>()?;
 
-        let pool = ProcMacroServerPool::new(workers);
-        Ok(ProcMacroClient { pool: Arc::new(pool), path: process_path.to_owned() })
+        let pool = Arc::new(ProcMacroServerPool::new(workers, spawn));
+        Ok(ProcMacroClient { pool, path: process_path.to_owned() })
     }
 
     /// Returns the absolute path to the proc-macro server.
@@ -203,7 +245,7 @@ impl ProcMacroClient {
     }
 
     /// Checks if the proc-macro server has exited.
-    pub fn exited(&self) -> Option<&ServerError> {
+    pub fn exited(&self) -> Option<ServerError> {
         self.pool.exited()
     }
 }
@@ -264,7 +306,8 @@ impl ProcMacro {
             }
         }
 
-        self.pool.pick_process()?.expand(
+        let process = self.pool.pick_process()?;
+        let result = process.expand(
             self,
             subtree,
             attr,
@@ -274,6 +317,10 @@ impl ProcMacro {
             mixed_site,
             current_dir,
             callback,
-        )
+        );
+        if process.timed_out() {
+            self.pool.replace_timed_out_process_in_background(process);
+        }
+        result
     }
 }

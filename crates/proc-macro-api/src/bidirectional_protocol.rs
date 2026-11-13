@@ -100,7 +100,7 @@ pub(crate) fn version_check(
 ) -> Result<u32, ServerError> {
     let request = BidirectionalMessage::Request(Request::ApiVersionCheck(ApiVersionCheck {}));
 
-    let response_payload = run_request(srv, request, callback)?;
+    let response_payload = run_request(srv, request, callback, None)?;
 
     match response_payload {
         BidirectionalMessage::Response(Response::ApiVersionCheck(version)) => Ok(version),
@@ -119,7 +119,7 @@ pub(crate) fn enable_rust_analyzer_spans(
         span_mode: SpanMode::RustAnalyzer,
     }));
 
-    let response_payload = run_request(srv, request, callback)?;
+    let response_payload = run_request(srv, request, callback, None)?;
 
     match response_payload {
         BidirectionalMessage::Response(Response::SetConfig(ServerConfig { span_mode })) => {
@@ -139,7 +139,7 @@ pub(crate) fn find_proc_macros(
         dylib_path: dylib_path.to_path_buf().into(),
     }));
 
-    let response_payload = run_request(srv, request, callback)?;
+    let response_payload = run_request(srv, request, callback, None)?;
 
     match response_payload {
         BidirectionalMessage::Response(Response::ListMacros(it)) => Ok(it),
@@ -182,7 +182,7 @@ pub(crate) fn expand(
         current_dir: Some(current_dir),
     })));
 
-    let response_payload = run_request(process, task, callback)?;
+    let response_payload = run_request(process, task, callback, Some(proc_macro.name()))?;
 
     match response_payload {
         BidirectionalMessage::Response(Response::ExpandMacro(it)) => Ok(it
@@ -202,11 +202,12 @@ fn run_request(
     srv: &ProcMacroServerProcess,
     msg: BidirectionalMessage,
     callback: SubCallback<'_>,
+    macro_name: Option<&str>,
 ) -> Result<BidirectionalMessage, ServerError> {
     if let Some(err) = srv.exited() {
         return Err(err.clone());
     }
-    srv.run_bidirectional(msg, callback)
+    srv.run_bidirectional(msg, callback, macro_name)
 }
 
 pub fn reject_subrequests(req: SubRequest) -> Result<SubResponse, ServerError> {

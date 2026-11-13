@@ -1913,6 +1913,7 @@ version = "0.0.0"
 dependencies = [
  "indexmap",
  "intern",
+ "parking_lot",
  "paths",
  "postcard",
  "proc-macro-srv",

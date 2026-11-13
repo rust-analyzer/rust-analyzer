@@ -37,7 +37,7 @@ impl std::fmt::Debug for SpanId {
 
 pub(crate) fn version_check(srv: &ProcMacroServerProcess) -> Result<u32, ServerError> {
     let request = Request::ApiVersionCheck {};
-    let response = send_task(srv, request)?;
+    let response = send_task(srv, request, None)?;
 
     match response {
         Response::ApiVersionCheck(version) => Ok(version),
@@ -50,7 +50,7 @@ pub(crate) fn enable_rust_analyzer_spans(
     srv: &ProcMacroServerProcess,
 ) -> Result<SpanMode, ServerError> {
     let request = Request::SetConfig(ServerConfig { span_mode: SpanMode::RustAnalyzer });
-    let response = send_task(srv, request)?;
+    let response = send_task(srv, request, None)?;
 
     match response {
         Response::SetConfig(ServerConfig { span_mode }) => Ok(span_mode),
@@ -65,7 +65,7 @@ pub(crate) fn find_proc_macros(
 ) -> Result<Result<Vec<(String, ProcMacroKind)>, String>, ServerError> {
     let request = Request::ListMacros { dylib_path: dylib_path.to_path_buf().into() };
 
-    let response = send_task(srv, request)?;
+    let response = send_task(srv, request, None)?;
 
     match response {
         Response::ListMacros(it) => Ok(it),
@@ -112,7 +112,8 @@ pub(crate) fn expand(
         current_dir: Some(current_dir),
     };
 
-    let response = send_task(process, Request::ExpandMacro(Box::new(task)))?;
+    let response =
+        send_task(process, Request::ExpandMacro(Box::new(task)), Some(proc_macro.name()))?;
 
     match response {
         Response::ExpandMacro(it) => Ok(it
@@ -142,12 +143,16 @@ pub(crate) fn expand(
 }
 
 /// Sends a request to the proc-macro server and waits for a response.
-fn send_task(srv: &ProcMacroServerProcess, req: Request) -> Result<Response, ServerError> {
+fn send_task(
+    srv: &ProcMacroServerProcess,
+    req: Request,
+    macro_name: Option<&str>,
+) -> Result<Response, ServerError> {
     if let Some(server_error) = srv.exited() {
         return Err(server_error.clone());
     }
 
-    srv.send_task_legacy::<_, _>(send_request, req)
+    srv.send_task_legacy::<_, _>(send_request, req, macro_name)
 }
 
 /// Sends a request to the server and reads the response.

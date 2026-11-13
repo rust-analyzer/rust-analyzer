@@ -116,6 +116,7 @@ pub fn load_workspace_into_db(
                     extra_env,
                     ws.toolchain.as_ref(),
                     load_config.proc_macro_processes,
+                    Some(proc_macro_api::DEFAULT_EXPANSION_TIMEOUT),
                 )
                 .map_err(Into::into)
             })
@@ -127,6 +128,7 @@ pub fn load_workspace_into_db(
                 extra_env,
                 ws.toolchain.as_ref(),
                 load_config.proc_macro_processes,
+                Some(proc_macro_api::DEFAULT_EXPANSION_TIMEOUT),
             )
             .map_err(|e| ProcMacroLoadingError::ProcMacroSrvError(e.to_string().into_boxed_str())),
         ),

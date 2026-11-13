@@ -3,14 +3,16 @@
 use std::{
     fmt::Debug,
     io::{self, BufRead, BufReader, Read, Write},
-    panic::AssertUnwindSafe,
     process::{Child, ChildStdin, ChildStdout, Command, Stdio},
     sync::{
-        Arc, Mutex, OnceLock,
-        atomic::{AtomicU32, Ordering},
+        Arc, OnceLock,
+        atomic::{AtomicU8, AtomicU32, Ordering},
+        mpsc,
     },
+    time::{Duration, Instant},
 };
 
+use parking_lot::Mutex;
 use paths::AbsPath;
 use semver::Version;
 use span::Span;
@@ -32,10 +34,14 @@ pub(crate) struct ProcMacroServerProcess {
     /// The state of the proc-macro server process, the protocol is currently strictly sequential
     /// hence the lock on the state.
     state: Mutex<ProcessSrvState>,
+    /// The process handle and its health, shared with the watchdog thread so that it can kill
+    /// the process when an expansion times out.
+    control: Arc<ProcessControl>,
+    /// When set, each expansion is raced against the timeout by the watchdog, which kills the
+    /// process if it does not respond in time.
+    watchdog: Option<(ProcessWatchdog, Duration)>,
     version: u32,
     protocol: Protocol,
-    /// Populated when the server exits.
-    exited: OnceLock<AssertUnwindSafe<ServerError>>,
     active: AtomicU32,
 }
 
@@ -44,7 +50,7 @@ impl std::fmt::Debug for ProcMacroServerProcess {
         f.debug_struct("ProcMacroServerProcess")
             .field("version", &self.version)
             .field("protocol", &self.protocol)
-            .field("exited", &self.exited)
+            .field("exited", &self.control.exited)
             .finish()
     }
 }
@@ -57,6 +63,170 @@ pub(crate) enum Protocol {
 
 pub trait ProcessExit: Send + Sync {
     fn exit_err(&mut self) -> Option<ServerError>;
+    fn kill(&mut self) -> io::Result<()>;
+}
+
+/// Health of a server process with respect to expansion timeouts.
+///
+/// The watchdog moves a process from `Healthy` to `TimedOut` when an expansion misses its
+/// deadline. The pool claims a timed out process (`TimedOut` -> `BeingReplaced`) before spawning
+/// its replacement, releasing the claim (back to `TimedOut`) if that fails so that a later
+/// expansion can retry the replacement.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+enum ProcessStatus {
+    Healthy = 0,
+    TimedOut = 1,
+    BeingReplaced = 2,
+}
+
+/// The part of a server process that is shared with the watchdog thread.
+struct ProcessControl {
+    process: Mutex<Box<dyn ProcessExit>>,
+    /// Populated when the server exits, whether on its own or killed by the watchdog.
+    exited: OnceLock<ServerError>,
+    /// A [`ProcessStatus`].
+    status: AtomicU8,
+}
+
+impl ProcessControl {
+    fn new(process: Box<dyn ProcessExit>) -> Arc<ProcessControl> {
+        Arc::new(ProcessControl {
+            process: Mutex::new(process),
+            exited: OnceLock::new(),
+            status: AtomicU8::new(ProcessStatus::Healthy as u8),
+        })
+    }
+
+    fn time_out(&self, macro_name: &str, timeout: Duration) {
+        let error = ServerError {
+            message: format!("proc-macro `{macro_name}` expansion timed out after {timeout:?}"),
+            io: None,
+        };
+        if self.exited.set(error).is_ok() {
+            self.status.store(ProcessStatus::TimedOut as u8, Ordering::Release);
+            _ = self.process.lock().kill();
+        }
+    }
+
+    fn timed_out(&self) -> bool {
+        self.status.load(Ordering::Acquire) != ProcessStatus::Healthy as u8
+    }
+
+    fn claim_replacement(&self) -> bool {
+        self.status
+            .compare_exchange(
+                ProcessStatus::TimedOut as u8,
+                ProcessStatus::BeingReplaced as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    fn replacement_failed(&self) {
+        self.status.store(ProcessStatus::TimedOut as u8, Ordering::Release);
+    }
+}
+
+/// A handle to the watchdog thread which kills server processes whose expansion requests
+/// exceed their deadline. The thread exits once all handles to it have been dropped.
+#[derive(Clone, Debug)]
+pub(crate) struct ProcessWatchdog {
+    sender: mpsc::Sender<WatchdogCommand>,
+}
+
+struct WatchdogRequest {
+    deadline: Instant,
+    timeout: Duration,
+    macro_name: Box<str>,
+    control: Arc<ProcessControl>,
+}
+
+enum WatchdogCommand {
+    Arm(WatchdogRequest),
+    Disarm(Arc<ProcessControl>),
+}
+
+/// Disarms the pending watchdog request on drop.
+struct WatchdogGuard {
+    control: Arc<ProcessControl>,
+    sender: mpsc::Sender<WatchdogCommand>,
+}
+
+impl Drop for WatchdogGuard {
+    fn drop(&mut self) {
+        _ = self.sender.send(WatchdogCommand::Disarm(self.control.clone()));
+    }
+}
+
+impl ProcessWatchdog {
+    pub(crate) fn spawn() -> io::Result<ProcessWatchdog> {
+        let (sender, receiver) = mpsc::channel();
+        std::thread::Builder::new()
+            .name("proc-macro-watchdog".into())
+            .spawn(move || run_watchdog(receiver))?;
+        Ok(ProcessWatchdog { sender })
+    }
+
+    /// Arms a timeout for a single expansion; dropping the returned guard disarms it.
+    ///
+    /// A process has at most one request armed at a time as its I/O is strictly sequential,
+    /// which makes `control` a unique key for the request.
+    fn arm(
+        &self,
+        control: &Arc<ProcessControl>,
+        macro_name: &str,
+        timeout: Duration,
+    ) -> WatchdogGuard {
+        let guard = WatchdogGuard { control: control.clone(), sender: self.sender.clone() };
+        let Some(deadline) = Instant::now().checked_add(timeout) else {
+            return guard;
+        };
+        let request = WatchdogRequest {
+            deadline,
+            timeout,
+            macro_name: macro_name.into(),
+            control: control.clone(),
+        };
+        if self.sender.send(WatchdogCommand::Arm(request)).is_err() {
+            stdx::never!("the proc-macro watchdog thread has died");
+        }
+        guard
+    }
+}
+
+fn run_watchdog(receiver: mpsc::Receiver<WatchdogCommand>) {
+    let mut requests = Vec::<WatchdogRequest>::new();
+    loop {
+        let deadline = requests.iter().map(|request| request.deadline).min();
+        let command = match deadline {
+            Some(deadline) => {
+                match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(command) => Some(command),
+                    Err(mpsc::RecvTimeoutError::Timeout) => None,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
+            }
+            None => match receiver.recv() {
+                Ok(command) => Some(command),
+                Err(mpsc::RecvError) => return,
+            },
+        };
+
+        match command {
+            Some(WatchdogCommand::Arm(request)) => requests.push(request),
+            Some(WatchdogCommand::Disarm(control)) => {
+                requests.retain(|request| !Arc::ptr_eq(&request.control, &control));
+            }
+            None => {
+                let now = Instant::now();
+                for request in requests.extract_if(.., |request| request.deadline <= now) {
+                    request.control.time_out(&request.macro_name, request.timeout);
+                }
+            }
+        }
+    }
 }
 
 impl ProcessExit for Process {
@@ -80,11 +250,14 @@ impl ProcessExit for Process {
             }
         }
     }
+
+    fn kill(&mut self) -> io::Result<()> {
+        self.child.kill()
+    }
 }
 
 /// Maintains the state of the proc-macro server process.
 pub(crate) struct ProcessSrvState {
-    process: Box<dyn ProcessExit>,
     stdin: Box<dyn Write + Send + Sync>,
     stdout: Box<dyn BufRead + Send + Sync>,
 }
@@ -97,6 +270,7 @@ impl ProcMacroServerProcess {
             Item = (impl AsRef<std::ffi::OsStr>, &'a Option<impl 'a + AsRef<std::ffi::OsStr>>),
         > + Clone,
         version: Option<&Version>,
+        watchdog: Option<(ProcessWatchdog, Duration)>,
     ) -> io::Result<ProcMacroServerProcess> {
         Self::run(
             |format| {
@@ -118,6 +292,7 @@ impl ProcMacroServerProcess {
                     .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_owned())
                     .unwrap_or_else(|_| "unknown version".to_owned())
             },
+            watchdog,
         )
     }
 
@@ -132,6 +307,7 @@ impl ProcMacroServerProcess {
         )>,
         version: Option<&Version>,
         binary_server_version: impl Fn() -> String,
+        watchdog: Option<(ProcessWatchdog, Duration)>,
     ) -> io::Result<ProcMacroServerProcess> {
         const VERSION: Version = Version::new(1, 93, 0);
         // we do `>` for nightly as this started working in the middle of the 1.93 nightly release, so we dont want to break on half of the nightlies
@@ -156,7 +332,9 @@ impl ProcMacroServerProcess {
                 let (process, stdin, stdout) = spawn(format)?;
 
                 io::Result::Ok(ProcMacroServerProcess {
-                    state: Mutex::new(ProcessSrvState { process, stdin, stdout }),
+                    state: Mutex::new(ProcessSrvState { stdin, stdout }),
+                    control: ProcessControl::new(process),
+                    watchdog: watchdog.clone(),
                     version: 0,
                     protocol: match format {
                         Some(ProtocolFormat::BidirectionalPostcardPrototype) => {
@@ -166,7 +344,6 @@ impl ProcMacroServerProcess {
                             Protocol::LegacyJson { mode: SpanMode::Id }
                         }
                     },
-                    exited: OnceLock::new(),
                     active: AtomicU32::new(0),
                 })
             };
@@ -229,7 +406,20 @@ impl ProcMacroServerProcess {
 
     /// Returns the server error if the process has exited.
     pub(crate) fn exited(&self) -> Option<&ServerError> {
-        self.exited.get().map(|it| &it.0)
+        self.control.exited.get()
+    }
+
+    /// Whether the process was killed because an expansion timed out.
+    pub(crate) fn timed_out(&self) -> bool {
+        self.control.timed_out()
+    }
+
+    pub(crate) fn claim_replacement(&self) -> bool {
+        self.control.claim_replacement()
+    }
+
+    pub(crate) fn replacement_failed(&self) {
+        self.control.replacement_failed()
     }
 
     /// Retrieves the API version of the proc-macro server.
@@ -323,8 +513,9 @@ impl ProcMacroServerProcess {
             &mut String,
         ) -> Result<Option<Response>, ServerError>,
         req: Request,
+        macro_name: Option<&str>,
     ) -> Result<Response, ServerError> {
-        self.with_locked_io(String::new(), |writer, reader, buf| {
+        self.with_locked_io(String::new(), macro_name, |writer, reader, buf| {
             send(writer, reader, req, buf).and_then(|res| {
                 res.ok_or_else(|| {
                     let message = "proc-macro server did not respond with data".to_owned();
@@ -343,19 +534,35 @@ impl ProcMacroServerProcess {
     fn with_locked_io<R, B>(
         &self,
         mut buf: B,
+        macro_name: Option<&str>,
         f: impl FnOnce(&mut dyn Write, &mut dyn BufRead, &mut B) -> Result<R, ServerError>,
     ) -> Result<R, ServerError> {
-        let state = &mut *self.state.lock().unwrap();
-        f(&mut state.stdin, &mut state.stdout, &mut buf).map_err(|e| {
-            if e.io.as_ref().map(|it| it.kind()) == Some(io::ErrorKind::BrokenPipe) {
-                match state.process.exit_err() {
-                    None => e,
-                    Some(server_error) => {
-                        self.exited.get_or_init(|| AssertUnwindSafe(server_error)).0.clone()
-                    }
-                }
-            } else {
-                e
+        let state = &mut *self.state.lock();
+        let watchdog = match (&self.watchdog, macro_name) {
+            (Some((watchdog, timeout)), Some(macro_name)) => {
+                Some(watchdog.arm(&self.control, macro_name, *timeout))
+            }
+            (Some(_), None) | (None, Some(_)) | (None, None) => None,
+        };
+        let result = f(&mut state.stdin, &mut state.stdout, &mut buf);
+        drop(watchdog);
+
+        if self.timed_out() {
+            return Err(self.exited().unwrap().clone());
+        }
+
+        result.map_err(|e| {
+            let process_exited = matches!(
+                e.io.as_ref().map(|it| it.kind()),
+                Some(io::ErrorKind::BrokenPipe | io::ErrorKind::UnexpectedEof)
+            );
+            if !process_exited {
+                return e;
+            }
+
+            match self.control.process.lock().exit_err() {
+                None => e,
+                Some(server_error) => self.control.exited.get_or_init(|| server_error).clone(),
             }
         })
     }
@@ -364,8 +571,9 @@ impl ProcMacroServerProcess {
         &self,
         initial: BidirectionalMessage,
         callback: SubCallback<'_>,
+        macro_name: Option<&str>,
     ) -> Result<BidirectionalMessage, ServerError> {
-        self.with_locked_io(Vec::new(), |writer, reader, buf| {
+        self.with_locked_io(Vec::new(), macro_name, |writer, reader, buf| {
             bidirectional_protocol::run_conversation(writer, reader, buf, initial, callback)
         })
     }
@@ -436,4 +644,180 @@ fn mk_child<'a>(
         cmd.env("PATH", path_var);
     }
     cmd.spawn()
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        io::Read,
+        sync::atomic::{AtomicBool, AtomicUsize},
+    };
+
+    use parking_lot::Condvar;
+
+    use crate::pool::{ProcMacroServerPool, ProcessFactory};
+
+    use super::*;
+
+    struct FakeProcess {
+        killed: Arc<AtomicBool>,
+        wake: Arc<(Mutex<bool>, Condvar)>,
+    }
+
+    impl ProcessExit for FakeProcess {
+        fn exit_err(&mut self) -> Option<ServerError> {
+            None
+        }
+
+        fn kill(&mut self) -> io::Result<()> {
+            self.killed.store(true, Ordering::Release);
+            let (lock, wake) = &*self.wake;
+            *lock.lock() = true;
+            wake.notify_all();
+            Ok(())
+        }
+    }
+
+    struct BlockingReader {
+        wake: Arc<(Mutex<bool>, Condvar)>,
+    }
+
+    impl Read for BlockingReader {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            let (lock, wake) = &*self.wake;
+            let mut killed = lock.lock();
+            while !*killed {
+                wake.wait(&mut killed);
+            }
+            Ok(0)
+        }
+    }
+
+    impl BufRead for BlockingReader {
+        fn fill_buf(&mut self) -> io::Result<&[u8]> {
+            let mut byte = [0];
+            _ = self.read(&mut byte)?;
+            Ok(&[])
+        }
+
+        fn consume(&mut self, _amt: usize) {}
+    }
+
+    fn fake_process(
+        watchdog: Option<(ProcessWatchdog, Duration)>,
+        killed: Arc<AtomicBool>,
+        wake: Arc<(Mutex<bool>, Condvar)>,
+    ) -> ProcMacroServerProcess {
+        ProcMacroServerProcess {
+            state: Mutex::new(ProcessSrvState {
+                stdin: Box::new(io::sink()),
+                stdout: Box::new(BlockingReader { wake: wake.clone() }),
+            }),
+            control: ProcessControl::new(Box::new(FakeProcess { killed, wake })),
+            watchdog,
+            version: 0,
+            protocol: Protocol::LegacyJson { mode: SpanMode::Id },
+            active: AtomicU32::new(0),
+        }
+    }
+
+    #[test]
+    fn expansion_timeout_kills_process() {
+        let killed = Arc::new(AtomicBool::new(false));
+        let wake = Arc::new((Mutex::new(false), Condvar::new()));
+        let watchdog = Some((ProcessWatchdog::spawn().unwrap(), Duration::from_millis(1000)));
+        let process = fake_process(watchdog, killed.clone(), wake);
+
+        let result: Result<(), ServerError> = process.send_task_legacy(
+            |_writer, reader, (), _buf| {
+                let mut byte = [0];
+                _ = reader.read(&mut byte).map_err(|error| ServerError {
+                    message: "failed to read response".into(),
+                    io: Some(Arc::new(error)),
+                })?;
+                Ok(None)
+            },
+            (),
+            Some("hang"),
+        );
+
+        let error = result.unwrap_err();
+        assert!(killed.load(Ordering::Acquire));
+        assert!(process.timed_out());
+        assert_eq!(error.message, "proc-macro `hang` expansion timed out after 10ms");
+    }
+
+    #[test]
+    fn completed_expansion_is_disarmed() {
+        let killed = Arc::new(AtomicBool::new(false));
+        let watchdog = Some((ProcessWatchdog::spawn().unwrap(), Duration::from_millis(10)));
+        let process =
+            fake_process(watchdog, killed.clone(), Arc::new((Mutex::new(false), Condvar::new())));
+
+        let result: Result<(), ServerError> =
+            process.send_task_legacy(|_writer, _reader, (), _buf| Ok(Some(())), (), Some("fast"));
+
+        result.unwrap();
+        std::thread::sleep(Duration::from_millis(30));
+        assert!(!killed.load(Ordering::Acquire));
+        assert!(!process.timed_out());
+    }
+
+    #[test]
+    fn watchdog_times_out_multiple_processes() {
+        let watchdog = ProcessWatchdog::spawn().unwrap();
+        let first_killed = Arc::new(AtomicBool::new(false));
+        let first =
+            fake_process(None, first_killed.clone(), Arc::new((Mutex::new(false), Condvar::new())));
+        let second_killed = Arc::new(AtomicBool::new(false));
+        let second = fake_process(
+            None,
+            second_killed.clone(),
+            Arc::new((Mutex::new(false), Condvar::new())),
+        );
+
+        let first_guard = watchdog.arm(&first.control, "first", Duration::from_millis(10));
+        let second_guard = watchdog.arm(&second.control, "second", Duration::from_millis(10));
+        std::thread::sleep(Duration::from_millis(30));
+
+        assert!(first_killed.load(Ordering::Acquire));
+        assert!(second_killed.load(Ordering::Acquire));
+        drop((first_guard, second_guard));
+    }
+
+    #[test]
+    fn timed_out_process_is_replaced_in_background() {
+        let spawn_count = Arc::new(AtomicUsize::new(0));
+        let spawn: ProcessFactory = Box::new({
+            let spawn_count = spawn_count.clone();
+            move || {
+                spawn_count.fetch_add(1, Ordering::AcqRel);
+                Ok(fake_process(
+                    None,
+                    Arc::new(AtomicBool::new(false)),
+                    Arc::new((Mutex::new(false), Condvar::new())),
+                ))
+            }
+        });
+        let pool = Arc::new(ProcMacroServerPool::new(vec![spawn().unwrap()], spawn));
+        let process = pool.pick_process().unwrap();
+
+        process.control.time_out("hang", Duration::from_millis(10));
+        assert!(process.timed_out());
+        pool.replace_timed_out_process_in_background(process.clone());
+        pool.replace_timed_out_process_in_background(process.clone());
+
+        let deadline = Instant::now() + Duration::from_secs(1);
+        let replacement = loop {
+            if let Ok(replacement) = pool.pick_process()
+                && !Arc::ptr_eq(&process, &replacement)
+            {
+                break replacement;
+            }
+            assert!(Instant::now() < deadline, "timed out waiting for replacement process");
+            std::thread::yield_now();
+        };
+        assert!(!Arc::ptr_eq(&process, &replacement));
+        assert_eq!(spawn_count.load(Ordering::Acquire), 2);
+    }
 }

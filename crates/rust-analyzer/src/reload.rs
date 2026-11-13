@@ -712,7 +712,14 @@ impl GlobalState {
                 info!("Spawning proc-macro server at {path}");
                 let num_process = self.config.proc_macro_num_processes();
 
-                Some(match ProcMacroClient::spawn(path, env, toolchain.as_ref(), num_process) {
+                let client = ProcMacroClient::spawn(
+                    path,
+                    env,
+                    toolchain.as_ref(),
+                    num_process,
+                    Some(proc_macro_api::DEFAULT_EXPANSION_TIMEOUT),
+                );
+                Some(match client {
                     Ok(client) => {
                         clients.push((key.clone(), client.clone()));
                         Ok(client)
