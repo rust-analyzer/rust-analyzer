@@ -835,6 +835,31 @@ fn main() {}
 }
 
 #[test]
+fn cursor_inside_identifier() {
+    check_edit(
+        "stdin",
+        r#"
+//- /lib.rs crate:dep
+pub mod io {
+    pub fn stdin() {}
+};
+
+//- /main.rs crate:main deps:dep
+fn main() {
+    stdi$0other_idents
+}
+"#,
+        r#"
+use dep::io::stdin;
+
+fn main() {
+    stdin();$0
+}
+"#,
+    );
+}
+
+#[test]
 fn prefix_config_usage() {
     let fixture = r#"
 mod foo {
