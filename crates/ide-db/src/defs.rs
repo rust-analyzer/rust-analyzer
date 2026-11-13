@@ -1056,3 +1056,94 @@ impl TryFrom<Definition<'_>> for GenericDef {
         }
     }
 }
+
+#[cfg(test)]
+mod to_def_tests {
+    use hir::Semantics;
+    use rustc_hash::FxHashSet;
+    use stdx::format_to;
+    use syntax::{AstNode, ast};
+    use test_fixture::WithFixture;
+
+    use crate::RootDatabase;
+
+    /// `depth` nested generic functions, the innermost one containing a local.
+    fn nested_fns(depth: usize, close: bool) -> String {
+        let mut res = String::new();
+        for i in 0..depth {
+            format_to!(res, "fn level_{i}<T>() {{\n");
+        }
+        res.push_str("let local = 0;\n");
+        if close {
+            res.push_str(&"}\n".repeat(depth));
+        }
+        res
+    }
+
+    /// The function, type parameter and local reach `find_container()` by different routes.
+    fn check_innermost_resolves(db: &RootDatabase, file: hir::EditionedFileId, resolves: bool) {
+        let sema = Semantics::new(db);
+        let file = sema.parse(file);
+        let func = file.syntax().descendants().filter_map(ast::Fn::cast).last().unwrap();
+        let type_param =
+            file.syntax().descendants().filter_map(ast::TypeParam::cast).last().unwrap();
+        let local = file.syntax().descendants().filter_map(ast::IdentPat::cast).last().unwrap();
+        assert_eq!(sema.to_def(&func).is_some(), resolves, "fn");
+        assert_eq!(sema.to_def(&type_param).is_some(), resolves, "type parameter");
+        assert_eq!(sema.to_def(&local).is_some(), resolves, "local");
+    }
+
+    #[test]
+    fn to_def_in_deeply_nested_items_of_file_without_crate() {
+        let notes = nested_fns(32, false);
+        let (db, files) = RootDatabase::with_many_files(&format!(
+            "//- /main.rs\nfn main() {{}}\n//- /notes.md\n{notes}"
+        ));
+        check_innermost_resolves(&db, files[1], false);
+    }
+
+    #[test]
+    fn to_def_in_deeply_nested_items_of_cfg_disabled_module() {
+        let nested = nested_fns(32, true);
+        let (db, file) = RootDatabase::with_single_file(&format!(
+            "#[cfg(any())]\nmod disabled {{\n{nested}}}\n"
+        ));
+        check_innermost_resolves(&db, file, false);
+    }
+
+    #[test]
+    fn to_def_in_deeply_nested_items_of_active_module() {
+        // Control: every node must resolve to its own def.
+        let depth = 32;
+        let nested = nested_fns(depth, true);
+        let (db, file) = RootDatabase::with_single_file(&format!("mod active {{\n{nested}}}\n"));
+        let sema = Semantics::new(&db);
+        let file = sema.parse(file);
+
+        let funcs: Vec<_> = file
+            .syntax()
+            .descendants()
+            .filter_map(ast::Fn::cast)
+            .map(|it| sema.to_def(&it))
+            .collect();
+        let type_params: Vec<_> = file
+            .syntax()
+            .descendants()
+            .filter_map(ast::TypeParam::cast)
+            .map(|it| sema.to_def(&it))
+            .collect();
+        let locals: Vec<_> = file
+            .syntax()
+            .descendants()
+            .filter_map(ast::IdentPat::cast)
+            .map(|it| sema.to_def(&it))
+            .collect();
+
+        assert!(funcs.iter().all(Option::is_some));
+        assert!(type_params.iter().all(Option::is_some));
+        assert_eq!(funcs.iter().flatten().collect::<FxHashSet<_>>().len(), depth);
+        assert_eq!(type_params.iter().flatten().collect::<FxHashSet<_>>().len(), depth);
+        assert_eq!(locals.len(), 1);
+        assert!(locals[0].is_some());
+    }
+}
