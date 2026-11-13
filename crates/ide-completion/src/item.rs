@@ -496,6 +496,7 @@ impl CompletionItem {
             relevance: CompletionRelevance::default(),
             ref_match: None,
             imports_to_add: Default::default(),
+            qualified_path_hint: None,
             doc_aliases: vec![],
             adds_text: None,
             const_value: None,
@@ -533,6 +534,7 @@ impl CompletionItem {
 pub(crate) struct Builder {
     source_range: TextRange,
     imports_to_add: SmallVec<[LocatedImport; 1]>,
+    qualified_path_hint: Option<SmolStr>,
     trait_name: Option<SmolStr>,
     doc_aliases: Vec<SmolStr>,
     adds_text: Option<SmolStr>,
@@ -618,6 +620,8 @@ impl Builder {
                 "(use {})",
                 import_edit.import_path.display(db, self.edition)
             ));
+        } else if let Some(path) = &self.qualified_path_hint {
+            to_detail_left(format_args!("({path})"));
         } else if let Some(trait_name) = self.trait_name {
             to_detail_left(format_args!("(as {trait_name})"));
         }
@@ -666,6 +670,10 @@ impl Builder {
             ref_match: self.ref_match,
             import_to_add,
         }
+    }
+    pub(crate) fn qualified_path_hint(&mut self, path: SmolStr) -> &mut Builder {
+        self.qualified_path_hint = Some(path);
+        self
     }
     pub(crate) fn lookup_by(&mut self, lookup: impl Into<SmolStr>) -> &mut Builder {
         self.lookup = Some(lookup.into());

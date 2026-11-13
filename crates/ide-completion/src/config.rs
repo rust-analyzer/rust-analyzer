@@ -17,6 +17,7 @@ use crate::{CompletionFieldsToResolve, snippet::Snippet};
 pub struct CompletionConfig<'a> {
     pub enable_postfix_completions: bool,
     pub enable_imports_on_the_fly: bool,
+    pub insert_qualified_path_on_completion: bool,
     pub enable_self_on_the_fly: bool,
     pub enable_auto_iter: bool,
     pub enable_auto_await: bool,

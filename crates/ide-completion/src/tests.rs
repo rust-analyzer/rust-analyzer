@@ -66,6 +66,7 @@ union Union { field: i32 }
 pub(crate) const TEST_CONFIG: CompletionConfig<'_> = CompletionConfig {
     enable_postfix_completions: true,
     enable_imports_on_the_fly: true,
+    insert_qualified_path_on_completion: false,
     enable_self_on_the_fly: true,
     enable_private_editable: false,
     enable_term_search: true,

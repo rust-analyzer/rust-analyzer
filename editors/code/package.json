@@ -1415,6 +1415,16 @@
             {
                 "title": "Completion",
                 "properties": {
+                    "rust-analyzer.completion.autoimport.insertQualifiedPath": {
+                        "markdownDescription": "When completing an out-of-scope item, inserts its fully qualified path instead of use\nstatement at the top of the file.",
+                        "default": false,
+                        "type": "boolean"
+                    }
+                }
+            },
+            {
+                "title": "Completion",
+                "properties": {
                     "rust-analyzer.completion.autoself.enable": {
                         "markdownDescription": "Show method calls and field access completions with `self` prefixed to them when\ninside a method.",
                         "default": true,

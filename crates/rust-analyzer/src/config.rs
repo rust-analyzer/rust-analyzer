@@ -676,6 +676,11 @@ config_data! {
             AutoImportExclusion::Verbose { path: "core::borrow::BorrowMut".to_owned(), r#type: AutoImportExclusionType::Methods },
         ],
 
+        /// When completing an out-of-scope item, inserts its fully qualified path instead of use
+        /// statement at the top of the file.
+        completion_autoimport_insertQualifiedPath: bool = false,
+
+
         /// Show method calls and field access completions with `self` prefixed to them when
         /// inside a method.
         completion_autoself_enable: bool = true,
@@ -1911,6 +1916,9 @@ impl Config {
             enable_postfix_completions: self.completion_postfix_enable(source_root).to_owned(),
             enable_imports_on_the_fly: self.completion_autoimport_enable(source_root).to_owned()
                 && self.caps.has_completion_item_resolve_additionalTextEdits(),
+            insert_qualified_path_on_completion: self
+                .completion_autoimport_insertQualifiedPath(source_root)
+                .to_owned(),
             enable_self_on_the_fly: self.completion_autoself_enable(source_root).to_owned(),
             enable_auto_iter: *self.completion_autoIter_enable(source_root),
             enable_auto_await: *self.completion_autoAwait_enable(source_root),

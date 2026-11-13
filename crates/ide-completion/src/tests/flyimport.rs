@@ -1304,6 +1304,60 @@ fn main() {
 }
 
 #[test]
+fn config_insert_qualified_path_on_completion() {
+    let fixture = r#"
+//- /lib.rs crate:dep
+pub mod foo {
+    pub mod bar {
+        pub struct Item;
+    }
+}
+
+//- /main.rs crate:main deps:dep
+fn main() {
+    Ite$0
+}"#;
+    let mut config = TEST_CONFIG;
+    config.insert_qualified_path_on_completion = true;
+
+    check_edit_with_config(
+        config.clone(),
+        "Item",
+        fixture,
+        r#"
+fn main() {
+    dep::foo::bar::Item
+}"#,
+    );
+}
+
+#[test]
+fn config_insert_qualified_path_on_completion_shows_hint() {
+    let fixture = r#"
+//- /lib.rs crate:dep
+pub mod foo {
+    pub mod bar {
+        pub struct Item;
+    }
+}
+
+//- /main.rs crate:main deps:dep
+fn main() {
+    Ite$0
+}"#;
+    let mut config = TEST_CONFIG;
+    config.insert_qualified_path_on_completion = true;
+
+    check_with_config(
+        config,
+        fixture,
+        expect![[r#"
+        st Item (dep::foo::bar::Item) Item
+    "#]],
+    );
+}
+
+#[test]
 fn no_inherent_candidates_proposed() {
     check(
         r#"

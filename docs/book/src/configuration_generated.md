@@ -463,6 +463,14 @@ itself.
 This setting also inherits `#rust-analyzer.completion.excludeTraits#`.
 
 
+## rust-analyzer.completion.autoimport.insertQualifiedPath {#completion.autoimport.insertQualifiedPath}
+
+Default: `false`
+
+When completing an out-of-scope item, inserts its fully qualified path instead of use
+statement at the top of the file.
+
+
 ## rust-analyzer.completion.autoself.enable {#completion.autoself.enable}
 
 Default: `true`
