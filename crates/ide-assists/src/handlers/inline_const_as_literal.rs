@@ -42,10 +42,26 @@ pub(crate) fn inline_const_as_literal(
         // FIXME: Add support to handle type aliases for builtin scalar types.
         validate_type_recursively(ctx, Some(&konst_ty), false, fuel)?;
 
-        let value = konst
+        let mut value = konst
             .eval(ctx.sema.db)
             .ok()?
             .render(ctx.sema.db, konst.krate(ctx.sema.db).to_display_target(ctx.sema.db));
+
+        // Preserve the numeric type by appending a suffix when the const has a known
+        // scalar numeric type. Without this, inlining `const N: i32 = 24;` followed by
+        // `N.wrapping_add(7i32)` would yield `24.wrapping_add(7i32)`, which fails to
+        // type-check (E0689) because `24` is left as an ambiguous `{integer}`.
+        //
+        // Only attach the suffix when the rendered value ends in a digit. Special float
+        // values such as `inf` or `NaN` are skipped, since `inff32` is not a valid
+        // literal; these cases were already producing non-literal output before this
+        // change.
+        if let Some(suffix) = numeric_type_suffix(&konst_ty)
+            && value.as_bytes().last().is_some_and(u8::is_ascii_digit)
+            && !value.ends_with(suffix)
+        {
+            value.push_str(suffix);
+        }
 
         let id = AssistId::refactor_inline("inline_const_as_literal");
 
@@ -57,6 +73,36 @@ pub(crate) fn inline_const_as_literal(
         });
     }
     None
+}
+
+/// Returns the literal-suffix string (e.g. `"i32"`, `"u64"`, `"f32"`) for a scalar
+/// numeric type, otherwise `None`.
+fn numeric_type_suffix(ty: &hir::Type<'_>) -> Option<&'static str> {
+    let builtin = ty.as_builtin()?;
+    if !(builtin.is_int() || builtin.is_uint() || builtin.is_float()) {
+        return None;
+    }
+    // The builtin type's name matches its literal suffix for every scalar numeric
+    // type (`i32`, `u64`, `f32`, ...), so look the suffix up by name.
+    Some(match builtin.name().as_str() {
+        "i8" => "i8",
+        "i16" => "i16",
+        "i32" => "i32",
+        "i64" => "i64",
+        "i128" => "i128",
+        "isize" => "isize",
+        "u8" => "u8",
+        "u16" => "u16",
+        "u32" => "u32",
+        "u64" => "u64",
+        "u128" => "u128",
+        "usize" => "usize",
+        "f16" => "f16",
+        "f32" => "f32",
+        "f64" => "f64",
+        "f128" => "f128",
+        _ => return None,
+    })
 }
 
 fn validate_type_recursively(
@@ -125,6 +171,13 @@ mod tests {
         ("&str", "\"str\"", STR),
         ("char", "'c'", CHAR),
     ];
+
+    /// Renders the literal that the assist is expected to inline. For scalar numeric
+    /// types we now annotate the literal with its type suffix to preserve type info
+    /// across the inlining (see `numeric_type_suffix`).
+    fn expected_inlined(ty: &str, val: &str, kind: u8) -> String {
+        if kind == NUMBER { format!("{val}{ty}") } else { val.to_owned() }
+    }
 
     // -----------Not supported-----------
     #[test]
@@ -231,7 +284,8 @@ mod tests {
 
     #[test]
     fn inline_const_as_literal_const_expr() {
-        TEST_PAIRS.iter().for_each(|(ty, val, _)| {
+        TEST_PAIRS.iter().for_each(|(ty, val, kind)| {
+            let out = expected_inlined(ty, val, *kind);
             check_assist(
                 inline_const_as_literal,
                 &format!(
@@ -243,7 +297,7 @@ mod tests {
                 &format!(
                     r#"
                     const ABC: {ty} = {val};
-                    fn a() {{ {val} }}
+                    fn a() {{ {out} }}
                     "#
                 ),
             );
@@ -252,7 +306,8 @@ mod tests {
 
     #[test]
     fn inline_const_as_literal_const_block_expr() {
-        TEST_PAIRS.iter().for_each(|(ty, val, _)| {
+        TEST_PAIRS.iter().for_each(|(ty, val, kind)| {
+            let out = expected_inlined(ty, val, *kind);
             check_assist(
                 inline_const_as_literal,
                 &format!(
@@ -264,7 +319,7 @@ mod tests {
                 &format!(
                     r#"
                     const ABC: {ty} = {{ {val} }};
-                    fn a() {{ {val} }}
+                    fn a() {{ {out} }}
                     "#
                 ),
             );
@@ -273,7 +328,8 @@ mod tests {
 
     #[test]
     fn inline_const_as_literal_const_block_eval_expr() {
-        TEST_PAIRS.iter().for_each(|(ty, val, _)| {
+        TEST_PAIRS.iter().for_each(|(ty, val, kind)| {
+            let out = expected_inlined(ty, val, *kind);
             check_assist(
                 inline_const_as_literal,
                 &format!(
@@ -285,7 +341,7 @@ mod tests {
                 &format!(
                     r#"
                     const ABC: {ty} = {{ true; {val} }};
-                    fn a() {{ {val} }}
+                    fn a() {{ {out} }}
                     "#
                 ),
             );
@@ -294,7 +350,8 @@ mod tests {
 
     #[test]
     fn inline_const_as_literal_const_block_eval_block_expr() {
-        TEST_PAIRS.iter().for_each(|(ty, val, _)| {
+        TEST_PAIRS.iter().for_each(|(ty, val, kind)| {
+            let out = expected_inlined(ty, val, *kind);
             check_assist(
                 inline_const_as_literal,
                 &format!(
@@ -306,7 +363,7 @@ mod tests {
                 &format!(
                     r#"
                     const ABC: {ty} = {{ true; {{ {val} }} }};
-                    fn a() {{ {val} }}
+                    fn a() {{ {out} }}
                     "#
                 ),
             );
@@ -315,7 +372,8 @@ mod tests {
 
     #[test]
     fn inline_const_as_literal_const_fn_call_block_nested_builtin() {
-        TEST_PAIRS.iter().for_each(|(ty, val, _)| {
+        TEST_PAIRS.iter().for_each(|(ty, val, kind)| {
+            let out = expected_inlined(ty, val, *kind);
             check_assist(
                 inline_const_as_literal,
                 &format!(
@@ -329,7 +387,7 @@ mod tests {
                     r#"
                     const fn abc() -> {ty} {{ {{ {{ {{ {val} }} }} }} }}
                     const ABC: {ty} = abc();
-                    fn a() {{ {val} }}
+                    fn a() {{ {out} }}
                     "#
                 ),
             );
@@ -361,7 +419,8 @@ mod tests {
 
     #[test]
     fn inline_const_as_literal_const_fn_call_builtin() {
-        TEST_PAIRS.iter().for_each(|(ty, val, _)| {
+        TEST_PAIRS.iter().for_each(|(ty, val, kind)| {
+            let out = expected_inlined(ty, val, *kind);
             check_assist(
                 inline_const_as_literal,
                 &format!(
@@ -375,7 +434,7 @@ mod tests {
                     r#"
 					const fn abc() -> {ty} {{ {val} }}
 					const ABC: {ty} = abc();
-					fn a() {{ {val} }}
+					fn a() {{ {out} }}
 					"#
                 ),
             );
@@ -392,7 +451,7 @@ mod tests {
             "#,
             r#"
             const ABC: i32 = 1 + 2 + 3;
-            fn a() { 6 }
+            fn a() { 6i32 }
             "#,
         );
     }
@@ -406,7 +465,7 @@ mod tests {
             "#,
             r#"
             const ABC: i32 = { 1 + 2 + 3 };
-            fn a() { 6 }
+            fn a() { 6i32 }
             "#,
         );
     }
@@ -421,7 +480,7 @@ mod tests {
             "#,
             r#"
             const ABC: i32 = { (1 + 2 + 3) };
-            fn a() { 6 }
+            fn a() { 6i32 }
             "#,
         );
     }
@@ -707,6 +766,39 @@ mod tests {
             fn something() -> &'static str {
                 STRING $0
             }
+            "#,
+        );
+    }
+
+    // Regression test for #22051: the inlined numeric literal must carry the
+    // const's type suffix, otherwise method calls on the receiver fail to
+    // type-check (E0689) because the literal is left as `{integer}`.
+    #[test]
+    fn inline_const_as_literal_preserves_int_suffix_on_method_receiver() {
+        check_assist(
+            inline_const_as_literal,
+            r#"
+            const BASE: i32 = 24;
+            fn main() { let _ = BAS$0E.wrapping_add(7i32); }
+            "#,
+            r#"
+            const BASE: i32 = 24;
+            fn main() { let _ = 24i32.wrapping_add(7i32); }
+            "#,
+        );
+    }
+
+    #[test]
+    fn inline_const_as_literal_preserves_float_suffix() {
+        check_assist(
+            inline_const_as_literal,
+            r#"
+            const BASE: f32 = 1.5;
+            fn main() { let _ = BAS$0E; }
+            "#,
+            r#"
+            const BASE: f32 = 1.5;
+            fn main() { let _ = 1.5f32; }
             "#,
         );
     }
