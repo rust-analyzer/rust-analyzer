@@ -18,9 +18,10 @@ use common::utils::{
 use expect_test::expect;
 use proc_macro_api::{
     ProtocolFormat::JsonLegacy,
+    flat::SpanDataIndexMap,
     legacy_protocol::msg::{
         ExpandMacro, ExpandMacroData, ExpnGlobals, PanicMessage, Request, Response, ServerConfig,
-        SpanDataIndexMap, SpanMode,
+        SpanMode,
     },
     version::CURRENT_API_VERSION,
 };

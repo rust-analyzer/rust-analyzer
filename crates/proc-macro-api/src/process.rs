@@ -17,13 +17,14 @@ use span::Span;
 use stdx::JodChild;
 
 use crate::{
-    ProcMacro, ProcMacroKind, ProtocolFormat, ServerError,
+    ProcMacroKind, ProtocolFormat,
     bidirectional_protocol::{
         self, SubCallback,
         msg::{BidirectionalMessage, SubResponse},
         reject_subrequests,
     },
-    legacy_protocol::{self, SpanMode},
+    client::{ProcMacro, ServerError},
+    legacy_protocol::{self, msg::SpanMode},
     version,
 };
 

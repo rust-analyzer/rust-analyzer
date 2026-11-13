@@ -7,11 +7,12 @@ use std::{
 
 use paths::Utf8PathBuf;
 use proc_macro_api::{
-    ServerError,
     bidirectional_protocol::msg::{
         BidirectionalMessage, Request as BiRequest, Response as BiResponse, SubRequest, SubResponse,
     },
-    legacy_protocol::msg::{FlatTree, Message, Request, Response, SpanDataIndexMap},
+    client::ServerError,
+    flat::{FlatTree, SpanDataIndexMap},
+    legacy_protocol::msg::{Message, Request, Response},
 };
 use span::{Edition, EditionedFileId, FileId, Span, SpanAnchor, SyntaxContext, TextRange};
 use tt::{Delimiter, DelimiterKind, TopSubtreeBuilder};

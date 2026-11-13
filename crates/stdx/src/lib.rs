@@ -362,6 +362,32 @@ pub fn slice_tails<T>(this: &[T]) -> impl Iterator<Item = &[T]> {
     (0..this.len()).map(|i| &this[i..])
 }
 
+/// Imports a sysroot crate from the sysroot or from crates.io, depending on whether the `in-rust-tree`
+/// feature is active.
+///
+/// Syntax:
+/// ```
+/// extern crate sysroot_crate or crates_io_crate;
+/// ```
+// FIXME: Should this really be in `stdx`?
+#[macro_export]
+macro_rules! rustc_crates {
+    (
+        $(
+            extern crate $sysroot_crate:ident or $crates_io_crate:ident;
+        )*
+    ) => {
+        ::std::cfg_select! {
+            feature = "in-rust-tree" => {
+                $( extern crate $sysroot_crate; )*
+            }
+            _ => {
+                $( extern crate $crates_io_crate as $sysroot_crate; )*
+            }
+        }
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

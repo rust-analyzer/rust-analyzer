@@ -1,22 +1,24 @@
 //! The main loop of the proc-macro server.
-use proc_macro_api::bidirectional_protocol::msg::{ApiVersionCheck, ListMacros};
-use proc_macro_api::{
-    ProtocolFormat, bidirectional_protocol::msg as bidirectional, legacy_protocol::msg as legacy,
-    version::CURRENT_API_VERSION,
-};
+
 use std::panic::{panic_any, resume_unwind};
 use std::{
     io::{self, BufRead, Write},
     ops::Range,
 };
 
-use legacy::Message;
-
+use proc_macro_api::{
+    ProtocolFormat,
+    bidirectional_protocol::msg::{self as bidirectional, ApiVersionCheck, ListMacros},
+    flat::{self, SpanTransformer},
+    legacy_protocol::msg::{self as legacy, Message},
+    version::CURRENT_API_VERSION,
+};
 use proc_macro_srv::{EnvSnapshot, ProcMacroClientError, ProcMacroPanicMarker, SpanId};
+use span::Span;
 
 struct SpanTrans;
 
-impl legacy::SpanTransformer for SpanTrans {
+impl SpanTransformer for SpanTrans {
     type Table = ();
     type Span = SpanId;
     fn token_id_of(
@@ -138,14 +140,9 @@ fn handle_expand_id(
     let call_site = SpanId(call_site as u32);
     let mixed_site = SpanId(mixed_site as u32);
 
-    let macro_body =
-        macro_body.to_tokenstream_unresolved::<SpanTrans>(CURRENT_API_VERSION, |_, b| b);
-    let attributes = attributes
-        .map(|it| it.to_tokenstream_unresolved::<SpanTrans>(CURRENT_API_VERSION, |_, b| b));
-
     let mut tracked_env = Default::default();
     let res = srv
-        .expand(
+        .expand::<SpanTrans>(
             lib,
             &env,
             current_dir,
@@ -156,11 +153,9 @@ fn handle_expand_id(
             call_site,
             mixed_site,
             &mut tracked_env,
+            &mut (),
             None,
         )
-        .map(|it| {
-            legacy::FlatTree::from_tokenstream_raw::<SpanTrans>(it, call_site, CURRENT_API_VERSION)
-        })
         .map(|tree| bidirectional::ExpandMacroResponse {
             tree,
             span_data_table: vec![],
@@ -415,27 +410,16 @@ fn handle_expand_ra(
             },
     } = task;
 
-    let mut span_data_table = legacy::deserialize_span_data_index_map(&span_data_table);
+    let mut span_data_table = flat::deserialize_span_data_index_map(&span_data_table);
 
     let def_site = span_data_table[def_site];
     let call_site = span_data_table[call_site];
     let mixed_site = span_data_table[mixed_site];
 
-    let macro_body =
-        macro_body.to_tokenstream_resolved(CURRENT_API_VERSION, &span_data_table, |a, b| {
-            srv.join_spans(a, b).unwrap_or(b)
-        });
-
-    let attributes = attributes.map(|it| {
-        it.to_tokenstream_resolved(CURRENT_API_VERSION, &span_data_table, |a, b| {
-            srv.join_spans(a, b).unwrap_or(b)
-        })
-    });
-
     let mut tracked_env = Default::default();
 
     let res = srv
-        .expand(
+        .expand::<Span>(
             lib,
             &env,
             current_dir,
@@ -446,19 +430,10 @@ fn handle_expand_ra(
             call_site,
             mixed_site,
             &mut tracked_env,
+            &mut span_data_table,
             Some(&mut ProcMacroClientHandle { stdin, stdout, buf }),
         )
-        .map(|it| {
-            (
-                legacy::FlatTree::from_tokenstream(
-                    it,
-                    CURRENT_API_VERSION,
-                    call_site,
-                    &mut span_data_table,
-                ),
-                legacy::serialize_span_data_index_map(&span_data_table),
-            )
-        })
+        .map(|it| (it, flat::serialize_span_data_index_map(&span_data_table)))
         .map(|(tree, span_data_table)| bidirectional::ExpandMacroResponse {
             tree,
             span_data_table,
@@ -521,13 +496,7 @@ fn run_old(
                         let call_site = SpanId(call_site as u32);
                         let mixed_site = SpanId(mixed_site as u32);
 
-                        let macro_body = macro_body
-                            .to_tokenstream_unresolved::<SpanTrans>(CURRENT_API_VERSION, |_, b| b);
-                        let attributes = attributes.map(|it| {
-                            it.to_tokenstream_unresolved::<SpanTrans>(CURRENT_API_VERSION, |_, b| b)
-                        });
-
-                        srv.expand(
+                        srv.expand::<SpanTrans>(
                             lib,
                             &env,
                             current_dir,
@@ -538,39 +507,21 @@ fn run_old(
                             call_site,
                             mixed_site,
                             &mut Default::default(),
+                            &mut (),
                             None,
                         )
-                        .map(|it| {
-                            legacy::FlatTree::from_tokenstream_raw::<SpanTrans>(
-                                it,
-                                call_site,
-                                CURRENT_API_VERSION,
-                            )
-                        })
                         .map_err(|e| e.into_string().unwrap_or_default())
                         .map_err(legacy::PanicMessage)
                     }),
                     legacy::SpanMode::RustAnalyzer => legacy::Response::ExpandMacroExtended({
                         let mut span_data_table =
-                            legacy::deserialize_span_data_index_map(&span_data_table);
+                            flat::deserialize_span_data_index_map(&span_data_table);
 
                         let def_site = span_data_table[def_site];
                         let call_site = span_data_table[call_site];
                         let mixed_site = span_data_table[mixed_site];
 
-                        let macro_body = macro_body.to_tokenstream_resolved(
-                            CURRENT_API_VERSION,
-                            &span_data_table,
-                            |a, b| srv.join_spans(a, b).unwrap_or(b),
-                        );
-                        let attributes = attributes.map(|it| {
-                            it.to_tokenstream_resolved(
-                                CURRENT_API_VERSION,
-                                &span_data_table,
-                                |a, b| srv.join_spans(a, b).unwrap_or(b),
-                            )
-                        });
-                        srv.expand(
+                        srv.expand::<Span>(
                             lib,
                             &env,
                             current_dir,
@@ -581,19 +532,10 @@ fn run_old(
                             call_site,
                             mixed_site,
                             &mut Default::default(),
+                            &mut span_data_table,
                             None,
                         )
-                        .map(|it| {
-                            (
-                                legacy::FlatTree::from_tokenstream(
-                                    it,
-                                    CURRENT_API_VERSION,
-                                    call_site,
-                                    &mut span_data_table,
-                                ),
-                                legacy::serialize_span_data_index_map(&span_data_table),
-                            )
-                        })
+                        .map(|it| (it, flat::serialize_span_data_index_map(&span_data_table)))
                         .map(|(tree, span_data_table)| legacy::ExpandMacroExtended {
                             tree,
                             span_data_table,

@@ -24,7 +24,7 @@ use itertools::Itertools;
 use load_cargo::{ProjectFolders, load_proc_macro};
 use lsp_types::FileSystemWatcher;
 use paths::Utf8Path;
-use proc_macro_api::ProcMacroClient;
+use proc_macro_api::client::ProcMacroClient;
 use project_model::{
     ManifestPath, ProjectWorkspace, ProjectWorkspaceKind, WorkspaceBuildScripts, project_json,
 };

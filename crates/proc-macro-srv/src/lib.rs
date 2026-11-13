@@ -18,15 +18,12 @@
 extern crate rustc_codegen_ssa;
 extern crate rustc_driver as _;
 extern crate rustc_interface;
-extern crate rustc_lexer;
 extern crate rustc_metadata;
 extern crate rustc_proc_macro;
 extern crate rustc_span;
 
-mod bridge;
 mod dylib;
 mod server_impl;
-mod token_stream;
 
 use std::{
     collections::hash_map::Entry,
@@ -40,17 +37,20 @@ use std::{
 };
 
 use paths::{Utf8Path, Utf8PathBuf};
+use proc_macro_api::{
+    flat::{FlatTree, SpanTransformer},
+    token_stream::SpanLike,
+    version::CURRENT_API_VERSION,
+};
 use rustc_hash::{FxHashMap, FxHashSet};
 use span::{FIXUP_ERASED_FILE_AST_ID_MARKER, Span};
-
-pub use crate::server_impl::token_id::SpanId;
 
 pub use rustc_proc_macro::Delimiter;
 pub use span;
 
-pub use crate::bridge::*;
-pub use crate::server_impl::literal_from_str;
-pub use crate::token_stream::{TokenStream, TokenStreamIter, literal_to_string};
+pub use tt::literal_from_str;
+
+pub use crate::server_impl::token_id::SpanId;
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
 pub enum ProcMacroKind {
@@ -128,20 +128,26 @@ impl ExpandError {
 }
 
 impl ProcMacroSrv<'_> {
-    pub fn expand<'a, S: ProcMacroSrvSpan + 'a>(
+    pub fn expand<'a, ST>(
         &self,
         lib: impl AsRef<Utf8Path>,
         env: &[(String, String)],
         current_dir: Option<impl AsRef<Path>>,
         macro_name: &str,
-        macro_body: token_stream::TokenStream<S>,
-        attribute: Option<token_stream::TokenStream<S>>,
-        def_site: S,
-        call_site: S,
-        mixed_site: S,
+        macro_body: FlatTree,
+        attribute: Option<FlatTree>,
+        def_site: ST::Span,
+        call_site: ST::Span,
+        mixed_site: ST::Span,
         tracked_env: &'a mut TrackedEnv,
+        span_data_table: &mut ST::Table,
         callback: Option<ProcMacroClientHandle<'a>>,
-    ) -> Result<token_stream::TokenStream<S>, ExpandError> {
+    ) -> Result<FlatTree, ExpandError>
+    where
+        ST: SpanTransformer,
+        ST::Span: ProcMacroSrvSpan + SpanLike + 'a,
+        ST::Table: Send,
+    {
         let snapped_env = self.env;
         let expander = self.expander(lib.as_ref()).map_err(|err| ExpandError::Internal {
             reason: Some(format!("failed to load macro: {err}")),
@@ -156,16 +162,29 @@ impl ProcMacroSrv<'_> {
                 .stack_size(EXPANDER_STACK_SIZE)
                 .name(macro_name.to_owned())
                 .spawn_scoped(s, move || {
-                    expander.expand(
-                        macro_name,
-                        macro_body,
-                        attribute,
-                        def_site,
-                        call_site,
-                        mixed_site,
-                        tracked_env,
-                        callback,
-                    )
+                    let macro_body =
+                        macro_body.to_tokenstream::<ST>(CURRENT_API_VERSION, span_data_table);
+                    let attribute = attribute
+                        .map(|it| it.to_tokenstream::<ST>(CURRENT_API_VERSION, span_data_table));
+                    expander
+                        .expand(
+                            macro_name,
+                            macro_body,
+                            attribute,
+                            def_site,
+                            call_site,
+                            mixed_site,
+                            tracked_env,
+                            callback,
+                        )
+                        .map(|result| {
+                            FlatTree::from_tokenstream::<ST>(
+                                result,
+                                call_site,
+                                CURRENT_API_VERSION,
+                                span_data_table,
+                            )
+                        })
                 });
             match thread.unwrap().join() {
                 Ok(res) => res.map_err(ExpandError::Panic),
@@ -233,7 +252,7 @@ pub struct TrackedEnv {
 
 pub trait ProcMacroSrvSpan: Copy + Send + Sync {
     type Server<'a>: rustc_proc_macro::bridge::server::Server<
-            TokenStream = crate::token_stream::TokenStream<Self>,
+            TokenStream = proc_macro_api::token_stream::TokenStream<Self>,
         >;
     fn make_server<'a>(
         call_site: Self,

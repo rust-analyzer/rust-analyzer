@@ -72,6 +72,9 @@ jobs:
       - name: Install Rust Problem Matcher
         run: echo "::add-matcher::.github/rust.json"
 
+      - name: Check without building tests
+        run: cargo check --features in-rust-tree -p proc-macro-srv-cli
+
       - name: Test
         run: cargo test --features in-rust-tree -p proc-macro-srv -p proc-macro-srv-cli -p proc-macro-api -- --quiet
 

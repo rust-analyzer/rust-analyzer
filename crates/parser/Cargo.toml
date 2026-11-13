@@ -19,6 +19,7 @@ rustc-literal-escaper.workspace = true
 tracing.workspace = true
 
 edition.workspace = true
+stdx.workspace = true
 winnow = { version = "0.7.13", default-features = false }
 
 [dev-dependencies]
@@ -32,3 +33,6 @@ in-rust-tree = []
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["ra-ap-rustc_lexer"]

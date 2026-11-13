@@ -39,3 +39,6 @@ in-rust-tree = ["parser/in-rust-tree", "tt/in-rust-tree"]
 
 [lints]
 workspace = true
+
+[package.metadata.cargo-machete]
+ignored = ["ra-ap-rustc_lexer"]

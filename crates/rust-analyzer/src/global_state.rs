@@ -23,7 +23,7 @@ use parking_lot::{
     MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard, RwLockUpgradableReadGuard,
     RwLockWriteGuard,
 };
-use proc_macro_api::ProcMacroClient;
+use proc_macro_api::client::ProcMacroClient;
 use project_model::{ManifestPath, ProjectWorkspace, ProjectWorkspaceKind, WorkspaceBuildScripts};
 use rustc_hash::{FxHashMap, FxHashSet};
 use stdx::thread;
