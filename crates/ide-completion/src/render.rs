@@ -632,11 +632,17 @@ pub(crate) fn render_type_keyword_snippet(
     ctx: &CompletionContext<'_, '_>,
     path_ctx: &PathCompletionCtx<'_>,
     label: &str,
-    snippet: &str,
+    mut snippet: &str,
 ) -> Builder {
     let source_range = ctx.source_range();
     let mut item =
         CompletionItem::new(CompletionItemKind::Keyword, source_range, label, ctx.edition);
+
+    if let Some(keyword) = snippet.strip_suffix("::")
+        && ctx.token.next_token().is_some_and(|it| it.kind() == syntax::T![::])
+    {
+        snippet = keyword;
+    }
 
     let insert_text = if !snippet.contains('$') {
         item.insert_text(snippet);

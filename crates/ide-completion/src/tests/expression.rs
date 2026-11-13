@@ -1247,6 +1247,29 @@ fn foo() { i!(module) }"#,
 }
 
 #[test]
+fn complete_self_kw() {
+    check_edit("self::", r#"fn foo() { $0 }"#, r#"fn foo() { self:: }"#);
+
+    check_edit("self::", r#"fn foo() -> $0 {}"#, r#"fn foo() -> self:: {}"#);
+
+    check_edit("self::", r#"fn foo() { $0::bar }"#, r#"fn foo() { self::bar }"#);
+
+    check_edit("self::", r#"fn foo() -> $0::bar {}"#, r#"fn foo() -> self::bar {}"#);
+
+    check_edit("self::", r#"fn foo() { $0bar::baz }"#, r#"fn foo() { self::bar::baz }"#);
+
+    check_edit(
+        "self::",
+        r#"
+macro_rules! i { ($i:ident) => { $i::bar } }
+fn foo() { i!($0) }"#,
+        r#"
+macro_rules! i { ($i:ident) => { $i::bar } }
+fn foo() { i!(self) }"#,
+    );
+}
+
+#[test]
 fn else_completion_after_if() {
     check(
         r#"

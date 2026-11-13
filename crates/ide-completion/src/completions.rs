@@ -97,11 +97,30 @@ impl Completions {
         item.add_to(self, ctx.db);
     }
 
+    pub(crate) fn add_keyword_with_colon(
+        &mut self,
+        ctx: &CompletionContext<'_, '_>,
+        keyword: &'static str,
+    ) {
+        debug_assert!(!keyword.ends_with("::"));
+        let label = syntax::format_smolstr!("{keyword}::");
+        let mut item = CompletionItem::new(
+            CompletionItemKind::Keyword,
+            ctx.source_range(),
+            label.clone(),
+            ctx.edition,
+        );
+        if ctx.token.next_token().is_some_and(|it| it.kind() == syntax::T![::]) {
+            item.insert_text(keyword);
+        }
+        item.add_to(self, ctx.db);
+    }
+
     pub(crate) fn add_nameref_keywords_with_colon(&mut self, ctx: &CompletionContext<'_, '_>) {
-        ["self::", "crate::"].into_iter().for_each(|kw| self.add_keyword(ctx, kw));
+        ["self", "crate"].into_iter().for_each(|kw| self.add_keyword_with_colon(ctx, kw));
 
         if ctx.depth_from_crate_root > 0 {
-            self.add_keyword(ctx, "super::");
+            self.add_keyword_with_colon(ctx, "super");
         }
     }
 
@@ -152,7 +171,7 @@ impl Completions {
             && len > 0
             && len < ctx.depth_from_crate_root
         {
-            self.add_keyword(ctx, "super::");
+            self.add_keyword_with_colon(ctx, "super");
         }
     }
 
