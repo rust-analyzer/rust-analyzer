@@ -418,6 +418,13 @@ fn filter_excluded_flyimport(ctx: &CompletionContext<'_, '_>, import: &LocatedIm
 fn import_name(ctx: &CompletionContext<'_, '_>) -> String {
     let token_kind = ctx.token.kind();
 
+    if ctx.original_token.kind().is_any_identifier()
+        && ctx.original_token.text_range().contains(ctx.position.offset)
+    {
+        let subrange =
+            syntax::TextRange::up_to(ctx.position.offset - ctx.original_token.text_range().start());
+        return ctx.original_token.text()[subrange].to_owned();
+    }
     if token_kind.is_any_identifier() { ctx.token.to_string() } else { String::new() }
 }
 
