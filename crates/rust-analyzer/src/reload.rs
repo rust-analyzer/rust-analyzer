@@ -539,6 +539,7 @@ impl GlobalState {
             // we don't care about build-script results, they are stale.
             // FIXME: can we abort the build scripts here if they are already running?
             self.workspaces = Arc::new(workspaces);
+            self.reload_flycheck();
             self.check_workspaces_msrv().for_each(|message| {
                 self.send_notification::<lsp_types::ShowMessageNotification>(
                     lsp_types::ShowMessageParams { kind: lsp_types::MessageType::Warning, message },
@@ -826,7 +827,6 @@ impl GlobalState {
 
     pub(crate) fn finish_loading_crate_graph(&mut self) -> Option<Duration> {
         let (_, cancellation_time) = self.process_changes();
-        self.reload_flycheck();
         cancellation_time
     }
 
