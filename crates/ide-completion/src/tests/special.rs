@@ -1753,6 +1753,92 @@ fn foo<T>() {
 }
 
 #[test]
+fn raw_ident_name_labels() {
+    check(
+        r#"
+#[macro_export]
+macro_rules! m { () => {} }
+mod foo {
+    pub struct r#if;
+    pub struct r#struct<T>;
+    pub enum r#enum { r#for }
+    pub use r#enum::r#for;
+    pub fn r#while() {}
+    pub const r#const: i32 = 2;
+    pub use crate::m as r#else;
+    pub mod r#mod;
+}
+type X = foo::$0;
+"#,
+        expect![[r#"
+            en enum             r#enum
+            ma else!(…) macro_rules! m
+            md mod::
+            st if                 r#if
+            st struct<…>   r#struct<T>
+        "#]],
+    );
+    check(
+        r#"
+#[macro_export]
+macro_rules! m { () => {} }
+mod foo {
+    pub struct r#if;
+    pub struct r#struct<T>;
+    pub enum r#enum { r#for }
+    pub use r#enum::r#for;
+    pub fn r#while() {}
+    pub const r#const: i32 = 2;
+    pub use crate::m as r#else;
+    pub mod r#mod;
+}
+fn main() {
+    foo::$0
+}
+"#,
+        expect![[r#"
+            ct const  = 2          i32
+            en enum             r#enum
+            fn while()            fn()
+            ma else!(…) macro_rules! m
+            md mod::
+            st if                 r#if
+            st struct      r#struct<T>
+            ev for               r#for
+        "#]],
+    );
+    check(
+        r#"
+#[macro_export]
+macro_rules! m { () => {} }
+mod foo {
+    pub struct r#if;
+    pub struct r#struct<T>;
+    pub enum r#enum { r#for }
+    pub use r#enum::r#for;
+    pub fn r#while() {}
+    pub const r#const: i32 = 2;
+    pub use crate::m as r#else;
+    pub mod r#mod;
+}
+fn main() {
+    let foo::$0
+}
+"#,
+        expect![[r#"
+            ct const  = 2          i32
+            en enum             r#enum
+            fn while              fn()
+            ma else!(…) macro_rules! m
+            md mod::
+            st if                 r#if
+            st struct      r#struct<T>
+            ev for               r#for
+        "#]],
+    );
+}
+
+#[test]
 fn fn_generic_params_const_param_snippet() {
     check_edit("const", "fn foo<c$0>() {}", "fn foo<const $1: $0>() {}");
     check_edit("const", "fn foo<T, c$0>() {}", "fn foo<T, const $1: $0>() {}");

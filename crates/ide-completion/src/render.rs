@@ -443,6 +443,7 @@ fn render_resolution_path<'db>(
     let config = completion.config;
     let requires_import = import_to_add.is_some();
 
+    let label = local_name.as_str();
     let name = local_name.display(db, completion.edition).to_smolstr();
     let mut item = render_resolution_simple_(ctx, &local_name, import_to_add, resolution);
     let mut insert_text = name.clone();
@@ -464,8 +465,8 @@ fn render_resolution_path<'db>(
         if has_non_default_type_params {
             cov_mark::hit!(inserts_angle_brackets_for_generics);
             insert_text = format_smolstr!("{insert_text}<$0>");
-            item.lookup_by(name.clone())
-                .label(SmolStr::from_iter([&name, "<…>"]))
+            item.lookup_by(label)
+                .label(SmolStr::from_iter([label, "<…>"]))
                 .trigger_call_info()
                 .insert_snippet(cap, ""); // set is snippet
         }
@@ -475,7 +476,7 @@ fn render_resolution_path<'db>(
         || !config.add_colons_to_module;
     if !allow_module_path && matches!(resolution, ScopeDef::ModuleDef(Module(_))) {
         insert_text = format_smolstr!("{insert_text}::");
-        item.lookup_by(name.clone()).label(insert_text.clone());
+        item.lookup_by(label).label(format_smolstr!("{label}::"));
     }
     let allow_dyn =
         matches!(&path_ctx.kind, PathKind::Type { location } if location.complete_dyn());
@@ -493,7 +494,7 @@ fn render_resolution_path<'db>(
         let ty = completion.rebase_ty(&ty);
         item.set_relevance(CompletionRelevance {
             type_match: compute_type_match(completion, &ty),
-            exact_name_match: compute_exact_name_match(completion, &name),
+            exact_name_match: compute_exact_name_match(completion, label),
             is_local: matches!(resolution, ScopeDef::Local(_)),
             requires_import,
             has_local_inherent_impl: compute_has_local_inherent_impl(db, path_ctx, &ty, module),
