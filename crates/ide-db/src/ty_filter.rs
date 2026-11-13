@@ -34,6 +34,13 @@ impl TryEnum {
             _ => return None,
         };
         TryEnum::ALL.iter().find_map(|&var| {
+            let variants = enum_.variants(sema.db);
+            if variants.len() != 2
+                || !variants.iter().any(|it| it.name(sema.db).as_str() == var.happy_case())
+            {
+                // FIXME: Quickly check if it looks like a standard try enum
+                return None;
+            }
             if enum_.name(sema.db).as_str() == var.type_name() {
                 return Some(var);
             }
@@ -59,6 +66,7 @@ impl TryEnum {
         }
     }
 
+    // FIXME: This should use the full path when the path is shadowed
     pub fn happy_pattern(self, pat: Pat) -> ast::Pat {
         match self {
             TryEnum::Result => {

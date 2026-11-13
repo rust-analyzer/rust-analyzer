@@ -57,15 +57,9 @@ pub(crate) fn replace_let_with_if_let(
                 // since the statement already wraps the pattern.
                 original_pat
             } else {
-                let happy_variant = ty
-                    .and_then(|ty| TryEnum::from_ty(&ctx.sema, &ty.adjusted()))
-                    .map(|it| it.happy_case());
-                match happy_variant {
-                    None => original_pat,
-                    Some(var_name) => {
-                        make.tuple_struct_pat(make.ident_path(var_name), [original_pat]).into()
-                    }
-                }
+                ty.and_then(|ty| TryEnum::from_ty(&ctx.sema, &ty.adjusted()))
+                    .map(|it| it.happy_pattern(original_pat.clone()))
+                    .unwrap_or(original_pat)
             };
             let init_expr =
                 if let_expr_needs_paren(&init) { make.expr_paren(init).into() } else { init };

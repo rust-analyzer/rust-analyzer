@@ -1171,6 +1171,33 @@ fn main() {
 }
 "#,
         );
+
+        check_edit(
+            "match",
+            r#"
+//- minicore: result
+pub enum Result<T> {
+    Left(T),
+    Both(T, T),
+    Right(T),
+}
+fn foo(diffline: Result<&str>) {
+    diffline.$0
+}
+"#,
+            r#"
+pub enum Result<T> {
+    Left(T),
+    Both(T, T),
+    Right(T),
+}
+fn foo(diffline: Result<&str>) {
+    match diffline {
+    ${1:_} => {$0},
+}
+}
+"#,
+        );
     }
 
     #[test]
