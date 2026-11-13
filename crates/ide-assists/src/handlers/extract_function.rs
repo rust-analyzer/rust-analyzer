@@ -287,6 +287,9 @@ fn make_function_name(
 fn extraction_target(node: &SyntaxNode, selection_range: TextRange) -> Option<FunctionBody> {
     if let Some(stmt) = ast::Stmt::cast(node.clone()) {
         return match stmt {
+            ast::Stmt::Item(ast::Item::MacroCall(_)) => {
+                FunctionBody::from_expr(node.parent().and_then(ast::Expr::cast)?)
+            }
             ast::Stmt::Item(_) => None,
             ast::Stmt::ExprStmt(_) | ast::Stmt::LetStmt(_) => FunctionBody::from_range(
                 node.parent().and_then(ast::StmtList::cast)?,
@@ -2914,6 +2917,30 @@ fn main() {
 
 fn $0fun_name() -> u32 {
     0f32 as u32
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn extract_macro_call() {
+        check_assist(
+            extract_function,
+            r#"
+//- minicore: matches
+fn main() {
+    let kind = "FN";
+    let v = $0matches!(kind, "FN" | "IMPL")$0;
+}
+"#,
+            r#"
+fn main() {
+    let kind = "FN";
+    let v = fun_name(kind);
+}
+
+fn $0fun_name(kind: &str) -> bool {
+    matches!(kind, "FN" | "IMPL")
 }
 "#,
         );
