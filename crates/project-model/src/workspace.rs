@@ -86,6 +86,8 @@ pub enum ProjectWorkspaceKind {
         error: Option<Arc<anyhow::Error>>,
         /// The build script results for the workspace.
         build_scripts: WorkspaceBuildScripts,
+        /// Build script results for sysroot packages (populated when build-std is active).
+        sysroot_build_scripts: WorkspaceBuildScripts,
         /// The rustc workspace loaded for this workspace. An `Err(None)` means loading has been
         /// disabled or was otherwise not requested.
         rustc: Result<Box<(CargoWorkspace, WorkspaceBuildScripts)>, Option<String>>,
@@ -124,7 +126,7 @@ impl fmt::Debug for ProjectWorkspace {
             set_test,
         } = self;
         match kind {
-            ProjectWorkspaceKind::Cargo { cargo, error: _, build_scripts, rustc } => f
+            ProjectWorkspaceKind::Cargo { cargo, error: _, build_scripts, rustc, .. } => f
                 .debug_struct("Cargo")
                 .field("root", &cargo.workspace_root().file_name())
                 .field("n_packages", &cargo.packages().len())
@@ -463,6 +465,7 @@ impl ProjectWorkspace {
             kind: ProjectWorkspaceKind::Cargo {
                 cargo,
                 build_scripts: WorkspaceBuildScripts::default(),
+                sysroot_build_scripts: WorkspaceBuildScripts::default(),
                 rustc,
                 error: error.map(Arc::new),
             },
@@ -641,11 +644,14 @@ impl ProjectWorkspace {
     }
 
     /// Runs the build scripts for this [`ProjectWorkspace`].
+    ///
+    /// Returns `(workspace_build_scripts, sysroot_build_scripts)`. The sysroot build scripts are
+    /// populated when build-std is active; otherwise they are empty/default.
     pub fn run_build_scripts(
         &self,
         config: &CargoConfig,
         progress: &dyn Fn(String),
-    ) -> anyhow::Result<WorkspaceBuildScripts> {
+    ) -> anyhow::Result<(WorkspaceBuildScripts, WorkspaceBuildScripts)> {
         match &self.kind {
             ProjectWorkspaceKind::DetachedFile { cargo: Some((cargo, _, None)), .. }
             | ProjectWorkspaceKind::Cargo { cargo, error: None, .. } => {
@@ -660,34 +666,37 @@ impl ProjectWorkspace {
                     format!("Failed to run build scripts for {}", cargo.workspace_root())
                 })
             }
-            _ => Ok(WorkspaceBuildScripts::default()),
+            _ => Ok((WorkspaceBuildScripts::default(), WorkspaceBuildScripts::default())),
         }
     }
 
     /// Runs the build scripts for the given [`ProjectWorkspace`]s. Depending on the invocation
     /// strategy this may run a single build process for all project workspaces.
+    ///
+    /// Returns a `Vec` of `(workspace_build_scripts, sysroot_build_scripts)` per workspace.
     pub fn run_all_build_scripts(
         workspaces: &[ProjectWorkspace],
         config: &CargoConfig,
         progress: &dyn Fn(String),
         working_directory: &AbsPathBuf,
-    ) -> Vec<anyhow::Result<WorkspaceBuildScripts>> {
+    ) -> Vec<anyhow::Result<(WorkspaceBuildScripts, WorkspaceBuildScripts)>> {
         if matches!(config.invocation_strategy, InvocationStrategy::PerWorkspace)
             || config.run_build_script_command.is_none()
         {
             return workspaces.iter().map(|it| it.run_build_scripts(config, progress)).collect();
         }
 
-        let cargo_ws: Vec<_> = workspaces
+        let (cargo_ws, sysroots): (Vec<_>, Vec<_>) = workspaces
             .iter()
             .filter_map(|it| match &it.kind {
-                ProjectWorkspaceKind::Cargo { cargo, .. } => Some(cargo),
+                ProjectWorkspaceKind::Cargo { cargo, .. } => Some((cargo, &it.sysroot)),
                 _ => None,
             })
-            .collect();
+            .unzip();
         let outputs = &mut match WorkspaceBuildScripts::run_once(
             config,
             &cargo_ws,
+            &sysroots,
             progress,
             working_directory,
         ) {
@@ -705,18 +714,29 @@ impl ProjectWorkspace {
                         format!("Failed to run build scripts for {}", cargo.workspace_root())
                     }),
                 },
-                _ => Ok(WorkspaceBuildScripts::default()),
+                _ => Ok((WorkspaceBuildScripts::default(), WorkspaceBuildScripts::default())),
             })
             .collect()
     }
 
-    pub fn set_build_scripts(&mut self, bs: WorkspaceBuildScripts) {
+    pub fn set_build_scripts(
+        &mut self,
+        bs: WorkspaceBuildScripts,
+        sysroot_bs: WorkspaceBuildScripts,
+    ) {
         match &mut self.kind {
-            ProjectWorkspaceKind::Cargo { build_scripts, .. }
-            | ProjectWorkspaceKind::DetachedFile { cargo: Some((_, build_scripts, _)), .. } => {
-                *build_scripts = bs
+            ProjectWorkspaceKind::Cargo { build_scripts, sysroot_build_scripts, .. } => {
+                *build_scripts = bs;
+                *sysroot_build_scripts = sysroot_bs;
             }
-            _ => assert_eq!(bs, WorkspaceBuildScripts::default()),
+            ProjectWorkspaceKind::DetachedFile { cargo: Some((_, build_scripts, _)), .. } => {
+                *build_scripts = bs;
+                assert_eq!(sysroot_bs, WorkspaceBuildScripts::default());
+            }
+            _ => {
+                assert_eq!(bs, WorkspaceBuildScripts::default());
+                assert_eq!(sysroot_bs, WorkspaceBuildScripts::default());
+            }
         }
     }
 
@@ -829,7 +849,7 @@ impl ProjectWorkspace {
                 .into_iter()
                 .chain(mk_sysroot())
                 .collect::<Vec<_>>(),
-            ProjectWorkspaceKind::Cargo { cargo, rustc, build_scripts, error: _ } => {
+            ProjectWorkspaceKind::Cargo { cargo, rustc, build_scripts, error: _, .. } => {
                 cargo
                     .packages()
                     .map(|pkg| {
@@ -1010,19 +1030,24 @@ impl ProjectWorkspace {
                 false,
                 crate_ws_data,
             ),
-            ProjectWorkspaceKind::Cargo { cargo, rustc, build_scripts, error: _ } => {
-                cargo_to_crate_graph(
-                    load,
-                    rustc.as_ref().map(|a| a.as_ref()).ok(),
-                    cargo,
-                    sysroot,
-                    rustc_cfg.clone(),
-                    cfg_overrides,
-                    build_scripts,
-                    self.set_test,
-                    crate_ws_data,
-                )
-            }
+            ProjectWorkspaceKind::Cargo {
+                cargo,
+                rustc,
+                build_scripts,
+                sysroot_build_scripts,
+                error: _,
+            } => cargo_to_crate_graph(
+                load,
+                rustc.as_ref().map(|a| a.as_ref()).ok(),
+                cargo,
+                sysroot,
+                rustc_cfg.clone(),
+                cfg_overrides,
+                build_scripts,
+                sysroot_build_scripts,
+                self.set_test,
+                crate_ws_data,
+            ),
             ProjectWorkspaceKind::DetachedFile { file, cargo: cargo_script, .. } => {
                 if let Some((cargo, build_scripts, _)) = cargo_script {
                     cargo_to_crate_graph(
@@ -1033,6 +1058,7 @@ impl ProjectWorkspace {
                         rustc_cfg.clone(),
                         cfg_overrides,
                         build_scripts,
+                        &WorkspaceBuildScripts::default(),
                         self.set_test,
                         crate_ws_data,
                     )
@@ -1068,13 +1094,8 @@ impl ProjectWorkspace {
         } = other;
         (match (kind, o_kind) {
             (
-                ProjectWorkspaceKind::Cargo { cargo, rustc, build_scripts: _, error: _ },
-                ProjectWorkspaceKind::Cargo {
-                    cargo: o_cargo,
-                    rustc: o_rustc,
-                    build_scripts: _,
-                    error: _,
-                },
+                ProjectWorkspaceKind::Cargo { cargo, rustc, .. },
+                ProjectWorkspaceKind::Cargo { cargo: o_cargo, rustc: o_rustc, .. },
             ) => cargo == o_cargo && rustc == o_rustc,
             (ProjectWorkspaceKind::Json(project), ProjectWorkspaceKind::Json(o_project)) => {
                 project == o_project
@@ -1123,6 +1144,7 @@ fn project_json_to_crate_graph(
         rustc_cfg.clone(),
         load,
         // FIXME: This looks incorrect but I don't think this matters.
+        &WorkspaceBuildScripts::default(),
         crate_ws_data.clone(),
     );
 
@@ -1269,6 +1291,7 @@ fn cargo_to_crate_graph(
     rustc_cfg: Vec<CfgAtom>,
     override_cfg: &CfgOverrides,
     build_scripts: &WorkspaceBuildScripts,
+    sysroot_build_scripts: &WorkspaceBuildScripts,
     set_test: bool,
     crate_ws_data: Arc<CrateWorkspaceData>,
 ) -> (CrateGraphBuilder, ProcMacroPaths) {
@@ -1280,6 +1303,7 @@ fn cargo_to_crate_graph(
         sysroot,
         rustc_cfg.clone(),
         load,
+        sysroot_build_scripts,
         crate_ws_data.clone(),
     );
     let cargo_path = sysroot.tool_path(Tool::Cargo, cargo.workspace_root(), cargo.env());
@@ -1491,6 +1515,7 @@ fn detached_file_to_crate_graph(
         rustc_cfg.clone(),
         load,
         // FIXME: This looks incorrect but I don't think this causes problems.
+        &WorkspaceBuildScripts::default(),
         crate_ws_data.clone(),
     );
 
@@ -1811,6 +1836,7 @@ fn sysroot_to_crate_graph(
     sysroot: &Sysroot,
     rustc_cfg: Vec<CfgAtom>,
     load: FileLoader<'_>,
+    sysroot_build_scripts: &WorkspaceBuildScripts,
     crate_ws_data: Arc<CrateWorkspaceData>,
 ) -> (SysrootPublicDeps, Option<CrateBuilderId>) {
     let _p = tracing::info_span!("sysroot_to_crate_graph").entered();
@@ -1833,6 +1859,7 @@ fn sysroot_to_crate_graph(
                     ),
                     ..Default::default()
                 },
+                sysroot_build_scripts,
                 &WorkspaceBuildScripts::default(),
                 false,
                 crate_ws_data,

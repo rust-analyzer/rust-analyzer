@@ -64,7 +64,8 @@ pub fn load_workspace_at(
     let mut workspace = ProjectWorkspace::load(root, cargo_config, progress)?;
 
     if load_config.load_out_dirs_from_check {
-        let build_scripts = workspace.run_build_scripts(cargo_config, progress)?;
+        let (build_scripts, sysroot_build_scripts) =
+            workspace.run_build_scripts(cargo_config, progress)?;
         if let Some(error) = build_scripts.error() {
             tracing::debug!(
                 "Errors occurred while running build scripts for {}: {}",
@@ -72,7 +73,7 @@ pub fn load_workspace_at(
                 error
             );
         }
-        workspace.set_build_scripts(build_scripts)
+        workspace.set_build_scripts(build_scripts, sysroot_build_scripts)
     }
 
     load_workspace(workspace, &cargo_config.extra_env, load_config)

@@ -61,7 +61,7 @@ pub(crate) struct FetchWorkspaceResponse {
 
 pub(crate) struct FetchBuildDataResponse {
     pub(crate) workspaces: Arc<Vec<ProjectWorkspace>>,
-    pub(crate) build_scripts: Vec<anyhow::Result<WorkspaceBuildScripts>>,
+    pub(crate) build_scripts: Vec<anyhow::Result<(WorkspaceBuildScripts, WorkspaceBuildScripts)>>,
 }
 
 // Enforces drop order

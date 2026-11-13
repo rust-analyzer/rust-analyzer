@@ -39,6 +39,7 @@ fn load_workspace_from_metadata(file: &str) -> ProjectWorkspace {
         kind: ProjectWorkspaceKind::Cargo {
             cargo: cargo_workspace,
             build_scripts: WorkspaceBuildScripts::default(),
+            sysroot_build_scripts: WorkspaceBuildScripts::default(),
             rustc: Err(None),
             error: None,
         },
@@ -267,6 +268,7 @@ fn smoke_test_real_sysroot_cargo() {
         kind: ProjectWorkspaceKind::Cargo {
             cargo: cargo_workspace,
             build_scripts: WorkspaceBuildScripts::default(),
+            sysroot_build_scripts: WorkspaceBuildScripts::default(),
             rustc: Err(None),
             error: None,
         },

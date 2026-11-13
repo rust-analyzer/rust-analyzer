@@ -107,8 +107,8 @@ impl flags::AnalysisStats {
             None
         } else {
             let mut build_scripts_sw = self.stop_watch();
-            let bs = workspace.run_build_scripts(&cargo_config, no_progress)?;
-            workspace.set_build_scripts(bs);
+            let (bs, sysroot_bs) = workspace.run_build_scripts(&cargo_config, no_progress)?;
+            workspace.set_build_scripts(bs, sysroot_bs);
             Some(build_scripts_sw.elapsed())
         };
 
@@ -624,7 +624,8 @@ impl flags::AnalysisStats {
                     if self.validate_term_search {
                         std::fs::write(path, txt).unwrap();
 
-                        let res = ws.run_build_scripts(&cargo_config, &|_| ()).unwrap();
+                        let (res, _sysroot_bs) =
+                            ws.run_build_scripts(&cargo_config, &|_| ()).unwrap();
                         if let Some(err) = res.error()
                             && err.contains("error: could not compile")
                         {

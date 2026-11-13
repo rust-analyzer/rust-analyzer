@@ -55,7 +55,12 @@ pub(crate) enum ProjectWorkspaceProgress {
 pub(crate) enum BuildDataProgress {
     Begin,
     Report(String),
-    End((Arc<Vec<ProjectWorkspace>>, Vec<anyhow::Result<WorkspaceBuildScripts>>)),
+    End(
+        (
+            Arc<Vec<ProjectWorkspace>>,
+            Vec<anyhow::Result<(WorkspaceBuildScripts, WorkspaceBuildScripts)>>,
+        ),
+    ),
 }
 
 #[derive(Debug)]
@@ -507,7 +512,8 @@ impl GlobalState {
                         .cloned()
                         .zip(build_scripts)
                         .map(|(mut ws, bs)| {
-                            ws.set_build_scripts(bs.as_ref().ok().cloned().unwrap_or_default());
+                            let (bs, sysroot_bs) = bs.as_ref().ok().cloned().unwrap_or_default();
+                            ws.set_build_scripts(bs, sysroot_bs);
                             ws
                         })
                         .collect::<Vec<_>>();
@@ -867,7 +873,7 @@ impl GlobalState {
 
         for script in build_scripts {
             match script {
-                Ok(data) => {
+                Ok((data, _sysroot_data)) => {
                     if let Some(stderr) = data.error() {
                         stdx::format_to!(buf, "{:#}\n", stderr)
                     }

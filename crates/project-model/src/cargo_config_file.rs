@@ -47,6 +47,15 @@ impl CargoConfigFile {
         CargoConfigFileReader::new(&self.0)
     }
 
+    pub(crate) fn build_std_requested(&self) -> bool {
+        let Some(reader) = self.read() else { return false };
+        match reader.get(["unstable", "build-std"]) {
+            Some(DeValue::Array(arr)) => !arr.is_empty(),
+            Some(_) => true,
+            None => false,
+        }
+    }
+
     #[cfg(test)]
     pub(crate) fn from_string_for_test(s: String) -> Self {
         CargoConfigFile(s)
