@@ -145,6 +145,7 @@ diagnostics![AnyDiagnostic<'db> ->
     MissingBody,
     FunctionalRecordUpdateOnNonStruct,
     GenericDefaultRefersToSelf,
+    ImplIncorrectSafety,
     InactiveCode,
     IncoherentImpl,
     IncorrectCase,
@@ -181,7 +182,6 @@ diagnostics![AnyDiagnostic<'db> ->
     RemoveUnnecessaryElse,
     UnusedMustUse<'db>,
     ReplaceFilterMapNextWithFindMap,
-    TraitImplIncorrectSafety,
     TraitImplMissingAssocItems,
     TraitImplOrphan,
     TraitImplRedundantAssocItems,
@@ -531,14 +531,6 @@ pub struct TraitImplOrphan {
     pub impl_: AstPtr<ast::Impl>,
 }
 
-// FIXME: Split this off into the corresponding 4 rustc errors
-#[derive(Debug, PartialEq, Eq)]
-pub struct TraitImplIncorrectSafety {
-    pub file_id: HirFileId,
-    pub impl_: AstPtr<ast::Impl>,
-    pub should_be_safe: bool,
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct TraitImplMissingAssocItems {
     pub file_id: HirFileId,
@@ -562,6 +554,22 @@ pub struct RemoveTrailingReturn {
 #[derive(Debug)]
 pub struct RemoveUnnecessaryElse {
     pub if_expr: InFile<AstPtr<ast::IfExpr>>,
+}
+
+#[derive(Debug)]
+pub struct ImplIncorrectSafety {
+    pub file_id: HirFileId,
+    pub impl_: AstPtr<ast::Impl>,
+    pub kind: ImplIncorrectSafetyKind,
+}
+
+#[derive(Debug)]
+pub enum ImplIncorrectSafetyKind {
+    UnsafeInherentImpl,
+    UnsafeNegativeImpl,
+    UnsafeImplOfSafeTrait(Trait),
+    SafeImplOfUnsafeTrait(Trait),
+    SafeImplOfDanglingDrop,
 }
 
 #[derive(Debug)]
@@ -1018,16 +1026,73 @@ impl<'a, 'db> DiagnosticsCollector<'a, 'db> {
         .unwrap_or(false);
 
         match (impl_is_unsafe, trait_is_unsafe, impl_is_negative, drop_maybe_dangle) {
-                // unsafe negative impl
-                (true, _, true, _) |
-                // unsafe impl for safe trait
-                (true, false, _, false) => self.acc.push(TraitImplIncorrectSafety { impl_: ast_id_map.get(loc.id.value), file_id, should_be_safe: true }.into()),
-                // safe impl for unsafe trait
-                (false, true, false, _) |
-                // safe impl of dangling drop
-                (false, false, _, true) => self.acc.push(TraitImplIncorrectSafety { impl_: ast_id_map.get(loc.id.value), file_id, should_be_safe: false }.into()),
-                _ => (),
-            };
+            // unsafe negative impl
+            (true, _, true, _) => {
+                self.acc.push(
+                    ImplIncorrectSafety {
+                        file_id,
+                        impl_: ast_id_map.get(loc.id.value),
+                        kind: ImplIncorrectSafetyKind::UnsafeNegativeImpl,
+                    }
+                    .into(),
+                );
+            }
+
+            (true, false, _, false) => {
+                let impl_ = ast_id_map.get(loc.id.value);
+
+                if let Some(trait_) = trait_ {
+                    // unsafe impl of safe trait
+                    let trait_ = Trait::from(trait_);
+                    self.acc.push(
+                        ImplIncorrectSafety {
+                            file_id,
+                            impl_,
+                            kind: ImplIncorrectSafetyKind::UnsafeImplOfSafeTrait(trait_),
+                        }
+                        .into(),
+                    );
+                } else {
+                    // unsafe inherent impl
+                    self.acc.push(
+                        ImplIncorrectSafety {
+                            file_id,
+                            impl_,
+                            kind: ImplIncorrectSafetyKind::UnsafeInherentImpl,
+                        }
+                        .into(),
+                    );
+                }
+            }
+
+            // safe impl of unsafe trait
+            (false, true, false, _) => {
+                if let Some(trait_) = trait_ {
+                    let trait_ = Trait::from(trait_);
+                    self.acc.push(
+                        ImplIncorrectSafety {
+                            file_id,
+                            impl_: ast_id_map.get(loc.id.value),
+                            kind: ImplIncorrectSafetyKind::SafeImplOfUnsafeTrait(trait_),
+                        }
+                        .into(),
+                    );
+                }
+            }
+
+            // safe impl of dangling drop
+            (false, false, _, true) => {
+                self.acc.push(
+                    ImplIncorrectSafety {
+                        file_id,
+                        impl_: ast_id_map.get(loc.id.value),
+                        kind: ImplIncorrectSafetyKind::SafeImplOfDanglingDrop,
+                    }
+                    .into(),
+                );
+            }
+            _ => (),
+        };
 
         // Negative impls can't have items, don't emit missing items diagnostic for them
         if let (false, Some(trait_)) = (impl_is_negative, trait_) {
