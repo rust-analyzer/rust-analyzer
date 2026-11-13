@@ -103,12 +103,22 @@ fn structure_node(node: &SyntaxNode, config: &FileStructureConfig) -> Option<Str
         kind: StructureNodeKind,
     ) -> Option<StructureNode> {
         let name = node.name()?;
+        let mut node_range = node.syntax().text_range();
+
+        if let Some(last) = node
+            .syntax()
+            .children_with_tokens()
+            .take_while(|it| it.kind().is_trivia() || ast::Attr::can_cast(it.kind()))
+            .last()
+        {
+            node_range = TextRange::new(last.text_range().end(), node_range.end());
+        }
 
         Some(StructureNode {
             parent: None,
             label: name.text().to_owned(),
             navigation_range: name.syntax().text_range(),
-            node_range: node.syntax().text_range(),
+            node_range,
             kind,
             detail,
             deprecated: node.attrs().filter_map(|x| x.simple_name()).any(|x| x == "deprecated"),
@@ -300,6 +310,49 @@ mod tests {
             },
         ]
         "#]],
+        );
+    }
+
+    #[test]
+    fn test_file_structure_exclude_comments_and_docs() {
+        check(
+            r#"
+// comment
+/// doc
+struct Foo;
+
+// comment
+/// doc
+fn foo() {}
+"#,
+            expect![[r#"
+                [
+                    StructureNode {
+                        parent: None,
+                        label: "Foo",
+                        navigation_range: 27..30,
+                        node_range: 20..31,
+                        kind: SymbolKind(
+                            Struct,
+                        ),
+                        detail: None,
+                        deprecated: false,
+                    },
+                    StructureNode {
+                        parent: None,
+                        label: "foo",
+                        navigation_range: 55..58,
+                        node_range: 52..63,
+                        kind: SymbolKind(
+                            Function,
+                        ),
+                        detail: Some(
+                            "fn()",
+                        ),
+                        deprecated: false,
+                    },
+                ]
+            "#]],
         );
     }
 
@@ -594,7 +647,7 @@ fn let_statements() {
                         parent: None,
                         label: "mcexp",
                         navigation_range: 364..369,
-                        node_range: 335..386,
+                        node_range: 351..386,
                         kind: SymbolKind(
                             Macro,
                         ),
@@ -605,7 +658,7 @@ fn let_statements() {
                         parent: None,
                         label: "mcexp",
                         navigation_range: 417..422,
-                        node_range: 388..439,
+                        node_range: 404..439,
                         kind: SymbolKind(
                             Macro,
                         ),
@@ -616,7 +669,7 @@ fn let_statements() {
                         parent: None,
                         label: "obsolete",
                         navigation_range: 458..466,
-                        node_range: 441..471,
+                        node_range: 455..471,
                         kind: SymbolKind(
                             Function,
                         ),
@@ -629,7 +682,7 @@ fn let_statements() {
                         parent: None,
                         label: "very_obsolete",
                         navigation_range: 512..525,
-                        node_range: 473..530,
+                        node_range: 509..530,
                         kind: SymbolKind(
                             Function,
                         ),
@@ -651,7 +704,7 @@ fn let_statements() {
                         parent: None,
                         label: "m",
                         navigation_range: 599..600,
-                        node_range: 574..637,
+                        node_range: 595..637,
                         kind: SymbolKind(
                             Module,
                         ),
@@ -690,7 +743,7 @@ fn let_statements() {
                         ),
                         label: "g",
                         navigation_range: 629..630,
-                        node_range: 613..635,
+                        node_range: 626..635,
                         kind: SymbolKind(
                             Function,
                         ),
