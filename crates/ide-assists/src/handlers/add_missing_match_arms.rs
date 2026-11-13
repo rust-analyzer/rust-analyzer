@@ -1844,6 +1844,43 @@ fn foo(t: Test) {
     }
 
     #[test]
+    fn works_inside_macro_call_on_whitespace() {
+        // On whitespace inside macro (#21729)
+        check_assist(
+            add_missing_match_arms,
+            r#"
+macro_rules! m { ($expr:expr) => {$expr}}
+enum Test {
+    A,
+    B,
+    C,
+}
+
+fn foo(t: Test) {
+    m!(match t {
+        Test::A => (),
+        $0
+    });
+}"#,
+            r#"
+macro_rules! m { ($expr:expr) => {$expr}}
+enum Test {
+    A,
+    B,
+    C,
+}
+
+fn foo(t: Test) {
+    m!(match t {
+        Test::A => (),
+        Test::B => ${1:todo!()},
+        Test::C => ${2:todo!()},$0
+    });
+}"#,
+        );
+    }
+
+    #[test]
     fn lazy_computation() {
         // We now collect all missing arms eagerly, so we can show the count
         // of missing arms.

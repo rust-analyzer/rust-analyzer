@@ -49,7 +49,7 @@ use stdx::{TupleExt, always};
 use syntax::{
     AstNode, AstPtr, AstToken, Direction, SmolStr, SmolStrBuilder, SyntaxElement, SyntaxKind,
     SyntaxNode, SyntaxNodePtr, SyntaxToken, T, TextRange, TextSize,
-    algo::skip_trivia_token,
+    algo::{skip_trivia_token, skip_whitespace_token},
     ast::{self, HasAttrs as _, HasGenericParams},
 };
 
@@ -1534,7 +1534,20 @@ impl<'db> SemanticsImpl<'db> {
         node: &SyntaxNode,
         offset: TextSize,
     ) -> impl Iterator<Item = impl Iterator<Item = SyntaxNode> + '_> + '_ {
-        node.token_at_offset(offset)
+        let (on_whitespace, tokens) = match node.token_at_offset(offset) {
+            syntax::TokenAtOffset::Single(token) if token.kind() == SyntaxKind::WHITESPACE => {
+                let prev = token
+                    .prev_token()
+                    .and_then(|token| skip_whitespace_token(token, Direction::Prev));
+                let next = token
+                    .next_token()
+                    .and_then(|token| skip_whitespace_token(token, Direction::Next));
+                (true, Either::Left(itertools::chain!([token], prev, next)))
+            }
+            tokens => (false, Either::Right(tokens)),
+        };
+        let file_id = self.find_file(node).file_id;
+        tokens
             .map(move |token| self.descend_into_macros_exact(token))
             .map(|descendants| {
                 descendants.into_iter().map(move |it| self.token_ancestors_with_macros(it))
@@ -1545,6 +1558,15 @@ impl<'db> SemanticsImpl<'db> {
                 left.clone()
                     .map(|node| node.text_range().len())
                     .lt(right.clone().map(|node| node.text_range().len()))
+            })
+            .map(move |ancestors| {
+                ancestors.filter(move |node| {
+                    if !on_whitespace {
+                        return true;
+                    }
+                    let origin = self.original_range(node);
+                    origin.file_id == file_id && origin.range.contains(offset)
+                })
             })
     }
 
