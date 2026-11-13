@@ -856,6 +856,7 @@ impl<'db> ReferenceConversion<'db> {
 // FIXME: It should return a new hir::Type, but currently constructing new types is too cumbersome
 //        and all users of this function operate on string type names, so they can do the conversion
 //        itself themselves.
+/// NOTE: This does not apply to mutable references
 pub(crate) fn convert_reference_type<'db>(
     ty: hir::Type<'db>,
     db: &'db RootDatabase,

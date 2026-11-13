@@ -1274,7 +1274,7 @@ fn fn_arg_type(
 
         generic_params.extend(ty.generic_params(ctx.db()));
 
-        if ty.is_reference() || ty.is_mutable_reference() {
+        if ty.is_reference() && !ty.is_mutable_reference() {
             let famous_defs = &FamousDefs(&ctx.sema, ctx.sema.scope(fn_arg.syntax())?.krate());
             convert_reference_type(ty.strip_references(), ctx.db(), famous_defs)
                 .map(|conversion| conversion.convert_type(ctx.db(), target_module).to_string())
@@ -3375,6 +3375,56 @@ fn bar(arg: impl Fn(_) -> bool) {
         "#,
         );
     }
+
+    #[test]
+    fn convert_reference_type() {
+        check_assist(
+            generate_function,
+            r#"
+//- minicore: option
+struct S;
+fn foo() {
+    $0bar(&Some(S))
+}
+        "#,
+            r#"
+struct S;
+fn foo() {
+    bar(&Some(S))
+}
+
+fn bar(s: Option<&S>) {
+    ${0:todo!()}
+}
+        "#,
+        );
+    }
+
+    #[test]
+    fn not_convert_mutable_reference_type() {
+        // Considering like Option::get_or_insert, this is not suitable for conversion
+        check_assist(
+            generate_function,
+            r#"
+//- minicore: option
+struct S;
+fn foo() {
+    $0bar(&mut Some(S))
+}
+        "#,
+            r#"
+struct S;
+fn foo() {
+    bar(&mut Some(S))
+}
+
+fn bar(s: &mut Option<S>) {
+    ${0:todo!()}
+}
+        "#,
+        );
+    }
+
     #[test]
     fn generate_method_uses_current_impl_block() {
         check_assist(
