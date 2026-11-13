@@ -58,7 +58,18 @@ pub(crate) fn move_guard_to_arm_body(acc: &mut Assists, ctx: &AssistContext<'_, 
         .rfold(None, |else_branch, arm| {
             if let Some(guard) = arm.guard() {
                 let then_branch = crate::utils::wrap_block(&arm.expr()?, &make);
+
+                let empty_if = make.expr_if(make.expr_unit(), make.expr_empty_block(), None);
+                let empty_condition = empty_if.condition()?;
+
                 let guard_condition = guard.condition()?.reset_indent();
+                let guard_condition = if guard_condition
+                    .needs_parens_in_place_of(empty_if.syntax(), empty_condition.syntax())
+                {
+                    make.expr_paren(guard_condition).into()
+                } else {
+                    guard_condition
+                };
                 Some(make.expr_if(guard_condition, then_branch, else_branch).into())
             } else {
                 arm.expr().map(|it| crate::utils::wrap_block(&it, &make).into())
@@ -352,6 +363,60 @@ fn main() {
 }
 "#,
             r#"if x > 10"#,
+        );
+    }
+
+    #[test]
+    fn move_guard_to_arm_body_parenthesizes_struct_literal() {
+        check_assist(
+            move_guard_to_arm_body,
+            r#"
+struct S { f: i32 }
+fn main() {
+    match 92 {
+        x $0if S { f: x } == y => false,
+        _ => true
+    }
+}
+"#,
+            r#"
+struct S { f: i32 }
+fn main() {
+    match 92 {
+        x => if (S { f: x } == y) {
+            false
+        },
+        _ => true
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn move_guard_to_arm_body_parenthesizes_trailing_struct_literal() {
+        check_assist(
+            move_guard_to_arm_body,
+            r#"
+struct S { f: i32 }
+fn main() {
+    match 92 {
+        x $0if y == S { f: x } => false,
+        _ => true
+    }
+}
+"#,
+            r#"
+struct S { f: i32 }
+fn main() {
+    match 92 {
+        x => if (y == S { f: x }) {
+            false
+        },
+        _ => true
+    }
+}
+"#,
         );
     }
 
