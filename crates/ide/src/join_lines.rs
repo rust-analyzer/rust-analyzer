@@ -45,16 +45,66 @@ pub(crate) fn join_lines(
         range
     };
 
+    let unprocessed = &mut JoinLines { elements: vec![] };
     let mut edit = TextEdit::builder();
     match file.syntax().covering_element(range) {
         NodeOrToken::Node(node) => {
             for token in node.descendants_with_tokens().filter_map(|it| it.into_token()) {
-                remove_newlines(config, &mut edit, &token, range)
+                remove_newlines(config, &mut edit, &token, range, unprocessed)
             }
         }
-        NodeOrToken::Token(token) => remove_newlines(config, &mut edit, &token, range),
+        NodeOrToken::Token(token) => remove_newlines(config, &mut edit, &token, range, unprocessed),
     };
+
+    unprocessed.try_handle_element_seq(
+        |elem| ast::LetStmt::cast(elem.as_node()?.clone()),
+        |nodes| join_let_stmts(&mut edit, nodes),
+    );
+
+    for (prev, token, next) in &unprocessed.elements {
+        // Remove newline but add a computed amount of whitespace characters
+        edit.replace(token.text_range(), compute_ws(prev.kind(), next.kind()).to_owned());
+    }
+
     edit.finish()
+}
+
+struct JoinLines {
+    elements: Vec<(SyntaxElement, SyntaxToken, SyntaxElement)>,
+}
+
+impl JoinLines {
+    fn try_handle_element_seq<T: AstNode>(
+        &mut self,
+        mut filter: impl FnMut(&SyntaxElement) -> Option<T>,
+        mut f: impl FnMut(&[T]),
+    ) {
+        // [ab, bc, cd, ef] -> f([a, b, c, d]) -> [ef]
+        let mut seq = vec![];
+        let mut cur = 0;
+
+        while let Some((prev, _, next)) = self.elements.get(cur) {
+            let (Some(first), Some(second)) = (filter(prev), filter(next)) else {
+                cur += 1;
+                continue;
+            };
+            let rest = self.elements[cur + 1..].iter().scan(next, |prev, (rest, _, next)| {
+                if *prev != rest {
+                    return None;
+                }
+                filter(next)
+            });
+
+            seq.clear();
+            seq.extend([first, second]);
+            seq.extend(rest);
+            f(&seq);
+
+            let processed =
+                seq.iter().fold(TextRange::default(), |a, b| a.cover(b.syntax().text_range()));
+            self.elements.retain(|elem| !processed.contains_range(elem.1.text_range()));
+        }
+    }
 }
 
 fn remove_newlines(
@@ -62,6 +112,7 @@ fn remove_newlines(
     edit: &mut TextEditBuilder,
     token: &SyntaxToken,
     range: TextRange,
+    unprocessed: &mut JoinLines,
 ) {
     let intersection = match range.intersect(token.text_range()) {
         Some(range) => range,
@@ -74,7 +125,7 @@ fn remove_newlines(
         let pos: TextSize = (pos as u32).into();
         let offset = token.text_range().start() + range.start() + pos;
         if !edit.invalidates_offset(offset) {
-            remove_newline(config, edit, token, offset);
+            remove_newline(config, edit, token, offset, unprocessed);
         }
     }
 }
@@ -84,6 +135,7 @@ fn remove_newline(
     edit: &mut TextEditBuilder,
     token: &SyntaxToken,
     offset: TextSize,
+    unprocessed: &mut JoinLines,
 ) {
     if token.kind() != WHITESPACE || token.text().bytes().filter(|&b| b == b'\n').count() != 1 {
         let n_spaces_after_line_break = {
@@ -108,12 +160,14 @@ fn remove_newline(
                         + TextSize::try_from(n_spaces_after_line_break).unwrap();
             }
         }
+        no_space |= token.kind() == WHITESPACE && offset == token.text_range().start();
 
         let range = TextRange::at(offset, ((n_spaces_after_line_break + 1) as u32).into());
         let replace_with = if no_space { "" } else { " " };
         edit.replace(range, replace_with.to_owned());
         return;
     }
+    assert_eq!(token.kind(), WHITESPACE);
 
     // The node is between two other nodes
     let (prev, next) = match (token.prev_sibling_or_token(), token.next_sibling_or_token()) {
@@ -199,8 +253,7 @@ fn remove_newline(
         return;
     }
 
-    // Remove newline but add a computed amount of whitespace characters
-    edit.replace(token.text_range(), compute_ws(prev.kind(), next.kind()).to_owned());
+    unprocessed.elements.push((prev, token.clone(), next.clone()));
 }
 
 fn join_single_expr_block(edit: &mut TextEditBuilder, token: &SyntaxToken) -> Option<()> {
@@ -265,6 +318,28 @@ fn join_assignments(
 
     edit.delete(let_stmt.semicolon_token()?.text_range().cover(lhs.syntax().text_range()));
     Some(())
+}
+
+fn join_let_stmts(edit: &mut TextEditBuilder, nodes: &[ast::LetStmt]) {
+    let first = nodes.first().unwrap();
+    let last = nodes.last().unwrap();
+    let range = first.syntax().text_range().cover(last.syntax().text_range());
+
+    let pats = nodes.iter().map(|it| it.pat().map_or(String::new(), |it| it.to_string()));
+    let exprs = nodes.iter().map(|it| it.initializer().map_or(String::new(), |it| it.to_string()));
+    let tys = nodes.iter().map(|it| it.ty().map_or_else(|| "_".to_owned(), |it| it.to_string()));
+
+    let pat = format!("({})", pats.format(", "));
+    let expr = format!("({})", exprs.format(", "));
+    let ty = if nodes.iter().any(|it| it.ty().is_some()) {
+        format!(": ({})", tys.format(", "))
+    } else {
+        "".to_owned()
+    };
+    let else_block =
+        nodes.iter().find_map(|it| it.let_else().map(|it| format!(" {it}"))).unwrap_or_default();
+    let new_let = format!("let {pat}{ty} = {expr}{else_block};");
+    edit.replace(range, new_let);
 }
 
 fn as_if_expr(element: &SyntaxElement) -> Option<ast::IfExpr> {
@@ -969,6 +1044,39 @@ $0hello world
     }
 
     #[test]
+    fn join_empty_line() {
+        check_join_lines(
+            r#"
+fn main() {
+    $02;
+
+    3;
+}
+"#,
+            r#"
+fn main() {
+    $02;
+    3;
+}
+"#,
+        );
+
+        check_join_lines(
+            r#"
+fn main() {
+    $02;
+    3;
+}
+"#,
+            r#"
+fn main() {
+    $02; 3;
+}
+"#,
+        );
+    }
+
+    #[test]
     fn join_last_line_empty() {
         check_join_lines(
             r#"
@@ -1080,6 +1188,90 @@ fn foo() {
             r#"
 fn foo() {
     let foo = "bar";$0 foo = "bar";
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn join_let_stmts() {
+        check_join_lines(
+            r#"
+fn foo() {
+    $0let x = 2;
+    let y = 3;
+}
+"#,
+            r#"
+fn foo() {
+    $0let (x, y) = (2, 3);
+}
+"#,
+        );
+
+        check_join_lines(
+            r#"
+fn foo() {
+    $0let x = 2;
+    let y = 3;
+    let other = 4;
+}
+"#,
+            r#"
+fn foo() {
+    $0let (x, y) = (2, 3);
+    let other = 4;
+}
+"#,
+        );
+
+        check_join_lines_sel(
+            r#"
+fn foo() {
+    $0let x = 2;
+    let y = 3;
+    let z = 4;
+
+    let a = 2;
+    let b = 3;
+
+    let m: i8 = 8;
+    let n = 9;
+
+    let Some(x) = Some(2) else { return };
+    let Some(y) = Some(3) else { return };$0
+}
+"#,
+            r#"
+fn foo() {
+    let (x, y, z) = (2, 3, 4);
+    let (a, b) = (2, 3);
+    let (m, n): (i8, _) = (8, 9);
+    let (Some(x), Some(y)) = (Some(2), Some(3)) else { return };
+}
+"#,
+        );
+
+        check_join_lines_sel(
+            r#"
+fn foo() {
+    $0let (
+        x
+    ) = (
+        2
+    );
+    let y = 3;$0
+    let other = 4;
+}
+"#,
+            r#"
+fn foo() {
+    let ((
+        x
+    ), y) = ((
+        2
+    ), 3);
+    let other = 4;
 }
 "#,
         );
