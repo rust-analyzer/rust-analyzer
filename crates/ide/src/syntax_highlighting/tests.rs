@@ -1666,3 +1666,67 @@ macro_rules! bar {
         false,
     );
 }
+
+#[test]
+fn test_async_highlighting() {
+    check_highlighting(
+        r#"
+//- minicore: future, pin, sized
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
+
+async fn async_fn() {}
+
+fn returns_impl_future() -> impl Future<Output = ()> {
+    async {}
+}
+
+struct MyFuture;
+
+impl Future for MyFuture {
+    type Output = ();
+    fn poll(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Self::Output> {
+        Poll::Ready(())
+    }
+}
+
+struct Foo;
+
+impl Foo {
+    async fn async_method(&self) {}
+    fn impl_future_method(&self) -> impl Future<Output = ()> {
+        async {}
+    }
+    fn concrete_future_method(&self) -> MyFuture {
+        MyFuture
+    }
+}
+
+fn returns_concrete_future() -> MyFuture {
+    MyFuture
+}
+
+type AliasFuture = MyFuture;
+
+fn returns_alias_future() -> AliasFuture {
+    MyFuture
+}
+
+fn not_async() {}
+
+fn use_them() {
+    returns_impl_future();
+    returns_concrete_future();
+    returns_alias_future();
+    not_async();
+    let foo = Foo;
+    foo.async_method();
+    foo.impl_future_method();
+    foo.concrete_future_method();
+}
+"#,
+        expect_file!["./test_data/highlight_async.html"],
+        false,
+    );
+}

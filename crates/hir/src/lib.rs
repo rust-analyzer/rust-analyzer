@@ -1703,25 +1703,26 @@ impl Function {
         }
 
         let ret_type = self.ret_type(db);
-        let Some(impl_traits) = ret_type.as_impl_traits(db) else { return false };
         let lang_items = hir_def::lang_item::lang_items(db, self.krate(db).id);
         let Some(future_trait_id) = lang_items.Future else {
             return false;
         };
-        let Some(sized_trait_id) = lang_items.Sized else {
-            return false;
-        };
 
-        let mut has_impl_future = false;
-        impl_traits
-            .filter(|t| {
-                let fut = t.id == future_trait_id;
-                has_impl_future |= fut;
-                !fut && t.id != sized_trait_id
-            })
-            // all traits but the future trait must be auto traits
-            .all(|t| t.is_auto(db))
-            && has_impl_future
+        if let Some(impl_traits) = ret_type.as_impl_traits(db) {
+            let sized_trait_id = lang_items.Sized;
+            let mut has_impl_future = false;
+            return impl_traits
+                .filter(|t| {
+                    let fut = t.id == future_trait_id;
+                    has_impl_future |= fut;
+                    !fut && sized_trait_id.is_none_or(|sid| t.id != sid)
+                })
+                // all traits but the future trait must be auto traits
+                .all(|t| t.is_auto(db))
+                && has_impl_future;
+        }
+
+        ret_type.impls_trait(db, Trait::from(future_trait_id), &[])
     }
 
     /// Does this function have `#[test]` attribute?

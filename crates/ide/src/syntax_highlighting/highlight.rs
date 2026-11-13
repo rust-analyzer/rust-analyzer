@@ -514,7 +514,7 @@ pub(super) fn highlight_def(
             if !is_ref && func.is_unsafe_to_call(db, None, edition) {
                 h |= HlMod::Unsafe;
             }
-            if func.is_async(db) {
+            if func.returns_impl_future(db) {
                 h |= HlMod::Async;
             }
             if func.is_const(db) {
@@ -700,7 +700,7 @@ fn highlight_method_call(
     if is_unsafe {
         h |= HlMod::Unsafe;
     }
-    if func.is_async(sema.db) {
+    if func.returns_impl_future(sema.db) {
         h |= HlMod::Async;
     }
     if func.is_const(sema.db) {
