@@ -1,13 +1,9 @@
 use hir::Type;
 use ide_db::FxHashMap;
-use std::iter::successors;
-use syntax::{
-    Direction,
-    algo::neighbor,
-    ast::{self, AstNode, HasName},
-};
+use std::iter;
+use syntax::ast::{self, AstNode, HasName};
 
-use crate::{AssistContext, AssistId, Assists, TextRange};
+use crate::{AssistContext, AssistId, Assists, utils};
 
 // Assist: merge_match_arms
 //
@@ -34,70 +30,104 @@ use crate::{AssistContext, AssistId, Assists, TextRange};
 // }
 // ```
 pub(crate) fn merge_match_arms(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Option<()> {
-    let current_arm = ctx.find_node_at_trimmed_offset::<ast::MatchArm>()?;
-    // Don't try to handle arms with guards for now - can add support for this later
-    if current_arm.guard().is_some() {
-        return None;
-    }
-    let current_expr = current_arm.expr()?;
-    let current_text_range = current_arm.syntax().text_range();
-    let current_arm_types = get_arm_types(ctx, &current_arm);
-    let multi_arm_selection = !ctx.has_empty_selection()
-        && ctx.selection_trimmed().end() > current_arm.syntax().text_range().end();
+    let current_match = ctx.find_node_at_offset::<ast::MatchExpr>()?;
+    let mergables = Mergeable::from_match(ctx, &current_match)?;
+    let (current_text_range, label) = match &mergables[..] {
+        [] => return None,
+        [mergeable] => (mergeable.arms[0].syntax().text_range(), "Merge match arms"),
+        _ => (current_match.syntax().text_range(), "Merge all match arms"),
+    };
 
-    // We check if the following match arms match this one. We could, but don't,
-    // compare to the previous match arm as well.
-    let arms_to_merge = successors(Some(current_arm), |it| neighbor(it, Direction::Next))
-        .take_while(|arm| match arm.expr() {
-            Some(expr) if arm.guard().is_none() => {
-                // don't include match arms that start after our selection
-                if multi_arm_selection
-                    && arm.syntax().text_range().start() >= ctx.selection_trimmed().end()
-                {
-                    return false;
-                }
+    acc.add(AssistId::refactor_rewrite("merge_match_arms"), label, current_text_range, |builder| {
+        let editor = builder.make_editor(current_match.syntax());
 
-                let same_text = expr.syntax().text() == current_expr.syntax().text();
-                if !same_text {
-                    return false;
-                }
+        for mergeable in mergables {
+            mergeable.apply(&editor);
+        }
 
-                are_same_types(&current_arm_types, arm, ctx)
+        builder.add_file_edits(ctx.vfs_file_id(), editor);
+    })
+}
+
+struct Mergeable {
+    arms: Vec<ast::MatchArm>,
+}
+impl Mergeable {
+    fn from_match(
+        ctx: &AssistContext<'_, '_>,
+        current_match: &ast::MatchExpr,
+    ) -> Option<Vec<Self>> {
+        let selection = ctx.selection_trimmed();
+        let multi_arm_selection = current_match.syntax().covering_element(selection).as_node()
+            == Some(current_match.match_arm_list()?.syntax());
+        let merge_all_arms = current_match.match_token()?.text_range().contains_range(selection);
+        let mut arms = current_match
+            .match_arm_list()?
+            .arms()
+            .skip_while(|it| !merge_all_arms && !utils::is_selected(it, selection, true))
+            .take_while(|it| {
+                !multi_arm_selection || merge_all_arms || utils::is_selected(it, selection, true)
+            })
+            .peekable();
+
+        if merge_all_arms {
+            let mut mergables = vec![];
+            while let Some(current_arm) = dbg!(arms.next()) {
+                mergables.extend(dbg!(Self::from_arms(ctx, current_arm, &mut arms)));
             }
-            _ => false,
-        })
-        .collect::<Vec<_>>();
-
-    if arms_to_merge.len() <= 1 {
-        return None;
+            Some(mergables)
+        } else {
+            // We check if the following match arms match this one.
+            // We could, but don't, compare to the previous match arm as well.
+            let current_arm = arms.next()?;
+            let mergeable = Self::from_arms(ctx, current_arm, &mut arms)?;
+            Some(vec![mergeable])
+        }
     }
 
-    acc.add(
-        AssistId::refactor_rewrite("merge_match_arms"),
-        "Merge match arms",
-        current_text_range,
-        |edit| {
-            let pats = if arms_to_merge.iter().any(contains_placeholder) {
-                "_".into()
-            } else {
-                arms_to_merge
-                    .iter()
-                    .filter_map(ast::MatchArm::pat)
-                    .map(|x| x.syntax().to_string())
-                    .collect::<Vec<String>>()
-                    .join(" | ")
-            };
+    fn from_arms(
+        ctx: &AssistContext<'_, '_>,
+        current_arm: ast::MatchArm,
+        arms: &mut iter::Peekable<impl Iterator<Item = ast::MatchArm>>,
+    ) -> Option<Self> {
+        // Don't try to handle arms with guards for now - can add support for this later
+        if current_arm.guard().is_some() {
+            return None;
+        }
+        let current_expr = current_arm.expr()?;
+        let current_arm_types = get_arm_types(ctx, &current_arm);
+        let mut mergable_arms = vec![current_arm];
 
-            let arm = format!("{pats} => {current_expr},");
-
-            if let [first, .., last] = &*arms_to_merge {
-                let start = first.syntax().text_range().start();
-                let end = last.syntax().text_range().end();
-
-                edit.replace(TextRange::new(start, end), arm);
+        while let Some(arm) = arms.peek()
+            && arm.guard().is_none()
+        {
+            let Some(expr) = arm.expr() else { break };
+            let same_text = expr.syntax().text() == current_expr.syntax().text();
+            if !same_text || !are_same_types(&current_arm_types, arm, ctx) {
+                break;
             }
-        },
-    )
+            mergable_arms.push(arms.next().unwrap());
+        }
+
+        (mergable_arms.len() > 1).then_some(Self { arms: mergable_arms })
+    }
+
+    fn apply(&self, editor: &syntax::syntax_editor::SyntaxEditor) {
+        let [first, .., last] = self.arms.as_slice() else { return };
+        let make = editor.make();
+
+        let start = first.syntax().clone().into();
+        let end = last.syntax().clone().into();
+
+        let pats = if self.arms.iter().any(contains_placeholder) {
+            make.wildcard_pat().into()
+        } else {
+            make.or_pat(self.arms.iter().filter_map(ast::MatchArm::pat), false).into()
+        };
+        let new = make.match_arm(pats, None, first.expr().unwrap());
+
+        editor.replace_all(start..=end, vec![new.syntax().clone().into()]);
+    }
 }
 
 fn contains_placeholder(a: &ast::MatchArm) -> bool {
@@ -207,7 +237,7 @@ enum X { A, B, C }
 fn main() {
     let x = X::A;
     let y = match x {
-        X::A | X::B => { 1i32 },
+        X::A | X::B => { 1i32 }
         X::C => { 2i32 }
     }
 }
@@ -241,7 +271,7 @@ use X::*;
 fn main() {
     let x = A;
     let y = match x {
-        A | B => { 1i32 },
+        A | B => { 1i32 }
         C => { 2i32 }
     }
 }
@@ -273,8 +303,43 @@ enum X { A, B, C, D, E }
 fn main() {
     let x = X::A;
     let y = match x {
-        X::A | X::B | X::C | X::D => { 1i32 },
+        X::A | X::B | X::C | X::D => { 1i32 }
         X::E => { 2i32 },
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn merge_match_arms_all_patterns() {
+        check_assist(
+            merge_match_arms,
+            r#"
+#[derive(Debug)]
+enum X { A, B, C, D, E }
+
+fn main() {
+    let x = X::A;
+    let y = $0match x {
+        X::A => 1i32,
+        X::B => 1i32,
+        X::C => 2i32,
+        X::D => 3i32,
+        X::E => 3i32,
+    }
+}
+"#,
+            r#"
+#[derive(Debug)]
+enum X { A, B, C, D, E }
+
+fn main() {
+    let x = X::A;
+    let y = match x {
+        X::A | X::B => 1i32,
+        X::C => 2i32,
+        X::D | X::E => 3i32,
     }
 }
 "#,
@@ -306,7 +371,7 @@ fn main() {
     let x = X::A;
     let y = match x {
         X::A => { 1i32 },
-        _ => { 2i32 },
+        _ => { 2i32 }
     }
 }
 "#,
@@ -449,8 +514,8 @@ enum X {
 fn main() {
     let x = X::A;
     let y = match x {
-        X::A(a) if a > 5 => { $01i32 },
-        X::B => { 1i32 },
+        X::A(a) if a > 5 => { $01i32 }
+        X::B => { 1i32 }
         X::C => { 2i32 }
     }
 }

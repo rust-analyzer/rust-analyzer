@@ -142,6 +142,7 @@ impl<'a, 'db> AssistContext<'a, 'db> {
     pub(crate) fn find_node_at_offset<N: AstNode>(&self) -> Option<N> {
         find_node_at_offset(self.source_file.syntax(), self.offset())
     }
+    #[allow(dead_code)]
     pub(crate) fn find_node_at_trimmed_offset<N: AstNode>(&self) -> Option<N> {
         find_node_at_offset(self.source_file.syntax(), self.trimmed_range.start())
     }

@@ -70,7 +70,6 @@ pub mod utils;
 
 use hir::Semantics;
 use ide_db::RootDatabase;
-use syntax::TextRange;
 
 pub(crate) use crate::assist_context::{AssistContext, Assists};
 
