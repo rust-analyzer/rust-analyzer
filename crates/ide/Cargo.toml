@@ -15,6 +15,7 @@ doctest = false
 [dependencies]
 cov-mark = "2.0.0"
 arrayvec.workspace = true
+dashmap.workspace = true
 either.workspace = true
 itertools.workspace = true
 tracing.workspace = true
