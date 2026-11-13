@@ -1,6 +1,6 @@
 use hir::HasSource;
 use syntax::{
-    Edition,
+    Edition, ToSmolStr,
     ast::{self, AstNode, syntax_factory::SyntaxFactory},
     syntax_editor::{Position, SyntaxEditor},
 };
@@ -8,10 +8,7 @@ use syntax::{
 use crate::{
     AssistId,
     assist_context::{AssistContext, Assists},
-    utils::{
-        DefaultMethods, IgnoreAssocItems, add_trait_assoc_items_to_impl, filter_assoc_items,
-        gen_trait_fn_body,
-    },
+    utils::{DefaultMethods, IgnoreAssocItems},
 };
 
 // Assist: add_impl_missing_members
@@ -108,13 +105,12 @@ fn add_missing_impl_members_inner(
     acc: &mut Assists,
     ctx: &AssistContext<'_, '_>,
     mode: DefaultMethods,
-    ignore_items: IgnoreAssocItems,
+    mut ignore_items: IgnoreAssocItems,
     assist_id: &'static str,
     label: &'static str,
 ) -> Option<()> {
     let _p = tracing::info_span!("add_missing_impl_members_inner").entered();
     let impl_def = ctx.find_node_at_offset::<ast::Impl>()?;
-    let impl_ = ctx.sema.to_def(&impl_def)?;
 
     if ctx.token_at_offset().all(|t| {
         t.parent_ancestors()
@@ -124,37 +120,34 @@ fn add_missing_impl_members_inner(
         return None;
     }
 
-    let target_scope = ctx.sema.scope(impl_def.syntax())?;
+    let impl_ = ctx.sema.to_def(&impl_def)?;
     let trait_ref = impl_.trait_ref(ctx.db())?;
     let trait_ = trait_ref.trait_();
 
-    let mut ign_item = ignore_items;
-
-    if let IgnoreAssocItems::DocHiddenAttrPresent = ignore_items {
-        // Relax condition for local crates.
-        let db = ctx.db();
-        if trait_.module(db).krate(db).origin(db).is_local() {
-            ign_item = IgnoreAssocItems::No;
-        }
+    // Relax condition for local crates.
+    let db = ctx.db();
+    if trait_.module(db).krate(db).origin(db).is_local() {
+        ignore_items = IgnoreAssocItems::No;
     }
 
-    let missing_items = filter_assoc_items(
+    let missing_items = crate::utils::filter_assoc_items(
         &ctx.sema,
         trait_,
         &ide_db::traits::get_missing_assoc_items(&ctx.sema, &impl_def),
         mode,
-        ign_item,
+        ignore_items,
     );
 
     if missing_items.is_empty() {
         return None;
     }
 
-    let target = impl_def.syntax().text_range();
-    acc.add(AssistId::quick_fix(assist_id), label, target, |edit| {
+    let target_scope = ctx.sema.scope(impl_def.syntax())?;
+
+    acc.add(AssistId::quick_fix(assist_id), label, impl_def.syntax().text_range(), |edit| {
         let editor = edit.make_editor(impl_def.syntax());
         let make = editor.make();
-        let new_item = add_trait_assoc_items_to_impl(
+        let new_items = crate::utils::add_trait_assoc_items_to_impl(
             make,
             &ctx.sema,
             ctx.config,
@@ -165,7 +158,7 @@ fn add_missing_impl_members_inner(
             mode,
         );
 
-        let Some((first_new_item, other_items)) = new_item.split_first() else {
+        let Some((first_new_item, other_items)) = new_items.split_first() else {
             return;
         };
 
@@ -188,11 +181,8 @@ fn add_missing_impl_members_inner(
             Some(first_new_item.clone())
         };
 
-        let new_assoc_items = first_new_item
-            .clone()
-            .into_iter()
-            .chain(other_items.iter().cloned())
-            .collect::<Vec<_>>();
+        let new_assoc_items: Vec<ast::AssocItem> =
+            first_new_item.clone().into_iter().chain(other_items.iter().cloned()).collect();
 
         if let Some(assoc_item_list) = impl_def.assoc_item_list() {
             assoc_item_list.add_items(&editor, new_assoc_items);
@@ -223,6 +213,7 @@ fn add_missing_impl_members_inner(
                 editor.add_annotation(first_new_item.syntax(), tabstop);
             };
         };
+
         edit.add_file_edits(ctx.vfs_file_id(), editor);
     })
 }
@@ -235,11 +226,12 @@ fn try_gen_trait_body(
     impl_def: &ast::Impl,
     edition: Edition,
 ) -> Option<ast::BlockExpr> {
+    let db = ctx.db();
     let trait_path =
-        make.ident_path(&trait_ref.trait_().name(ctx.db()).display(ctx.db(), edition).to_string());
+        make.ident_path(&trait_ref.trait_().name(db).display(db, edition).to_smolstr());
     let hir_ty = ctx.sema.resolve_type(&impl_def.self_ty()?)?;
-    let adt = hir_ty.as_adt()?.source(ctx.db())?;
-    gen_trait_fn_body(make, func, &trait_path, &adt.value, Some(trait_ref))
+    let adt = hir_ty.as_adt()?.source(db)?;
+    crate::utils::gen_trait_fn_body(make, func, &trait_path, &adt.value, Some(trait_ref))
 }
 
 #[cfg(test)]
@@ -2621,6 +2613,307 @@ impl Allocator for System {
     fn deallocate(&self, p: u8) {
         ${0:todo!()}
     }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_single_generic_name_collision() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<A> { fn bar<T: IntoIterator<Item = A>>(iter: T) -> Self; }
+impl<T> Foo<T> for () {
+    $0
+}"#,
+            r#"
+trait Foo<A> { fn bar<T: IntoIterator<Item = A>>(iter: T) -> Self; }
+impl<T> Foo<T> for () {
+    fn bar<T1: IntoIterator<Item = T>>(iter: T1) -> Self {
+        ${0:todo!()}
+    }
+}"#,
+        );
+    }
+
+    #[test]
+    fn test_multiple_generic_name_collisions1() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<A, B> {
+    fn bar<T: IntoIterator<Item = A>, U: IntoIterator<Item = B>>(iter: T, iter2: U) -> Self;
+}
+impl<T, U> Foo<T, U> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<A, B> {
+    fn bar<T: IntoIterator<Item = A>, U: IntoIterator<Item = B>>(iter: T, iter2: U) -> Self;
+}
+impl<T, U> Foo<T, U> for () {
+    fn bar<T1: IntoIterator<Item = T>, U1: IntoIterator<Item = U>>(iter: T1, iter2: U1) -> Self {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_multiple_generic_name_collisions2() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<A, B> {
+    fn bar<T: IntoIterator<Item = A>, U: IntoIterator<Item = B>>(iter: T, iter2: U) -> Self;
+}
+impl<T, B> Foo<T, B> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<A, B> {
+    fn bar<T: IntoIterator<Item = A>, U: IntoIterator<Item = B>>(iter: T, iter2: U) -> Self;
+}
+impl<T, B> Foo<T, B> for () {
+    fn bar<T1: IntoIterator<Item = T>, U: IntoIterator<Item = B>>(iter: T1, iter2: U) -> Self {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_generic_name_collision_with_existing_renames() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<A> {
+    fn bar<T: IntoIterator<Item = A>>(iter: T) -> Self;
+}
+impl<T, T1> Foo<T> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<A> {
+    fn bar<T: IntoIterator<Item = A>>(iter: T) -> Self;
+}
+impl<T, T1> Foo<T> for () {
+    fn bar<T2: IntoIterator<Item = T>>(iter: T2) -> Self {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_single_const_generic_name_collision() {
+        check_assist(
+            add_missing_default_members,
+            r#"
+trait Foo<const M: usize> {
+    fn bar<const N: usize>() -> usize {
+        M
+    }
+}
+impl<const N: usize> Foo<N> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<const M: usize> {
+    fn bar<const N: usize>() -> usize {
+        M
+    }
+}
+impl<const N: usize> Foo<N> for () {
+    $0fn bar<const N1: usize>() -> usize {
+        N
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_multiple_const_generic_name_collisions1() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<const M: usize, const N: usize> {
+    fn bar<const J: usize, const K: usize>() -> usize;
+}
+impl<const J: usize, const K: usize, const N: usize> Foo<J, K> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<const M: usize, const N: usize> {
+    fn bar<const J: usize, const K: usize>() -> usize;
+}
+impl<const J: usize, const K: usize, const N: usize> Foo<J, K> for () {
+    fn bar<const J1: usize, const K1: usize>() -> usize {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_mixed_generic_collisions() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<A, B, const C: usize, const D: usize> {
+    fn bar<T, U, const M: usize, const N: usize>(
+        a: A, b: B, t: T, u: U,
+        ac: [A; C], bn: [B; N], mc: [T; M], ud: [U; D],
+    );
+}
+impl<A, U, const C: usize, const N: usize> Foo<A, U, C, N> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<A, B, const C: usize, const D: usize> {
+    fn bar<T, U, const M: usize, const N: usize>(
+        a: A, b: B, t: T, u: U,
+        ac: [A; C], bn: [B; N], mc: [T; M], ud: [U; D],
+    );
+}
+impl<A, U, const C: usize, const N: usize> Foo<A, U, C, N> for () {
+    fn bar<T, U1, const M: usize, const N1: usize>(
+        a: A, b: U, t: T, u: U1,
+        ac: [A; C], bn: [U; N1], mc: [T; M], ud: [U1; N],
+    ) {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_single_lifetime_collision() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<'b> {
+    fn bar<'a>(&'a self, other: &'b i32);
+}
+impl<'a> Foo<'a> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<'b> {
+    fn bar<'a>(&'a self, other: &'b i32);
+}
+impl<'a> Foo<'a> for () {
+    fn bar<'a1>(&'a1 self, other: &'a i32) {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_multiple_lifetime_collisions() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<'m, 'n> {
+    fn bar<'a, 'b>(&'a self, other: &'b i32);
+}
+impl<'a, 'b> Foo<'a, 'b> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<'m, 'n> {
+    fn bar<'a, 'b>(&'a self, other: &'b i32);
+}
+impl<'a, 'b> Foo<'a, 'b> for () {
+    fn bar<'a1, 'b1>(&'a1 self, other: &'b1 i32) {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_all_kinds_of_collisions() {
+        check_assist(
+            add_missing_impl_members,
+            r#"
+trait Foo<'g, 'h, A, B, const C: usize, const D: usize> {
+    fn bar<'j, 'k, T, U, const M: usize, const N: usize>(
+        a: A, b: B, t: T, u: U,
+        ac: [A; C], bn: [B; N], mc: [T; M], ud: [U; D],
+        life1: &'g str, life2: &'h str, life3: &'j str, life4: &'k str,
+    );
+}
+impl<'g, 'k, A, U, const C: usize, const N: usize> Foo<'g, 'k, A, U, C, N> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<'g, 'h, A, B, const C: usize, const D: usize> {
+    fn bar<'j, 'k, T, U, const M: usize, const N: usize>(
+        a: A, b: B, t: T, u: U,
+        ac: [A; C], bn: [B; N], mc: [T; M], ud: [U; D],
+        life1: &'g str, life2: &'h str, life3: &'j str, life4: &'k str,
+    );
+}
+impl<'g, 'k, A, U, const C: usize, const N: usize> Foo<'g, 'k, A, U, C, N> for () {
+    fn bar<'j, 'k1, T, U1, const M: usize, const N1: usize>(
+        a: A, b: U, t: T, u: U1,
+        ac: [A; C], bn: [U; N1], mc: [T; M], ud: [U1; N],
+        life1: &'g str, life2: &'k str, life3: &'j str, life4: &'k1 str,
+    ) {
+        ${0:todo!()}
+    }
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn test_default_name_collisions() {
+        check_assist(
+            add_missing_default_members,
+            r#"
+trait Foo<'g, 'h, A, B, const C: usize, const D: usize> {
+    fn complex<'j, 'k, T, U>(x: &'j T, y: &'k U) -> Box<dyn Fn(&'j T) -> &'k U>
+    where
+        T: 'j, U: 'h, 'g: 'j, 'j: 'g,
+    { Box::new(move |z: &'g T| -> &'k U { unimplemented!() }) }
+}
+impl<'g, 'k, A, U, const C: usize, const N: usize> Foo<'g, 'k, A, U, C, N> for () {
+    $0
+}
+"#,
+            r#"
+trait Foo<'g, 'h, A, B, const C: usize, const D: usize> {
+    fn complex<'j, 'k, T, U>(x: &'j T, y: &'k U) -> Box<dyn Fn(&'j T) -> &'k U>
+    where
+        T: 'j, U: 'h, 'g: 'j, 'j: 'g,
+    { Box::new(move |z: &'g T| -> &'k U { unimplemented!() }) }
+}
+impl<'g, 'k, A, U, const C: usize, const N: usize> Foo<'g, 'k, A, U, C, N> for () {
+    $0fn complex<'j, 'k1, T, U1>(x: &'j T, y: &'k1 U1) -> Box<dyn Fn(&'j T) -> &'k1 U1>
+    where
+        T: 'j, U1: 'k, 'g: 'j, 'j: 'g,
+    { Box::new(move |z: &'g T| -> &'k1 U1 { unimplemented!() }) }
 }
 "#,
         );
