@@ -10180,6 +10180,134 @@ fn fn_$0(
 }
 
 #[test]
+fn test_hover_function_param_generic_bounds() {
+    check(
+        r#"
+//- minicore: sized
+trait Bound {}
+fn foo<T: Bound>(param: T) {
+    let _ = param$0;
+}
+        "#,
+        expect![[r#"
+            *param*
+
+            ```rust
+            param: T
+            where
+                T: Bound
+            ```
+        "#]],
+    );
+
+    check(
+        r#"
+//- minicore: sized
+trait Bound {}
+fn foo<T>(param: T)
+where
+    T: Bound,
+{
+    let _ = param$0;
+}
+        "#,
+        expect![[r#"
+            *param*
+
+            ```rust
+            param: T
+            where
+                T: Bound
+            ```
+        "#]],
+    );
+
+    check(
+        r#"
+//- minicore: sized
+trait Bound {}
+fn foo<T>(param: T)
+where
+    T: Bound,
+{
+    let used$0 = param;
+}
+        "#,
+        expect![[r#"
+            *used*
+
+            ```rust
+            let used: T
+            where
+                T: Bound
+            ```
+
+            ---
+
+            type param may need Drop
+        "#]],
+    );
+
+    check(
+        r#"
+//- minicore: sized
+trait Bound {}
+trait Bound2 {}
+fn foo<T>(param: T)
+where
+    T: Bound,
+    T: Bound2,
+{
+    let used$0 = param;
+}
+        "#,
+        expect![[r#"
+            *used*
+
+            ```rust
+            let used: T
+            where
+                T: Bound + Bound2
+            ```
+
+            ---
+
+            type param may need Drop
+        "#]],
+    );
+
+    // XXX: Maybe `U` has more bounds that need to be show
+    check(
+        r#"
+//- minicore: sized
+trait Bound {}
+trait Bound1 {}
+struct Foo<T: Bound> { field: T }
+fn foo<U: Bound + Bound1>(param: Foo<U>) {
+    let _ = param.field$0;
+}
+        "#,
+        expect![[r#"
+            *field*
+
+            ```rust
+            ra_test_fixture::Foo
+            ```
+
+            ```rust
+            field: T
+            where
+                T: Bound
+            ```
+
+            ---
+
+            `T` = `U`
+        "#]],
+    );
+}
+
+#[test]
 fn hover_path_inside_block_scope() {
     check(
         r#"

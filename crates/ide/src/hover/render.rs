@@ -447,6 +447,7 @@ pub(super) fn definition(
     db: &RootDatabase,
     def: Definition<'_>,
     famous_defs: Option<&FamousDefs<'_, '_>>,
+    def_ty: Option<Type<'_>>,
     notable_traits: &[(Trait, Vec<(Option<Type<'_>>, Name)>)],
     macro_arm: Option<u32>,
     render_extras: bool,
@@ -593,6 +594,18 @@ pub(super) fn definition(
             })
         }
         _ => None,
+    };
+
+    let type_params_info = || {
+        if matches!(def, Definition::GenericParam(_)) {
+            return None;
+        }
+        // FIXME: Show nested type params, such as `Vec<T, A>` shows `T` and `A`
+        let type_param = def_ty?.as_type_param(db)?;
+        if type_param.is_implicit(db) || type_param.trait_bounds(db).is_empty() {
+            return None;
+        }
+        Some(type_param.display(db, display_target).to_string())
     };
 
     let layout_info = || match def {
@@ -793,6 +806,10 @@ pub(super) fn definition(
     if let Some(value) = value() {
         desc.push_str(" = ");
         desc.push_str(&value);
+    }
+    if let Some(type_params_info) = type_params_info() {
+        desc.push_str("\nwhere\n    ");
+        desc.push_str(&type_params_info);
     }
 
     let subst_types = match config.max_subst_ty_len {
