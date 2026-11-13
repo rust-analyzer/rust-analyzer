@@ -158,18 +158,23 @@ pub(crate) fn runnables(db: &RootDatabase, file_id: FileId) -> Vec<Runnable> {
             Definition::SelfType(impl_) => runnable_impl(&sema, &impl_),
             _ => None,
         };
+
         add_opt(runnable.or_else(|| module_def_doctest(&sema, def)), Some(def));
-        if let Definition::SelfType(impl_) = def {
-            impl_.items(db).into_iter().for_each(|assoc| {
-                let runnable = match assoc {
-                    hir::AssocItem::Function(it) => {
-                        runnable_fn(&sema, it).or_else(|| module_def_doctest(&sema, it.into()))
-                    }
-                    hir::AssocItem::Const(it) => module_def_doctest(&sema, it.into()),
-                    hir::AssocItem::TypeAlias(it) => module_def_doctest(&sema, it.into()),
-                };
-                add_opt(runnable, Some(assoc.into()))
-            });
+
+        let assoc_items = match def {
+            Definition::SelfType(impl_) => impl_.items(db),
+            Definition::Trait(trait_) => trait_.items(db),
+            _ => return,
+        };
+
+        for assoc in assoc_items {
+            let runnable = match assoc {
+                hir::AssocItem::Function(it) if matches!(def, Definition::SelfType(_)) => {
+                    runnable_fn(&sema, it).or_else(|| module_def_doctest(&sema, it.into()))
+                }
+                _ => module_def_doctest(&sema, assoc.into()),
+            };
+            add_opt(runnable, Some(assoc.into()));
         }
     });
 
@@ -530,6 +535,9 @@ fn module_def_doctest(sema: &Semantics<'_, RootDatabase>, def: Definition<'_>) -
             format_to!(path, "::{}", def_name.display(db, edition));
             path.retain(|c| c != ' ');
             return Some(path);
+        }
+        if let Some(trait_) = def.as_assoc_item(db).and_then(|it| it.container_trait(db)) {
+            format_to!(path, "{}::", trait_.name(db).display(db, edition));
         }
         format_to!(path, "{}", def_name.display(db, edition));
         Some(path)
@@ -925,6 +933,72 @@ impl Test for StructWithRunnable {}
                 ]
             "#]],
         );
+    }
+
+    #[test]
+    fn test_runnables_doc_test_in_trait() {
+        let (analysis, position) = fixture::position(
+            r#"
+//- /lib.rs
+$0
+mod module {
+    /// ```
+    /// assert!(true);
+    /// ```
+    trait Trait<T> {
+        /// ```
+        /// assert!(true);
+        /// ```
+        fn method(&self);
+
+        /// ```
+        /// assert!(true);
+        /// ```
+        fn default_method(&self) {}
+
+        /// ```
+        /// assert!(true);
+        /// ```
+        const CONSTANT: usize;
+
+        /// ```
+        /// assert!(true);
+        /// ```
+        type Type;
+
+        fn undocumented(&self);
+    }
+}
+
+trait Root {
+    /// ```
+    /// assert!(true);
+    /// ```
+    fn main();
+}
+
+trait Undocumented {
+    fn main();
+}
+"#,
+        );
+        let labels = analysis
+            .runnables(position.file_id)
+            .unwrap()
+            .into_iter()
+            .map(|runnable| runnable.label(None))
+            .collect::<Vec<_>>();
+        expect![[r#"
+            [
+                "doctest module::Trait",
+                "doctest module::Trait::method",
+                "doctest module::Trait::default_method",
+                "doctest module::Trait::CONSTANT",
+                "doctest module::Trait::Type",
+                "doctest Root::main",
+            ]
+        "#]]
+        .assert_debug_eq(&labels);
     }
 
     #[test]
