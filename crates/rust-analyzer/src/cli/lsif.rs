@@ -317,7 +317,7 @@ impl flags::Lsif {
             VendoredLibrariesConfig::Included { workspace_root: &path.clone().into() }
         };
 
-        let si = StaticIndex::compute(&analysis, vendored_libs_config, true);
+        let si = StaticIndex::compute(&analysis, vendored_libs_config, true, 1);
 
         let mut lsif = LsifManager::new(&analysis, db, &vfs, out);
         lsif.add_vertex(lsif::Vertex::MetaData(lsif::MetaData {
@@ -333,7 +333,22 @@ impl flags::Lsif {
         for file in si.files {
             lsif.add_file(file);
         }
-        for (id, token) in si.tokens.iter() {
+
+        // The output order depends on the iteration order, make that order somewhat stable to avoid making lsif_contains_generated_constant flaky
+        let tokens = {
+            let mut tokens: Vec<_> = si.tokens.iter().collect();
+            tokens.sort_by_key(|(_, token)| {
+                (
+                    token.references[0].range.file_id,
+                    token.references[0].range.range.start(),
+                    token.references[0].range.range.end(),
+                    token.kind,
+                )
+            });
+            tokens
+        };
+
+        for (id, token) in tokens {
             lsif.add_token(id, token);
         }
         eprintln!("Generating LSIF finished in {:?}", now.elapsed());

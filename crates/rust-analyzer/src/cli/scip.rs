@@ -22,7 +22,8 @@ use crate::{
 
 impl flags::Scip {
     pub fn run(self) -> anyhow::Result<()> {
-        eprintln!("Generating SCIP start...");
+        let num_threads = self.num_threads.unwrap_or_else(num_cpus::get_physical);
+        eprintln!("Generating SCIP start with {num_threads} threads...");
         let now = Instant::now();
 
         let no_progress = &|s| eprintln!("rust-analyzer: Loading {s}");
@@ -52,7 +53,7 @@ impl flags::Scip {
             load_out_dirs_from_check: true,
             with_proc_macro_server: ProcMacroServerChoice::Sysroot,
             prefill_caches: true,
-            num_worker_threads: self.num_threads.unwrap_or_else(num_cpus::get_physical),
+            num_worker_threads: num_threads,
             proc_macro_processes: config.proc_macro_num_processes(),
         };
         let cargo_config = config.cargo(None);
@@ -72,7 +73,7 @@ impl flags::Scip {
             VendoredLibrariesConfig::Included { workspace_root: &root.clone().into() }
         };
 
-        let si = StaticIndex::compute(&analysis, vendored_libs_config, false);
+        let si = StaticIndex::compute(&analysis, vendored_libs_config, false, num_threads);
 
         let metadata = scip_types::Metadata {
             version: scip_types::ProtocolVersion::UnspecifiedProtocolVersion.into(),
@@ -145,7 +146,7 @@ impl flags::Scip {
                 let token = si.tokens.get(id).unwrap();
 
                 let Some(TokenSymbols { symbol, enclosing_symbol, is_inherent_impl }) =
-                    symbol_generator.token_symbols(id, token)
+                    symbol_generator.token_symbols(id, token.value())
                 else {
                     // token did not have a moniker, so there is no reasonable occurrence to emit
                     // see ide::moniker::def_to_moniker
@@ -171,7 +172,7 @@ impl flags::Scip {
                             symbols.push(compute_symbol_info(
                                 symbol.clone(),
                                 enclosing_symbol,
-                                token,
+                                token.value(),
                             ));
                         }
                     }
@@ -253,7 +254,7 @@ impl flags::Scip {
             }
 
             let TokenSymbols { symbol, enclosing_symbol, .. } = symbol_generator
-                .token_symbols(id, token)
+                .token_symbols(id, token.value())
                 .expect("To have been referenced, the symbol must be in the cache.");
 
             record_error_if_symbol_already_used(
@@ -263,7 +264,11 @@ impl flags::Scip {
                 &line_index,
                 text_range,
             );
-            external_symbols.push(compute_symbol_info(symbol.clone(), enclosing_symbol, token));
+            external_symbols.push(compute_symbol_info(
+                symbol.clone(),
+                enclosing_symbol,
+                token.value(),
+            ));
         }
 
         let index = scip_types::Index {
@@ -542,6 +547,7 @@ mod test {
                 workspace_root: &VfsPath::new_virtual_path("/workspace".to_owned()),
             },
             false,
+            1,
         );
 
         let FilePosition { file_id, offset } = position;
@@ -988,6 +994,7 @@ pub mod example_mod {
                 workspace_root: &VfsPath::new_virtual_path("/workspace".to_owned()),
             },
             false,
+            1,
         );
 
         let file = si.files.first().unwrap();
@@ -1012,6 +1019,7 @@ pub mod example_mod {
                 workspace_root: &VfsPath::new_virtual_path("/workspace".to_owned()),
             },
             false,
+            1,
         );
 
         let file = si.files.first().unwrap();
@@ -1041,6 +1049,7 @@ pub mod example_mod {
                 workspace_root: &VfsPath::new_virtual_path("/workspace".to_owned()),
             },
             false,
+            1,
         );
 
         let file = si.files.first().unwrap();
@@ -1074,6 +1083,7 @@ pub mod example_mod {
                 workspace_root: &VfsPath::new_virtual_path("/workspace".to_owned()),
             },
             false,
+            1,
         );
 
         let file = si.files.first().unwrap();

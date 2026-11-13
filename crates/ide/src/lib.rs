@@ -240,7 +240,7 @@ impl Default for AnalysisHost {
 /// entry point for asking semantic information about the world. When the world
 /// state is advanced using `AnalysisHost::apply_change` method, all existing
 /// `Analysis` are canceled (most method return `Err(Canceled)`).
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Analysis {
     db: RootDatabase,
 }
