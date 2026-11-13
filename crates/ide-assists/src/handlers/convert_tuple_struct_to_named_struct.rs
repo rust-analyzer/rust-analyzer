@@ -1,5 +1,6 @@
 use either::Either;
 use ide_db::{
+    FxHashSet,
     defs::{Definition, NameRefClass},
     search::FileReference,
 };
@@ -155,9 +156,12 @@ fn edit_struct_references(
     for (file_id, refs) in usages {
         let source = ctx.sema.parse(file_id);
         let editor = edit.make_editor(source.syntax());
-
+        // a macro expanding $e twice yields two FileReferences with identical source ranges
+        let mut seen = FxHashSet::default();
         for r in refs {
-            process_struct_name_reference(ctx, r, &editor, &source, &strukt_def, names);
+            if seen.insert(r.range) {
+                process_struct_name_reference(ctx, r, &editor, &source, &strukt_def, names);
+            }
         }
 
         edit.add_file_edits(file_id.file_id(ctx.db()), editor);
@@ -354,9 +358,12 @@ fn edit_field_references(
         for (file_id, refs) in usages {
             let source = ctx.sema.parse(file_id);
             let editor = edit.make_editor(source.syntax());
+            // a macro expanding $e twice yields two FileReferences with identical source ranges
+            let mut seen = FxHashSet::default();
             for r in refs {
                 if let Some(name_ref) = r.name.as_name_ref()
                     && let Some(original) = ctx.sema.original_range_opt(name_ref.syntax())
+                    && seen.insert(r.range)
                 {
                     editor.replace_all(
                         cover_edit_range(source.syntax(), original.range),
@@ -1409,6 +1416,23 @@ impl T2 for S {
     }
 }
             "#,
+        );
+    }
+
+    #[test]
+    fn field_ref_in_macro_expanding_arg_twice() {
+        check_assist(
+            convert_tuple_struct_to_named_struct,
+            r#"
+struct $0Foo(i32);
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn f(foo: Foo) { m!(foo.0); }
+"#,
+            r#"
+struct Foo { field1: i32 }
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn f(foo: Foo) { m!(foo.field1); }
+"#,
         );
     }
 }

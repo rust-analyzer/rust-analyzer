@@ -1,4 +1,5 @@
 use ide_db::{
+    FxHashSet,
     assists::AssistId,
     defs::Definition,
     search::{FileReference, SearchScope},
@@ -250,11 +251,14 @@ fn edit_tuple_usages(
     // tree mutation in the same file breaks when `builder.edit_file`
     // is called
 
+    // a macro expanding $e twice yields two FileReferences with identical source ranges
+    let mut seen = FxHashSet::default();
     let edits = data
         .usages
         .as_ref()?
         .as_slice()
         .iter()
+        .filter(|r| seen.insert(r.range))
         .filter_map(|r| edit_tuple_usage(ctx, make, r, data, in_sub_pattern))
         .collect_vec();
 
@@ -1652,6 +1656,26 @@ macro_rules! m {
 fn main() {
     let t @ ($0_0, _1) = (1,2);
     m!(t, _0);
+}
+                "#,
+            )
+        }
+
+        #[test]
+        fn tuple_index_in_macro_expanding_arg_twice() {
+            check_in_place_assist(
+                r#"
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn main() {
+    let $0t = (1,);
+    m!(t.0);
+}
+                "#,
+                r#"
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn main() {
+    let ($0_0,) = (1,);
+    m!(_0);
 }
                 "#,
             )

@@ -1,5 +1,5 @@
 use either::Either;
-use ide_db::{defs::Definition, search::FileReference};
+use ide_db::{FxHashSet, defs::Definition, search::FileReference};
 use syntax::{
     NodeOrToken, SyntaxKind, SyntaxNode, T,
     algo::next_non_trivia_token,
@@ -166,8 +166,12 @@ fn edit_struct_references(
     for (file_id, refs) in usages {
         let source = ctx.sema.parse(file_id);
         let editor = builder.make_editor(source.syntax());
+        // a macro expanding $e twice yields two FileReferences with identical source ranges
+        let mut seen = FxHashSet::default();
         for r in refs {
-            process_struct_name_reference(ctx, r, &editor, &source);
+            if seen.insert(r.range) {
+                process_struct_name_reference(ctx, r, &editor, &source);
+            }
         }
         builder.add_file_edits(file_id.file_id(ctx.db()), editor);
     }
@@ -298,15 +302,17 @@ fn edit_field_references(
             let editor = builder.make_editor(source.syntax());
             let make = editor.make();
 
+            // a macro expanding $e twice yields two FileReferences with identical source ranges
+            let mut seen = FxHashSet::default();
             for r in refs {
-                if let Some(name_ref) = r.name.as_name_ref() {
-                    // Only edit the field reference if it's part of a `.field` access
-                    if name_ref.syntax().parent().and_then(ast::FieldExpr::cast).is_some() {
-                        editor.replace_all(
-                            cover_edit_range(source.syntax(), r.range),
-                            vec![make.name_ref(&index.to_string()).syntax().clone().into()],
-                        );
-                    }
+                if let Some(name_ref) = r.name.as_name_ref()
+                    && name_ref.syntax().parent().and_then(ast::FieldExpr::cast).is_some()
+                    && seen.insert(r.range)
+                {
+                    editor.replace_all(
+                        cover_edit_range(source.syntax(), r.range),
+                        vec![make.name_ref(&index.to_string()).syntax().clone().into()],
+                    );
                 }
             }
 
@@ -1302,6 +1308,23 @@ pub struct $0Foo {
 "#,
             r#"
 pub struct Foo(#[my_custom_attr]u32);
+"#,
+        );
+    }
+
+    #[test]
+    fn field_ref_in_macro_expanding_arg_twice() {
+        check_assist(
+            convert_named_struct_to_tuple_struct,
+            r#"
+struct $0Foo { x: i32 }
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn f(foo: Foo) { m!(foo.x); }
+"#,
+            r#"
+struct Foo(i32);
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn f(foo: Foo) { m!(foo.0); }
 "#,
         );
     }

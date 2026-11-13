@@ -366,9 +366,12 @@ fn update_usages(
     field_names: &FxHashMap<SmolStr, SmolStr>,
 ) {
     let source = ctx.source_file().syntax();
+    // a macro expanding $e twice yields two FileReferences with identical source ranges
+    let mut seen = FxHashSet::default();
     let edits = data
         .usages
         .iter()
+        .filter(|r| seen.insert(r.range))
         .filter_map(|r| build_usage_edit(ctx, editor.make(), data, r, field_names))
         .collect_vec();
     for (old, new) in edits {
@@ -1056,6 +1059,29 @@ fn main() {
     let mut s = String::new();
     let Foo { y } = Foo { y: 8 };
     write!(s, "{}", y).unwrap();
+}
+"#,
+        )
+    }
+
+    #[test]
+    fn struct_field_in_macro_expanding_arg_twice() {
+        check_assist(
+            destructure_struct_binding,
+            r#"
+struct Foo { x: i32 }
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn main() {
+    let $0foo = Foo { x: 1 };
+    m!(foo.x);
+}
+"#,
+            r#"
+struct Foo { x: i32 }
+macro_rules! m { ($e:expr) => { ($e, $e) }; }
+fn main() {
+    let Foo { x } = Foo { x: 1 };
+    m!(x);
 }
 "#,
         )
