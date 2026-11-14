@@ -449,6 +449,15 @@ impl Ctx<'_> {
                     return None;
                 }
 
+                if let hir::ModuleDef::Module(_) = def
+                    && let Some(parent) = path.syntax().parent()
+                    && ast::Expr::can_cast(parent.kind())
+                {
+                    // XXX: When input is correct, this may have the same name as a local variable
+                    // May have false negative when Static/Const with *lowercase* names
+                    return None;
+                }
+
                 let cfg = FindPathConfig {
                     prefer_no_std: false,
                     prefer_prelude: true,
@@ -492,7 +501,17 @@ impl Ctx<'_> {
                         true,
                     )
                     .ok()?;
-                let ast_ty = make::ty(ty_str);
+                let mut ast_ty = make::ty(ty_str);
+
+                if let Some(parent) = path.syntax().parent()
+                    && !ast::Type::can_cast(parent.kind())
+                    && let Some(generic_arg_list) = ast_ty.generic_arg_list()
+                {
+                    // Do not replace generic arg list in path segment, expressions...
+                    let (res_editor, _) = SyntaxEditor::with_ast_node(&ast_ty);
+                    res_editor.delete(generic_arg_list.syntax());
+                    ast_ty = ast::Type::cast(res_editor.finish().new_root().clone()).unwrap()
+                }
 
                 if let Some(adt) = ty.as_adt()
                     && let ast::Type::PathType(path_ty) = &ast_ty
