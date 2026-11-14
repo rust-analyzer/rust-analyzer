@@ -204,8 +204,9 @@ impl Expr {
         if is_parent_call_expr && is_field_expr {
             return true;
         }
-        let place_of_parent =
-            || place_of.ancestors().find(|it| it.parent().is_none_or(|p| &p == parent.syntax()));
+        let is_place_of_parent =
+            |it: &SyntaxNode| it.parent().is_none_or(|p| &p == parent.syntax());
+        let Some(ref place_of) = place_of.ancestors().find(is_place_of_parent) else { return true };
 
         // Special-case block weirdness
         if parent.child_is_followed_by_a_block() {
@@ -235,8 +236,7 @@ impl Expr {
         // For `&&`, we avoid introducing `<ret-like> && <expr>` into a binary chain.
 
         if self.precedence() == ExprPrecedence::Jump
-            && let Some(node) = place_of_parent()
-            && let Some(next) = next_token_of(&node)
+            && let Some(next) = next_token_of(place_of)
             && matches!(next.kind(), T![||] | T![&&])
         {
             return true;
@@ -246,10 +246,14 @@ impl Expr {
         if let Some(it) = self.right_side_cast_expr()
             && let Some(ty) = it.ty()
             && ty.syntax().last_token().and_then(|it| ast::NameLike::cast(it.parent()?)).is_some()
-            && let Some(node) = place_of_parent()
-            && let Some(next) = next_token_of(&node)
+            && let Some(next) = next_token_of(place_of)
             && matches!(next.kind(), T![<] | T![<<])
         {
+            return true;
+        }
+
+        // Special-cast `{2} + 3` in stmt-list
+        if self.is_block_like() && parent.disallowed_ambiguous_block(place_of) {
             return true;
         }
 
@@ -559,6 +563,21 @@ impl Expr {
 
             ForExpr(_) | IfExpr(_) | MatchExpr(_) | WhileExpr(_) | IncludeBytesExpr(_) => true,
         }
+    }
+
+    fn disallowed_ambiguous_block(&self, place_of: &SyntaxNode) -> bool {
+        match self {
+            Expr::CastExpr(_) | Expr::RangeExpr(_) | Expr::IndexExpr(_) | Expr::CallExpr(_) => (),
+            Expr::BinExpr(it) if it.lhs().is_some_and(|it| it.syntax() == place_of) => (),
+            _ => return false,
+        };
+
+        self.syntax().parent().is_some_and(|node| {
+            ast::ExprStmt::can_cast(node.kind())
+                || ast::StmtList::can_cast(node.kind())
+                || Expr::cast(node)
+                    .is_some_and(|expr| expr.disallowed_ambiguous_block(self.syntax()))
+        })
     }
 
     fn contains_let_expr(&self) -> bool {
