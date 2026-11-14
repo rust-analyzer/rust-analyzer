@@ -2337,9 +2337,9 @@ fn foo(name: Option<&str>) {
         r#####"
 fn foo(name: Option<&str>) {
     let name = match name {
-            Some(val) => val,
-            None => panic!("called `Option::unwrap()` on a `None` value"),
-        };
+        Some(val) => val,
+        None => panic!("called `Option::unwrap()` on a `None` value"),
+    };
 }
 "#####,
     )

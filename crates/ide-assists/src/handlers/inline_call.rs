@@ -13,7 +13,7 @@ use ide_db::{
 };
 use itertools::{Itertools, izip};
 use syntax::{
-    AstNode, NodeOrToken, SyntaxKind, T, TextRange,
+    AstNode, T, TextRange,
     ast::{
         self, HasArgList, HasGenericArgs, Pat, PathExpr,
         edit::{AstNodeEdit, IndentLevel},
@@ -214,9 +214,9 @@ pub(super) fn split_refs_and_uses<T: ast::AstNode>(
 // ```
 // fn foo(name: Option<&str>) {
 //     let name = match name {
-//             Some(val) => val,
-//             None => panic!("called `Option::unwrap()` on a `None` value"),
-//         };
+//         Some(val) => val,
+//         None => panic!("called `Option::unwrap()` on a `None` value"),
+//     };
 // }
 // ```
 pub(crate) fn inline_call(acc: &mut Assists, ctx: &AssistContext<'_, '_>) -> Option<()> {
@@ -426,39 +426,6 @@ fn inline<'db>(
         Vec::new()
     };
 
-    // Replace `Self` type keywords with the actual impl type
-    if let Some(imp) =
-        sema.ancestors_with_macros(fn_body.syntax().clone()).find_map(ast::Impl::cast)
-        && !node.syntax().ancestors().any(|anc| &anc == imp.syntax())
-        && let Some(t) = imp.self_ty()
-    {
-        let self_tokens: Vec<_> = body
-            .syntax()
-            .descendants_with_tokens()
-            .filter_map(NodeOrToken::into_token)
-            .filter(|tok| tok.kind() == SyntaxKind::SELF_TYPE_KW)
-            .collect();
-        for self_tok in self_tokens {
-            let replace_with = if !is_in_type_path(&self_tok)
-                && let Some(generic_arg_list) = t.generic_arg_list()
-            {
-                // Strip the outer generic arg list and reparse, since turbofish-less
-                // generics aren't valid in expression position. The outermost
-                // `GenericArgList` text is unique within `t`'s text (any inner generics
-                // are nested inside it), so `replacen(.., 1)` is safe.
-                let stripped = t.syntax().text().to_string().replacen(
-                    &generic_arg_list.syntax().text().to_string(),
-                    "",
-                    1,
-                );
-                editor.make().ty(&stripped).syntax().clone()
-            } else {
-                t.syntax().clone()
-            };
-            editor.replace(self_tok, replace_with);
-        }
-    }
-
     let mut func_let_vars: BTreeSet<String> = BTreeSet::new();
 
     // grab all of the local variable declarations in the function
@@ -629,15 +596,16 @@ fn inline<'db>(
     let mut body = ast::BlockExpr::cast(edit.new_root().clone())
         .expect("editor root should still be a BlockExpr");
 
-    // Apply generic substitution (needs immutable tree)
-    if let Some(generic_arg_list) = generic_arg_list.clone()
-        && let Some((target, source)) = &sema.scope(node.syntax()).zip(sema.scope(fn_body.syntax()))
-        && let Some(new_body) = ast::BlockExpr::cast(
+    // Apply generic substitution and path transform
+    if let Some((target, source)) = &sema.scope(node.syntax()).zip(sema.scope(fn_body.syntax())) {
+        let transform = if let Some(generic_arg_list) = generic_arg_list.clone() {
             PathTransform::function_call(target, source, function, generic_arg_list)
-                .apply(body.syntax()),
-        )
-    {
-        body = new_body;
+        } else {
+            PathTransform::generic_transformation(target, source)
+        };
+        if let Some(new_body) = ast::BlockExpr::cast(transform.apply(body.syntax())) {
+            body = new_body
+        }
     }
     if let Some(macro_file) = file_id.macro_file() {
         cov_mark::hit!(inline_call_defined_in_macro);
@@ -671,37 +639,17 @@ fn inline<'db>(
         original_body_indent = IndentLevel(0);
     }
 
-    body = body.dedent(original_body_indent).indent(original_indentation);
+    body = body.dedent(original_body_indent);
 
     let no_stmts = body.statements().next().is_none();
-    match body.tail_expr() {
-        Some(expr) if matches!(expr, ast::Expr::ClosureExpr(_)) && no_stmts => {
-            make.expr_paren(expr).into()
-        }
-        Some(expr) if !is_async_fn && no_stmts => expr,
-        _ => match node
-            .syntax()
-            .parent()
-            .and_then(ast::BinExpr::cast)
-            .and_then(|bin_expr| bin_expr.lhs())
-        {
-            Some(lhs) if lhs.syntax() == node.syntax() => {
-                make.expr_paren(ast::Expr::BlockExpr(body)).into()
-            }
-            _ => ast::Expr::BlockExpr(body),
-        },
+    let mut expr = match body.tail_expr() {
+        Some(expr) if !is_async_fn && no_stmts => expr.reset_indent(),
+        _ => ast::Expr::BlockExpr(body),
+    };
+    if node.syntax().parent().is_some_and(|it| expr.needs_parens_in_place_of(&it, node.syntax())) {
+        expr = make.expr_paren(expr).into()
     }
-}
-
-fn is_in_type_path(self_tok: &syntax::SyntaxToken) -> bool {
-    self_tok
-        .parent_ancestors()
-        .skip_while(|it| !ast::Path::can_cast(it.kind()))
-        .map_while(ast::Path::cast)
-        .last()
-        .and_then(|it| it.syntax().parent())
-        .and_then(ast::PathType::cast)
-        .is_some()
+    expr.indent(original_indentation)
 }
 
 fn path_expr_as_record_field(usage: &PathExpr) -> Option<ast::RecordExprField> {
@@ -1254,6 +1202,71 @@ fn main() {
     }
 
     #[test]
+    fn transform_path() {
+        check_assist(
+            inline_call,
+            r#"
+mod foo {
+    pub const VAL: usize = 2;
+    pub fn bar() -> usize {
+        VAL
+    }
+}
+fn main() {
+    foo::bar$0();
+}
+"#,
+            r#"
+mod foo {
+    pub const VAL: usize = 2;
+    pub fn bar() -> usize {
+        VAL
+    }
+}
+fn main() {
+    foo::VAL;
+}
+"#,
+        );
+
+        check_assist(
+            inline_call,
+            r#"
+mod foo {
+    pub struct S(i32);
+    impl S {
+        pub fn bar<const N: usize>() -> Self {
+            Self(
+                N
+            )
+        }
+    }
+}
+fn main() {
+    foo::S::bar$0::<2>();
+}
+"#,
+            r#"
+mod foo {
+    pub struct S(i32);
+    impl S {
+        pub fn bar<const N: usize>() -> Self {
+            Self(
+                N
+            )
+        }
+    }
+}
+fn main() {
+    foo::S(
+        2
+    );
+}
+"#,
+        );
+    }
+
+    #[test]
     fn inline_callers() {
         check_assist(
             inline_into_callers,
@@ -1436,11 +1449,11 @@ fn main() {
     let bar = 0;
     let baz = 0;
     Foo {
-            field: bar,
-            field1: 0,
-            field2: baz,
-            field3: 0,
-        };
+        field: bar,
+        field1: 0,
+        field2: baz,
+        field3: 0,
+    };
 }
 "#,
         );
