@@ -495,6 +495,14 @@ impl ItemScope {
         self.legacy_macros.entry(name).or_default().push(mac);
     }
 
+    /// Replaces the legacy macros with `macros`, given in definition order.
+    pub(crate) fn set_legacy_macros(&mut self, macros: impl IntoIterator<Item = (Name, MacroId)>) {
+        self.legacy_macros = Default::default();
+        for (name, mac) in macros {
+            self.define_legacy_macro(name, mac);
+        }
+    }
+
     pub(crate) fn add_attr_macro_invoc(&mut self, item: AstId<ast::Item>, call: MacroCallId) {
         self.attr_macros.insert(item, call);
     }

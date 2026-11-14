@@ -3,7 +3,7 @@
 //! `DefCollector::collect` contains the fixed-point iteration loop which
 //! resolves imports and expands macros.
 
-use std::{iter, mem, ops::Range};
+use std::{cell::Cell, iter, mem, ops::Range};
 
 use base_db::{BuiltDependency, Crate, CrateOrigin, LangCrateOrigin, SourceDatabase};
 use cfg::{CfgAtom, CfgExpr, CfgOptions};
@@ -57,6 +57,12 @@ use crate::{
     visibility::{RawVisibility, Visibility},
 };
 
+mod macro_rules_scope;
+
+use self::macro_rules_scope::{
+    MacroInvocationId, MacroRulesResolution, MacroRulesScopeId, MacroRulesScopes,
+};
+
 const GLOB_RECURSION_LIMIT: usize = 100;
 const FIXED_POINT_LIMIT: usize = 8192;
 
@@ -107,6 +113,8 @@ pub(super) fn collect_defs(
         unresolved_extern_crates: Default::default(),
         is_proc_macro: krate.target_kind.is_proc_macro(),
         deferred_builtin_derives: Default::default(),
+        macro_rules_scopes: Default::default(),
+        module_macro_rules_scopes: Default::default(),
     };
     if tree_id.is_block() {
         collector.seed_with_inner(tree_id);
@@ -189,6 +197,8 @@ struct MacroDirective<'db> {
     depth: u32,
     kind: MacroDirectiveKind<'db>,
     container: ItemContainerId,
+    /// The place of this macro call in the textual scope of `macro_rules!` macros.
+    invocation: MacroInvocationId,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -271,6 +281,11 @@ struct DefCollector<'db> {
     /// However, we can only do that when the derive is directly above the item, and there is no attribute in between.
     /// Otherwise, all sorts of weird things can happen, like the item name resolving to something else.
     deferred_builtin_derives: FxHashMap<AstId<ast::Item>, Vec<DeferredBuiltinDerive>>,
+    /// The textual scopes of `macro_rules!` macros.
+    macro_rules_scopes: MacroRulesScopes,
+    /// The textual scope at the end of each module, used to compute the legacy macros visible in
+    /// it once collection is done.
+    module_macro_rules_scopes: FxHashMap<ModuleId, MacroRulesScopeId>,
 }
 
 impl<'db> DefCollector<'db> {
@@ -381,15 +396,18 @@ impl<'db> DefCollector<'db> {
         }
 
         let module_id = self.def_map.root;
-        ModCollector {
+        let mut collector = ModCollector {
             def_collector: self,
             macro_depth: 0,
             module_id,
             tree_id: TreeId::new(file_id.into(), None),
             item_tree,
             mod_dir: ModDir::root(),
-        }
-        .collect_in_top_module(item_tree.top_level_items());
+            macro_rules_scope: MacroRulesScopes::EMPTY,
+        };
+        collector.collect_in_top_module(item_tree.top_level_items());
+        let macro_rules_scope = collector.macro_rules_scope;
+        self.module_macro_rules_scopes.insert(module_id, macro_rules_scope);
         Arc::get_mut(&mut self.def_map.data).unwrap().shrink_to_fit();
     }
 
@@ -405,15 +423,18 @@ impl<'db> DefCollector<'db> {
             // expansion. Continue that chain's budget instead of restarting it, or a macro
             // expanding to an item that invokes the macro again never reaches the limit.
             let macro_depth = tree_id.file_id().macro_expansion_depth(self.db);
-            ModCollector {
+            let mut collector = ModCollector {
                 def_collector: self,
                 macro_depth,
                 module_id,
                 tree_id,
                 item_tree,
                 mod_dir: ModDir::root(),
-            }
-            .collect_in_top_module(item_tree.top_level_items());
+                macro_rules_scope: MacroRulesScopes::EMPTY,
+            };
+            collector.collect_in_top_module(item_tree.top_level_items());
+            let macro_rules_scope = collector.macro_rules_scope;
+            self.module_macro_rules_scopes.insert(module_id, macro_rules_scope);
         }
     }
 
@@ -447,7 +468,9 @@ impl<'db> DefCollector<'db> {
                 }
             }
 
-            if self.reseed_with_unresolved_attribute() == ReachedFixedPoint::Yes {
+            if self.reseed_with_unresolved_attribute() == ReachedFixedPoint::Yes
+                && self.force_unresolved_invocations() == ReachedFixedPoint::Yes
+            {
                 break 'resolve_attr;
             }
         }
@@ -514,22 +537,26 @@ impl<'db> DefCollector<'db> {
         match unresolved_attr {
             Some((
                 pos,
-                &MacroDirective { module_id, depth, container, .. },
+                &MacroDirective { module_id, depth, container, invocation, .. },
                 mod_item,
                 tree_id,
                 item_tree,
             )) => {
                 // FIXME: Remove this clone
                 let mod_dir = self.mod_dirs[&module_id].clone();
-                ModCollector {
+                let macro_rules_scope = self.macro_rules_scopes.invocation_parent(invocation);
+                let mut collector = ModCollector {
                     def_collector: self,
                     macro_depth: depth,
                     module_id,
                     tree_id,
                     item_tree,
                     mod_dir,
-                }
-                .collect(&[mod_item], container);
+                    macro_rules_scope,
+                };
+                collector.collect(&[mod_item], container);
+                let macro_rules_scope = collector.macro_rules_scope;
+                self.macro_rules_scopes.set_expanded(invocation, macro_rules_scope);
 
                 self.unresolved_macros.swap_remove(pos);
                 // Continue name resolution with the new data.
@@ -537,6 +564,40 @@ impl<'db> DefCollector<'db> {
             }
             None => ReachedFixedPoint::Yes,
         }
+    }
+
+    /// When the fixed-point loop reaches a stable state, macro calls that can't be resolved are
+    /// treated as expanding to nothing, so that they no longer block the resolution of names in
+    /// the textual scope after them.
+    ///
+    /// This is similar but not exactly the same as rustc's "force mode". See the comment in
+    /// `macro_rules_scope.rs`.
+    fn force_unresolved_invocations(&mut self) -> ReachedFixedPoint {
+        let mut res = ReachedFixedPoint::Yes;
+        for directive in &self.unresolved_macros {
+            if !self.macro_rules_scopes.is_unexpanded(directive.invocation) {
+                continue;
+            }
+            let blocked = match &directive.kind {
+                MacroDirectiveKind::FnLike { ast_id, .. } => {
+                    ast_id.path.as_ident().is_some_and(|name| {
+                        matches!(
+                            self.resolve_in_macro_rules_scope(
+                                self.macro_rules_scopes.invocation_parent(directive.invocation),
+                                name,
+                            ),
+                            MacroRulesResolution::Indeterminate
+                        )
+                    })
+                }
+                MacroDirectiveKind::Derive { .. } | MacroDirectiveKind::Attr { .. } => false,
+            };
+            if !blocked {
+                self.macro_rules_scopes.set_forced(directive.invocation);
+                res = ReachedFixedPoint::No;
+            }
+        }
+        res
     }
 
     fn inject_prelude(&mut self) {
@@ -1305,20 +1366,6 @@ impl<'db> DefCollector<'db> {
 
     fn resolve_macros(&mut self) -> ReachedFixedPoint {
         let mut macros = mem::take(&mut self.unresolved_macros);
-        let mut resolved = Vec::new();
-        let push_resolved = |resolved: &mut Vec<_>, directive: &MacroDirective<'_>, call_id| {
-            let attr_macro_item = match &directive.kind {
-                MacroDirectiveKind::Attr { ast_id, .. } => Some(ast_id.ast_id),
-                MacroDirectiveKind::FnLike { .. } | MacroDirectiveKind::Derive { .. } => None,
-            };
-            resolved.push((
-                directive.module_id,
-                directive.depth,
-                directive.container,
-                call_id,
-                attr_macro_item,
-            ));
-        };
 
         #[derive(PartialEq, Eq)]
         enum Resolved {
@@ -1352,6 +1399,9 @@ impl<'db> DefCollector<'db> {
 
             match &directive.kind {
                 MacroDirectiveKind::FnLike { ast_id, expand_to, ctxt: call_site } => {
+                    let blocked = Cell::new(false);
+                    let macro_rules_scope =
+                        self.macro_rules_scopes.invocation_parent(directive.invocation);
                     let call_id = macro_call_as_call_id(
                         self.db,
                         ast_id.ast_id,
@@ -1361,11 +1411,23 @@ impl<'db> DefCollector<'db> {
                         self.def_map.krate,
                         directive.depth,
                         self.def_map.recursion_limit(),
-                        resolver_def_id,
+                        |path| {
+                            self.resolve_fn_like_macro_path(
+                                directive.module_id,
+                                macro_rules_scope,
+                                path,
+                                &blocked,
+                            )
+                        },
                         &mut |ptr, call_id| {
                             eager_callback_buffer.push((directive.module_id, ptr, call_id));
                         },
                     );
+                    if blocked.get() {
+                        // Some name can only be resolved once an invocation before this one in
+                        // the textual scope is expanded.
+                        return Resolved::No;
+                    }
                     if let Ok(call_id) = call_id {
                         // FIXME: Expansion error
                         if let Some(call_id) = call_id.value {
@@ -1373,7 +1435,14 @@ impl<'db> DefCollector<'db> {
                                 .scope
                                 .add_macro_invoc(ast_id.ast_id, call_id);
 
-                            push_resolved(&mut resolved, directive, call_id);
+                            self.collect_invocation_expansion(
+                                directive.module_id,
+                                call_id,
+                                directive.depth,
+                                directive.container,
+                                None,
+                                Some(directive.invocation),
+                            );
 
                             res = ReachedFixedPoint::No;
                             return Resolved::Yes;
@@ -1423,7 +1492,14 @@ impl<'db> DefCollector<'db> {
                             }
                         }
 
-                        push_resolved(&mut resolved, directive, call_id);
+                        self.collect_invocation_expansion(
+                            directive.module_id,
+                            call_id,
+                            directive.depth,
+                            directive.container,
+                            None,
+                            Some(directive.invocation),
+                        );
 
                         res = ReachedFixedPoint::No;
                         return Resolved::Yes;
@@ -1440,20 +1516,60 @@ impl<'db> DefCollector<'db> {
                     let &AstIdWithPath { ast_id, ref path } = file_ast_id;
                     let file_id = ast_id.file_id;
 
-                    let mut recollect_without = |collector: &mut Self| {
+                    // Collects the item without the attribute, followed by the derives applied to
+                    // it (if the attribute is a `#[derive]`), each of them with the call ID it
+                    // resolved to, if any.
+                    let mut recollect_without = |collector: &mut Self,
+                                                 derives: Vec<(
+                        MacroDirectiveKind<'db>,
+                        Option<MacroCallId>,
+                    )>| {
                         // Remove the original directive since we resolved it.
                         let mod_dir = collector.mod_dirs[&directive.module_id].clone();
                         collector.skip_attrs.insert(InFile::new(file_id, *mod_item), *attr_id);
 
-                        ModCollector {
+                        let macro_rules_scope =
+                            collector.macro_rules_scopes.invocation_parent(directive.invocation);
+                        let mut mod_collector = ModCollector {
                             def_collector: collector,
                             macro_depth: directive.depth,
                             module_id: directive.module_id,
                             tree_id: *tree,
                             item_tree,
                             mod_dir,
+                            macro_rules_scope,
+                        };
+                        mod_collector.collect(&[*mod_item], directive.container);
+                        let mut macro_rules_scope = mod_collector.macro_rules_scope;
+
+                        // Like in rustc, the derives are invocations placed after the item.
+                        for (kind, call_id) in derives {
+                            let (invocation, scope) =
+                                collector.macro_rules_scopes.invocation(macro_rules_scope);
+                            macro_rules_scope = scope;
+                            let depth = directive.depth + 1;
+                            match call_id {
+                                Some(call_id) => collector.collect_invocation_expansion(
+                                    directive.module_id,
+                                    call_id,
+                                    depth,
+                                    directive.container,
+                                    None,
+                                    Some(invocation),
+                                ),
+                                None => collector.unresolved_macros.push(MacroDirective {
+                                    module_id: directive.module_id,
+                                    depth,
+                                    kind,
+                                    container: directive.container,
+                                    invocation,
+                                }),
+                            }
                         }
-                        .collect(&[*mod_item], directive.container);
+                        collector
+                            .macro_rules_scopes
+                            .set_expanded(directive.invocation, macro_rules_scope);
+
                         res = ReachedFixedPoint::No;
                         Resolved::Yes
                     };
@@ -1465,7 +1581,7 @@ impl<'db> DefCollector<'db> {
                         cov_mark::hit!(resolved_derive_helper);
                         // Resolved to derive helper. Collect the item's attributes again,
                         // starting after the derive helper.
-                        return recollect_without(self);
+                        return recollect_without(self, Vec::new());
                     }
 
                     let def = match resolver_def_id(path) {
@@ -1486,7 +1602,7 @@ impl<'db> DefCollector<'db> {
                     ) {
                         let test_is_active = self.cfg_options.check_atom(&CfgAtom::Flag(sym::test));
                         if test_is_active {
-                            return recollect_without(self);
+                            return recollect_without(self, Vec::new());
                         }
                     }
 
@@ -1523,13 +1639,14 @@ impl<'db> DefCollector<'db> {
                                     *attr_id,
                                 );
                                 self.def_map.diagnostics.push(diag);
-                                return recollect_without(self);
+                                return recollect_without(self, Vec::new());
                             }
                         };
 
                         let ast_id = ast_id.with_value(ast_adt_id);
 
                         let mut derive_call_ids = SmallVec::new();
+                        let mut derives = Vec::new();
                         match attr.parse_path_comma_token_tree(self.db) {
                             Some(derive_macros) => {
                                 let call_id = call_id();
@@ -1558,17 +1675,12 @@ impl<'db> DefCollector<'db> {
                                     );
 
                                     let ast_id_without_path = ast_id.ast_id;
-                                    let directive = MacroDirective {
-                                        module_id: directive.module_id,
-                                        depth: directive.depth + 1,
-                                        kind: MacroDirectiveKind::Derive {
-                                            ast_id,
-                                            derive_attr: *attr_id,
-                                            derive_pos: idx,
-                                            ctxt: call_site.ctx,
-                                            derive_macro_id: call_id,
-                                        },
-                                        container: directive.container,
+                                    let kind = MacroDirectiveKind::Derive {
+                                        ast_id,
+                                        derive_attr: *attr_id,
+                                        derive_pos: idx,
+                                        ctxt: call_site.ctx,
+                                        derive_macro_id: call_id,
                                     };
 
                                     if let Ok((macro_id, def_id, call_id)) = id {
@@ -1611,18 +1723,18 @@ impl<'db> DefCollector<'db> {
                                                     derive: builtin_derive,
                                                     module_id: directive.module_id,
                                                     container: directive.container,
-                                                    depth: directive.depth,
+                                                    depth: directive.depth + 1,
                                                     derive_attr_id: *attr_id,
                                                     derive_index: idx as u32,
                                                     helpers_range: helpers_start..helpers_end,
                                                 });
                                         } else {
-                                            push_resolved(&mut resolved, &directive, call_id);
+                                            derives.push((kind, Some(call_id)));
                                             *derive_call_ids.last_mut().unwrap() =
                                                 Some(Either::Left(call_id));
                                         }
                                     } else {
-                                        self.unresolved_macros.push(directive);
+                                        derives.push((kind, None));
                                     }
                                 }
 
@@ -1649,7 +1761,7 @@ impl<'db> DefCollector<'db> {
                             }
                         }
 
-                        return recollect_without(self);
+                        return recollect_without(self, derives);
                     }
 
                     if let MacroDefKind::ProcMacro(_, exp, _) = def.kind {
@@ -1664,21 +1776,8 @@ impl<'db> DefCollector<'db> {
                                 (**path).clone(),
                                 err,
                             ));
-                            return recollect_without(self);
+                            return recollect_without(self, Vec::new());
                         }
-                    }
-
-                    // Clear deferred derives for this item, unfortunately we cannot use them due to the attribute.
-                    if let Some(deferred_derives) = self.deferred_builtin_derives.remove(&ast_id) {
-                        resolved.extend(deferred_derives.into_iter().map(|derive| {
-                            (
-                                derive.module_id,
-                                derive.depth,
-                                derive.container,
-                                derive.call_id,
-                                Some(ast_id),
-                            )
-                        }));
                     }
 
                     let call_id = call_id();
@@ -1686,7 +1785,30 @@ impl<'db> DefCollector<'db> {
                         .scope
                         .add_attr_macro_invoc(ast_id, call_id);
 
-                    push_resolved(&mut resolved, directive, call_id);
+                    // Clear deferred derives for this item, unfortunately we cannot use them due to the attribute.
+                    // Builtin derives don't define `macro_rules!`, so they don't need to be
+                    // placed in the textual scope.
+                    if let Some(deferred_derives) = self.deferred_builtin_derives.remove(&ast_id) {
+                        for derive in deferred_derives {
+                            self.collect_invocation_expansion(
+                                derive.module_id,
+                                derive.call_id,
+                                derive.depth,
+                                derive.container,
+                                Some(ast_id),
+                                None,
+                            );
+                        }
+                    }
+
+                    self.collect_invocation_expansion(
+                        directive.module_id,
+                        call_id,
+                        directive.depth,
+                        directive.container,
+                        Some(ast_id),
+                        Some(directive.invocation),
+                    );
                     res = ReachedFixedPoint::No;
                     return Resolved::Yes;
                 }
@@ -1703,19 +1825,11 @@ impl<'db> DefCollector<'db> {
             self.def_map.modules[module_id].scope.add_macro_invoc(ptr.map(|(_, it)| it), call_id);
         }
 
-        for (module_id, depth, container, macro_call_id, attr_macro_item) in resolved {
-            self.collect_macro_expansion(
-                module_id,
-                macro_call_id,
-                depth,
-                container,
-                attr_macro_item,
-            );
-        }
-
         res
     }
 
+    /// Collects the items of a macro expansion. `macro_rules_scope` is the textual scope the macro
+    /// call is in, the textual scope at the end of the expansion is returned.
     fn collect_macro_expansion(
         &mut self,
         module_id: ModuleId,
@@ -1723,11 +1837,12 @@ impl<'db> DefCollector<'db> {
         depth: u32,
         container: ItemContainerId,
         attr_macro_item: Option<AstId<ast::Item>>,
-    ) {
+        macro_rules_scope: MacroRulesScopeId,
+    ) -> MacroRulesScopeId {
         if depth > self.def_map.recursion_limit() {
             cov_mark::hit!(macro_expansion_overflow);
             tracing::warn!("macro expansion is too deep");
-            return;
+            return macro_rules_scope;
         }
         let file_id = macro_call_id.into();
 
@@ -1767,25 +1882,118 @@ impl<'db> DefCollector<'db> {
             self.mod_dirs[&module_id].clone()
         };
 
-        ModCollector {
+        let mut collector = ModCollector {
             def_collector: &mut *self,
             macro_depth: depth,
             tree_id: TreeId::new(file_id, None),
             module_id,
             item_tree,
             mod_dir,
+            macro_rules_scope,
+        };
+        collector.collect(item_tree.top_level_items(), container);
+        collector.macro_rules_scope
+    }
+
+    /// Collects the expansion of a macro call that was resolved during the fixed-point loop, and
+    /// records the output of `invocation` in the textual scope.
+    ///
+    /// Like rustc, invocations are expanded right after they are resolved, so that macro calls
+    /// after them in the textual scope can be resolved in the same iteration.
+    fn collect_invocation_expansion(
+        &mut self,
+        module_id: ModuleId,
+        macro_call_id: MacroCallId,
+        depth: u32,
+        container: ItemContainerId,
+        attr_macro_item: Option<AstId<ast::Item>>,
+        invocation: Option<MacroInvocationId>,
+    ) {
+        let parent = match invocation {
+            Some(invocation) => self.macro_rules_scopes.invocation_parent(invocation),
+            None => MacroRulesScopes::EMPTY,
+        };
+        let output = self.collect_macro_expansion(
+            module_id,
+            macro_call_id,
+            depth,
+            container,
+            attr_macro_item,
+            parent,
+        );
+        if let Some(invocation) = invocation {
+            self.macro_rules_scopes.set_expanded(invocation, output);
         }
-        .collect(item_tree.top_level_items(), container);
+    }
+
+    /// Resolves a name of a fn-like macro in the textual scope of `macro_rules!` macros.
+    fn resolve_in_macro_rules_scope(
+        &self,
+        macro_rules_scope: MacroRulesScopeId,
+        name: &Name,
+    ) -> MacroRulesResolution {
+        self.macro_rules_scopes.resolve(macro_rules_scope, name, |id| {
+            sub_namespace_match(self.db, id.into(), Some(MacroSubNs::Bang))
+        })
+    }
+
+    /// Resolves the path of a fn-like macro call during the fixed-point loop, for a macro call
+    /// at `macro_rules_scope` in the textual scope.
+    ///
+    /// Sets `blocked` if the path can't be resolved before an invocation is expanded.
+    fn resolve_fn_like_macro_path(
+        &self,
+        module_id: ModuleId,
+        macro_rules_scope: MacroRulesScopeId,
+        path: &ModPath,
+        blocked: &Cell<bool>,
+    ) -> Option<MacroDefId> {
+        if let Some(name) = path.as_ident() {
+            match self.resolve_in_macro_rules_scope(macro_rules_scope, name) {
+                MacroRulesResolution::Resolved(id) => {
+                    return Some(MacroId::from(id).definition(self.db));
+                }
+                MacroRulesResolution::Indeterminate => {
+                    blocked.set(true);
+                    return None;
+                }
+                MacroRulesResolution::Unresolved => {}
+            }
+        }
+        let resolved_res = self.def_map.resolve_path_fp_with_macro_outside_textual_scope(
+            self.crate_local_def_map.unwrap_or(&self.local_def_map),
+            self.db,
+            module_id,
+            path,
+            Some(MacroSubNs::Bang),
+        );
+        resolved_res.resolved_def.take_macros().map(|it| it.definition(self.db))
     }
 
     fn finish(mut self) -> (DefMap, LocalDefMap) {
-        // Emit diagnostics for all remaining unexpanded macros.
         let _p = tracing::info_span!("DefCollector::finish").entered();
 
+        // The legacy macros of a module are all `macro_rules!` macros in the textual scope at its
+        // end, including the ones defined by macro expansions that were collected after the
+        // module itself. The root module of a block keeps its legacy macros in definition order,
+        // as expected when lowering the block.
+        for (&module_id, &macro_rules_scope) in &self.module_macro_rules_scopes {
+            if self.def_map.block.is_some() && module_id == self.def_map.root {
+                continue;
+            }
+            let macros = self.macro_rules_scopes.visible_macros(macro_rules_scope);
+            self.def_map.modules[module_id]
+                .scope
+                .set_legacy_macros(macros.into_iter().map(|(name, id)| (name, id.into())));
+        }
+
+        // Emit diagnostics for all remaining unexpanded macros.
         for directive in &self.unresolved_macros {
             match &directive.kind {
                 MacroDirectiveKind::FnLike { ast_id, expand_to, ctxt: call_site } => {
                     // FIXME: we shouldn't need to re-resolve the macro here just to get the unresolved error!
+                    let macro_rules_scope =
+                        self.macro_rules_scopes.invocation_parent(directive.invocation);
                     let macro_call_as_call_id = macro_call_as_call_id(
                         self.db,
                         ast_id.ast_id,
@@ -1796,16 +2004,12 @@ impl<'db> DefCollector<'db> {
                         directive.depth,
                         self.def_map.recursion_limit(),
                         |path| {
-                            let resolved_res = self.def_map.resolve_path_fp_with_macro(
-                                self.crate_local_def_map.unwrap_or(&self.local_def_map),
-                                self.db,
-                                ResolveMode::Other,
+                            self.resolve_fn_like_macro_path(
                                 directive.module_id,
+                                macro_rules_scope,
                                 path,
-                                BuiltinShadowMode::Module,
-                                Some(MacroSubNs::Bang),
-                            );
-                            resolved_res.resolved_def.take_macros().map(|it| it.definition(self.db))
+                                &Cell::new(false),
+                            )
                         },
                         &mut |_, _| (),
                     );
@@ -1888,6 +2092,8 @@ struct ModCollector<'a, 'db> {
     tree_id: TreeId,
     item_tree: &'db ItemTree,
     mod_dir: ModDir,
+    /// The textual scope of `macro_rules!` macros at the current point of the collection.
+    macro_rules_scope: MacroRulesScopeId,
 }
 
 impl ModCollector<'_, '_> {
@@ -2328,18 +2534,18 @@ impl ModCollector<'_, '_> {
                 else {
                     return;
                 };
-                ModCollector {
+                let mut collector = ModCollector {
                     def_collector: &mut *self.def_collector,
                     macro_depth: self.macro_depth,
                     module_id,
                     tree_id: self.tree_id,
                     item_tree: self.item_tree,
                     mod_dir,
-                }
-                .collect_in_top_module(items);
-                if is_macro_use {
-                    self.import_all_legacy_macros(module_id);
-                }
+                    macro_rules_scope: self.macro_rules_scope,
+                };
+                collector.collect_in_top_module(items);
+                let macro_rules_scope = collector.macro_rules_scope;
+                self.finish_child_module(module_id, macro_rules_scope, is_macro_use);
             }
             // out of line module, resolve, parse and recurse
             ModKind::Outline => {
@@ -2369,20 +2575,24 @@ impl ModCollector<'_, '_> {
                                     Some((file_id, is_mod_rs)),
                                     &self.item_tree[module.visibility],
                                 );
-                                ModCollector {
+                                let mut collector = ModCollector {
                                     def_collector: self.def_collector,
                                     macro_depth: self.macro_depth,
                                     module_id,
                                     tree_id: TreeId::new(file_id.into(), None),
                                     item_tree,
                                     mod_dir,
-                                }
-                                .collect_in_top_module(item_tree.top_level_items());
+                                    macro_rules_scope: self.macro_rules_scope,
+                                };
+                                collector.collect_in_top_module(item_tree.top_level_items());
+                                let macro_rules_scope = collector.macro_rules_scope;
                                 let is_macro_use = is_macro_use
                                     || matches!(top_level_attrs, Some(AttrsOrCfg::Enabled { attrs }) if attrs.as_ref().by_key(sym::macro_use).exists());
-                                if is_macro_use {
-                                    self.import_all_legacy_macros(module_id);
-                                }
+                                self.finish_child_module(
+                                    module_id,
+                                    macro_rules_scope,
+                                    is_macro_use,
+                                );
                             }
                         }
                     }
@@ -2399,6 +2609,21 @@ impl ModCollector<'_, '_> {
                     }
                 };
             }
+        }
+    }
+
+    /// Records the textual scope at the end of a child module. With `#[macro_use]`, the textual
+    /// scope of the parent continues with the one at the end of the child.
+    fn finish_child_module(
+        &mut self,
+        module_id: ModuleId,
+        macro_rules_scope: MacroRulesScopeId,
+        is_macro_use: bool,
+    ) {
+        self.def_collector.module_macro_rules_scopes.insert(module_id, macro_rules_scope);
+        if is_macro_use {
+            self.import_all_legacy_macros(module_id);
+            self.macro_rules_scope = macro_rules_scope;
         }
     }
 
@@ -2452,6 +2677,9 @@ impl ModCollector<'_, '_> {
         }
         modules[self.module_id].children.insert(name.clone(), module);
         modules.insert(module, data);
+        // A child module starts with the textual scope of its parent at its declaration. This is
+        // also its scope at the end if its items can't be collected.
+        self.def_collector.module_macro_rules_scopes.insert(module, self.macro_rules_scope);
 
         let def = ModuleDefId::from(module);
 
@@ -2494,6 +2722,7 @@ impl ModCollector<'_, '_> {
                 mod_item.ast_id(self.item_tree),
                 attr.path.clone(),
             );
+            let invocation = self.push_invocation();
             self.def_collector.unresolved_macros.push(MacroDirective {
                 module_id: self.module_id,
                 depth: self.macro_depth + 1,
@@ -2506,6 +2735,7 @@ impl ModCollector<'_, '_> {
                     item_tree: self.item_tree,
                 },
                 container,
+                invocation,
             });
 
             return Err(());
@@ -2594,6 +2824,19 @@ impl ModCollector<'_, '_> {
             macro_id,
             is_export,
         );
+        self.macro_rules_scope = self.def_collector.macro_rules_scopes.define(
+            self.macro_rules_scope,
+            mac.name.clone(),
+            macro_id,
+        );
+    }
+
+    /// Places an unexpanded macro invocation at the current point of the textual scope.
+    fn push_invocation(&mut self) -> MacroInvocationId {
+        let (invocation, macro_rules_scope) =
+            self.def_collector.macro_rules_scopes.invocation(self.macro_rules_scope);
+        self.macro_rules_scope = macro_rules_scope;
+        invocation
     }
 
     fn collect_macro_def(
@@ -2686,12 +2929,18 @@ impl ModCollector<'_, '_> {
         let ast_id = AstIdWithPath::new(self.file_id(), ast_id, path.clone());
         let db = self.def_collector.db;
 
-        // FIXME: Immediately expanding in "Case 1" is insufficient since "Case 2" may also define
-        // new legacy macros that create textual scopes. We need a way to resolve names in textual
-        // scopes without eager expansion.
-
+        // Case 1: try to resolve macro calls with single-segment name right away, and expand them
+        // in place. This mirrors rustc, which expands macro calls in order as soon as they
+        // resolve. Names are resolved in the textual scope of `macro_rules!` macros, then in the
+        // scope of the module (as far as it is known yet) and in the preludes, see `visit_scopes`
+        // in `compiler/rustc_resolve/src/ident.rs`.
+        // If the name can't be determined yet because of an unexpanded macro invocation in the
+        // textual scope, or if it isn't found, the call is resolved in the fixed-point loop.
+        // Unlike rustc, we don't look past unexpanded invocations, see the `macro_rules_scope`
+        // module docs.
+        let blocked = Cell::new(false);
+        let macro_rules_scope = self.macro_rules_scope;
         let mut eager_callback_buffer = vec![];
-        // Case 1: try to resolve macro calls with single-segment name and expand macro_rules
         if let Ok(res) = macro_call_as_call_id(
             db,
             ast_id.ast_id,
@@ -2702,40 +2951,61 @@ impl ModCollector<'_, '_> {
             self.macro_depth + 1,
             self.def_collector.def_map.recursion_limit(),
             |path| {
-                path.as_ident().and_then(|name| {
-                    let def_map = &self.def_collector.def_map;
-                    def_map
-                        .with_ancestor_maps(db, self.module_id, &mut |map, module| {
-                            map[module].scope.get_legacy_macro(name)?.last().copied()
-                        })
-                        .or_else(|| def_map[self.module_id].scope.get(name).take_macros())
-                        .or_else(|| Some(def_map.macro_use_prelude.get(name).copied()?.0))
-                        .filter(|&id| sub_namespace_match(db, id, Some(MacroSubNs::Bang)))
-                        .map(|it| it.definition(self.def_collector.db))
-                })
+                let name = path.as_ident()?;
+                let def_collector = &*self.def_collector;
+                let def_map = &def_collector.def_map;
+                let from_textual_scope = match def_collector
+                    .resolve_in_macro_rules_scope(macro_rules_scope, name)
+                {
+                    MacroRulesResolution::Resolved(id) => Some(id.into()),
+                    MacroRulesResolution::Indeterminate => {
+                        blocked.set(true);
+                        return None;
+                    }
+                    // The textual scope of a block continues in its parent `DefMap`s, of
+                    // which only all legacy macros are known.
+                    MacroRulesResolution::Unresolved => {
+                        iter::successors(def_map.block, |block| block.parent.def_map(db).block)
+                            .find_map(|block| {
+                                block.parent.def_map(db)[block.parent]
+                                    .scope
+                                    .get_legacy_macro(name)?
+                                    .iter()
+                                    .rev()
+                                    .copied()
+                                    .find(|&id| sub_namespace_match(db, id, Some(MacroSubNs::Bang)))
+                            })
+                    }
+                };
+                from_textual_scope
+                    .or_else(|| def_map[self.module_id].scope.get(name).take_macros())
+                    .or_else(|| Some(def_map.macro_use_prelude.get(name).copied()?.0))
+                    .or_else(|| def_map.resolve_in_prelude(db, name).take_macros())
+                    .filter(|&id| sub_namespace_match(db, id, Some(MacroSubNs::Bang)))
+                    .map(|it| it.definition(db))
             },
             &mut |ptr, call_id| eager_callback_buffer.push((ptr, call_id)),
-        ) {
+        ) && !blocked.get()
+        {
             for (ptr, call_id) in eager_callback_buffer {
                 self.def_collector.def_map.modules[self.module_id]
                     .scope
                     .add_macro_invoc(ptr.map(|(_, it)| it), call_id);
             }
             // FIXME: if there were errors, this might've been in the eager expansion from an
-            // unresolved macro, so we need to push this into late macro resolution. see fixme above
+            // unresolved macro, so we need to push this into late macro resolution.
             if res.err.is_none() {
-                // Legacy macros need to be expanded immediately, so that any macros they produce
-                // are in scope.
                 if let Some(call_id) = res.value {
                     self.def_collector.def_map.modules[self.module_id]
                         .scope
                         .add_macro_invoc(ast_id.ast_id, call_id);
-                    self.def_collector.collect_macro_expansion(
+                    self.macro_rules_scope = self.def_collector.collect_macro_expansion(
                         self.module_id,
                         call_id,
                         self.macro_depth + 1,
                         container,
                         None,
+                        self.macro_rules_scope,
                     );
                 }
 
@@ -2743,12 +3013,15 @@ impl ModCollector<'_, '_> {
             }
         }
 
-        // Case 2: resolve in module scope, expand during name resolution.
+        // Case 2: resolve in the fixed-point loop. The call is an invocation in the textual scope
+        // until it is expanded.
+        let invocation = self.push_invocation();
         self.def_collector.unresolved_macros.push(MacroDirective {
             module_id: self.module_id,
             depth: self.macro_depth + 1,
             kind: MacroDirectiveKind::FnLike { ast_id, expand_to, ctxt },
             container,
+            invocation,
         });
     }
 

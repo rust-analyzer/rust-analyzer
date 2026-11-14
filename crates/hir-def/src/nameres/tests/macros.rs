@@ -406,11 +406,9 @@ macro_rules! m {
 "#,
         expect![[r#"
             crate
-            - S : type value
             - (legacy) m : macro!
         "#]],
     );
-    // FIXME: should not expand. legacy macro scoping is not implemented.
 }
 
 #[test]
@@ -487,7 +485,6 @@ macro_rules! baz {
 "#,
         expect![[r#"
             crate
-            - NotFoundBefore : type value
             - Ok : type value
             - OkAfter : type value
             - OkShadowStop : type value
@@ -498,7 +495,7 @@ macro_rules! baz {
             - m7 : type
             - ok_double_macro_use_shadow : value
             - (legacy) baz : macro!
-            - (legacy) foo : macro! macro! macro!
+            - (legacy) foo : macro! macro!
 
             crate::m1
             - (legacy) bar : macro!
@@ -512,9 +509,9 @@ macro_rules! baz {
             - m4 : type
             - m5 : type
             - ok_shadow : value
-            - (legacy) bar : macro! macro!
+            - (legacy) bar : macro!
             - (legacy) baz : macro!
-            - (legacy) foo : macro! macro! macro! macro!
+            - (legacy) foo : macro! macro!
 
             crate::m3::m4
             - ok_shadow_deep : value
@@ -524,7 +521,7 @@ macro_rules! baz {
             crate::m3::m5
             - (legacy) bar : macro!
             - (legacy) baz : macro!
-            - (legacy) foo : macro! macro! macro!
+            - (legacy) foo : macro! macro!
 
             crate::m5
             - m6 : type
@@ -1373,6 +1370,312 @@ pub mod ip_address {
 
             crate::company_name::network::v1::ip_address
             - IpType : type
+        "#]],
+    );
+}
+
+#[test]
+fn include_macro_rules_visible_in_child_modules() {
+    // Child modules see the `macro_rules!` of the textual scope of their parent at their
+    // declaration, including the ones defined by an `include!` before it. `include!` comes from
+    // the std prelude.
+    check(
+        r#"
+//- minicore: include, concat
+//- /lib.rs
+include!(concat!("out_dir", "/macros.rs"));
+
+mod a;
+mod b {
+    m!(B);
+}
+
+//- /a.rs
+m!(A);
+
+//- /out_dir/macros.rs
+macro_rules! m {
+    ($name:ident) => { struct $name; };
+}
+"#,
+        expect![[r#"
+            crate
+            - a : type
+            - b : type
+            - (legacy) m : macro!
+
+            crate::a
+            - A : type value
+            - (legacy) m : macro!
+
+            crate::b
+            - B : type value
+            - (legacy) m : macro!
+        "#]],
+    );
+}
+
+#[test]
+fn macro_rules_from_deferred_macro_call_visible_in_later_child_modules() {
+    // `foo::def!()` is a path, so it is only resolved in the fixed-point loop. Until it is
+    // expanded, it is a placeholder in the textual scope, which is inherited by the child modules
+    // declared after it. Modules declared before it don't see what it defines.
+    check(
+        r#"
+//- /lib.rs crate:main deps:foo
+mod before {
+    m!(Before);
+}
+foo::def!();
+mod after;
+mod after_inline {
+    m!(AfterInline);
+}
+
+//- /after.rs
+m!(After);
+
+//- /foo.rs crate:foo
+#[macro_export]
+macro_rules! def {
+    () => { macro_rules! m { ($name:ident) => { pub struct $name; } } };
+}
+"#,
+        expect![[r#"
+            crate
+            - after : type
+            - after_inline : type
+            - before : type
+            - (legacy) m : macro!
+
+            crate::after
+            - After : type value
+            - (legacy) m : macro!
+
+            crate::after_inline
+            - AfterInline : type value
+            - (legacy) m : macro!
+
+            crate::before
+        "#]],
+    );
+}
+
+#[test]
+fn macro_rules_from_deferred_macro_call_in_macro_use_module() {
+    // The textual scope after a `#[macro_use]` module continues with the scope at its end,
+    // including what macro calls that are expanded later define in it.
+    check(
+        r#"
+//- /lib.rs crate:main deps:foo
+#[macro_use]
+mod a {
+    foo::def!();
+}
+m!(A);
+mod b {
+    m!(B);
+}
+
+//- /foo.rs crate:foo
+#[macro_export]
+macro_rules! def {
+    () => { macro_rules! m { ($name:ident) => { pub struct $name; } } };
+}
+"#,
+        expect![[r#"
+            crate
+            - A : type value
+            - a : type
+            - b : type
+            - (legacy) m : macro!
+
+            crate::a
+            - (legacy) m : macro!
+
+            crate::b
+            - B : type value
+            - (legacy) m : macro!
+        "#]],
+    );
+}
+
+#[test]
+fn macro_call_waits_for_preceding_macro_call_in_textual_scope() {
+    // `m!` can't be resolved before `foo::def!()` is expanded, as it may (and does) define `m`.
+    // rustc reports an ambiguity here, because a macro-expanded `macro_rules!` shadows one from
+    // an outer expansion. It expands `foo::def!()` before resolving `m!(New)`, so it uses the
+    // innermost one, like we do.
+    // Calls before `foo::def!()` are unaffected.
+    check(
+        r#"
+//- /lib.rs crate:main deps:foo
+macro_rules! m {
+    ($name:ident) => { pub struct Old; };
+}
+m!(X);
+foo::def!();
+m!(New);
+mod a {
+    m!(NewA);
+}
+
+//- /foo.rs crate:foo
+#[macro_export]
+macro_rules! def {
+    () => { macro_rules! m { ($name:ident) => { pub struct $name; } } };
+}
+"#,
+        expect![[r#"
+            crate
+            - New : type value
+            - Old : type value
+            - a : type
+            - (legacy) m : macro! macro!
+
+            crate::a
+            - NewA : type value
+            - (legacy) m : macro! macro!
+        "#]],
+    );
+}
+
+#[test]
+fn unresolved_macro_call_does_not_block_textual_scope() {
+    // Like rustc's force mode, a macro call that can't be resolved is treated as expanding to
+    // nothing once nothing else can be resolved, so the calls after it can be resolved.
+    check(
+        r#"
+macro_rules! m {
+    ($name:ident) => { pub struct $name; };
+}
+unresolved!();
+m!(A);
+mod a {
+    m!(B);
+}
+"#,
+        expect![[r#"
+            crate
+            - A : type value
+            - a : type
+            - (legacy) m : macro!
+
+            crate::a
+            - B : type value
+            - (legacy) m : macro!
+        "#]],
+    );
+}
+
+#[test]
+fn forced_macro_call_is_expanded_once_resolvable() {
+    // `make_x!()` waits for `x::def!()`, which needs the `mod x` defined by `make_x!()`. rustc
+    // resolves `make_x!()` past the unexpanded `x::def!()` and accepts this. We force
+    // `x::def!()`, which unblocks `make_x!()`, and then expand `x::def!()` once `mod x` exists.
+    check(
+        r#"
+macro_rules! make_x {
+    () => {
+        mod x {
+            macro_rules! def_ { () => { pub struct A; } }
+            pub(crate) use def_ as def;
+        }
+    };
+}
+x::def!();
+make_x!();
+"#,
+        expect![[r#"
+            crate
+            - A : type value
+            - x : type
+            - (legacy) make_x : macro!
+
+            crate::x
+            - def : macro! (import)
+            - (legacy) def_ : macro!
+            - (legacy) make_x : macro!
+        "#]],
+    );
+}
+
+#[test]
+fn unresolved_derive_does_not_block_textual_scope() {
+    check(
+        r#"
+macro_rules! m {
+    ($name:ident) => { pub struct $name; };
+}
+#[derive(Unresolved)]
+pub struct S;
+m!(A);
+mod a {
+    m!(B);
+}
+"#,
+        expect![[r#"
+            crate
+            - A : type value
+            - S : type value
+            - a : type
+            - (legacy) m : macro!
+
+            crate::a
+            - B : type value
+            - (legacy) m : macro!
+        "#]],
+    );
+}
+
+#[test]
+fn attribute_macro_in_textual_scope() {
+    // Items with an attribute macro are placeholders in the textual scope until the attribute is
+    // expanded. Their expansion can define `macro_rules!`.
+    check(
+        r#"
+//- proc_macros: identity, input_replace
+macro_rules! m {
+    ($name:ident) => { pub struct $name; };
+}
+#[proc_macros::identity]
+fn f() {}
+m!(A);
+
+#[proc_macros::identity]
+macro_rules! n {
+    ($name:ident) => { pub struct $name; };
+}
+
+#[proc_macros::input_replace(
+    macro_rules! o {
+        ($name:ident) => { pub struct $name; };
+    }
+)]
+fn g() {}
+
+mod a {
+    m!(B);
+    n!(C);
+    o!(D);
+}
+"#,
+        expect![[r#"
+            crate
+            - A : type value
+            - a : type
+            - f : value
+            - (legacy) m : macro!
+            - (legacy) n : macro!
+            - (legacy) o : macro!
+
+            crate::a
+            - B : type value
+            - C : type value
+            - D : type value
+            - (legacy) m : macro!
+            - (legacy) n : macro!
+            - (legacy) o : macro!
         "#]],
     );
 }

@@ -157,12 +157,57 @@ impl DefMap {
         db: &dyn SourceDatabase,
         mode: ResolveMode,
         // module to import to
-        mut original_module: ModuleId,
+        original_module: ModuleId,
         path: &ModPath,
         shadow: BuiltinShadowMode,
         // Pass `MacroSubNs` if we know we're resolving macro names and which kind of macro we're
         // resolving them to. Pass `None` otherwise, e.g. when we're resolving import paths.
         expected_macro_subns: Option<MacroSubNs>,
+    ) -> ResolvePathResult {
+        self.resolve_path_fp_with_macro_(
+            local_def_map,
+            db,
+            mode,
+            original_module,
+            path,
+            shadow,
+            expected_macro_subns,
+            true,
+        )
+    }
+
+    /// Like [`DefMap::resolve_path_fp_with_macro`], but doesn't look into the textual scope of
+    /// `macro_rules!` macros of this `DefMap`, as the def collector has already looked into it.
+    pub(super) fn resolve_path_fp_with_macro_outside_textual_scope(
+        &self,
+        local_def_map: &LocalDefMap,
+        db: &dyn SourceDatabase,
+        original_module: ModuleId,
+        path: &ModPath,
+        expected_macro_subns: Option<MacroSubNs>,
+    ) -> ResolvePathResult {
+        self.resolve_path_fp_with_macro_(
+            local_def_map,
+            db,
+            ResolveMode::Other,
+            original_module,
+            path,
+            BuiltinShadowMode::Module,
+            expected_macro_subns,
+            false,
+        )
+    }
+
+    fn resolve_path_fp_with_macro_(
+        &self,
+        local_def_map: &LocalDefMap,
+        db: &dyn SourceDatabase,
+        mode: ResolveMode,
+        mut original_module: ModuleId,
+        path: &ModPath,
+        shadow: BuiltinShadowMode,
+        expected_macro_subns: Option<MacroSubNs>,
+        include_textual_scope: bool,
     ) -> ResolvePathResult {
         let mut result = self.resolve_path_fp_with_macro_single(
             local_def_map,
@@ -172,6 +217,7 @@ impl DefMap {
             path,
             shadow,
             expected_macro_subns,
+            include_textual_scope,
         );
 
         if self.block.is_none() {
@@ -225,6 +271,8 @@ impl DefMap {
                 }
             }
 
+            // The textual scope of the parent `DefMap`s is only known as a whole, so this is
+            // where the textual scope of a block continues.
             let new = current_map.resolve_path_fp_with_macro_single(
                 local_def_map,
                 db,
@@ -233,6 +281,7 @@ impl DefMap {
                 path,
                 shadow,
                 expected_macro_subns,
+                true,
             );
 
             merge(new);
@@ -248,6 +297,7 @@ impl DefMap {
         path: &ModPath,
         shadow: BuiltinShadowMode,
         expected_macro_subns: Option<MacroSubNs>,
+        include_textual_scope: bool,
     ) -> ResolvePathResult {
         let mut segments = path.segments().iter().enumerate();
         let curr_per_ns = match path.kind {
@@ -304,6 +354,7 @@ impl DefMap {
                     segment,
                     prefer_module,
                     expected_macro_subns,
+                    include_textual_scope,
                 )
             }
             PathKind::Super(lvl) => {
@@ -628,15 +679,16 @@ impl DefMap {
         name: &Name,
         shadow: BuiltinShadowMode,
         expected_macro_subns: Option<MacroSubNs>,
+        include_textual_scope: bool,
     ) -> PerNs {
         // Resolve in:
         //  - legacy scope of macro
         //  - current module / scope
         //  - extern prelude / macro_use prelude
         //  - std prelude
-        let from_legacy_macro = self[module]
-            .scope
-            .get_legacy_macro(name)
+        let from_legacy_macro = include_textual_scope
+            .then(|| self[module].scope.get_legacy_macro(name))
+            .flatten()
             // FIXME: shadowing
             .and_then(|it| it.last())
             .copied()
@@ -742,7 +794,7 @@ impl DefMap {
         from_crate_root.or_else(from_extern_prelude)
     }
 
-    fn resolve_in_prelude(&self, db: &dyn SourceDatabase, name: &Name) -> PerNs {
+    pub(super) fn resolve_in_prelude(&self, db: &dyn SourceDatabase, name: &Name) -> PerNs {
         if let Some((prelude, _use)) = self.prelude {
             let def_map = if prelude.krate(db) == self.krate { self } else { prelude.def_map(db) };
             def_map[prelude].scope.get(name)
