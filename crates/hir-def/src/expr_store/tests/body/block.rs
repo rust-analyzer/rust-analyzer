@@ -348,6 +348,47 @@ fn main() {
 }
 
 #[test]
+fn macro_rules_from_deferred_macro_call_in_block() {
+    // Like in modules, child modules of a block see the `macro_rules!` defined by macro calls
+    // before them, even when those are only expanded in the fixed-point loop.
+    check_at(
+        r#"
+//- /lib.rs crate:main deps:foo
+fn f() {
+    mod before {
+        m!(Before);
+    }
+    foo::def!();
+    mod after {
+        m!(After);
+        $0
+    }
+}
+//- /foo.rs crate:foo
+#[macro_export]
+macro_rules! def {
+    () => { macro_rules! m { ($name:ident) => { pub struct $name; } } };
+}
+"#,
+        expect![[r#"
+            (block scope)
+            - after : type
+            - before : type
+            - (legacy) m : macro!
+
+            (block scope)::after
+            - After : type value
+            - (legacy) m : macro!
+
+            (block scope)::before
+
+            crate
+            - f : value
+        "#]],
+    );
+}
+
+#[test]
 fn macro_resolve_legacy() {
     check_at(
         r#"

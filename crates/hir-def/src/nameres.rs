@@ -725,6 +725,7 @@ impl DefMap {
             path,
             shadow,
             None, // Currently this function isn't used for macro resolution.
+            true,
         );
         (res.resolved_def, res.segment_index, res.prefix_info)
     }

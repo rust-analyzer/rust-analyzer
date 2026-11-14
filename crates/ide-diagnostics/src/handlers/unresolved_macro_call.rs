@@ -56,6 +56,55 @@ m!(); m2!();
     }
 
     #[test]
+    fn unresolved_legacy_scope_macro_used_before_definition() {
+        check_diagnostics(
+            r#"
+  m!();
+//^ error: unresolved macro `m!`
+macro_rules! m { () => {} }
+m!();
+"#,
+        );
+    }
+
+    #[test]
+    fn unresolved_macro_call_does_not_block_later_calls() {
+        check_diagnostics(
+            r#"
+macro_rules! m { () => {} }
+  unresolved!();
+//^^^^^^^^^^ error: unresolved macro `unresolved!`
+m!();
+mod a {
+    m!();
+}
+"#,
+        );
+    }
+
+    #[test]
+    fn legacy_scope_macro_from_deferred_macro_call() {
+        check_diagnostics(
+            r#"
+//- /lib.rs crate:main deps:foo
+mod before {
+    m!();
+  //^ error: unresolved macro `m!`
+}
+foo::def!();
+mod after {
+    m!();
+}
+//- /foo.rs crate:foo
+#[macro_export]
+macro_rules! def {
+    () => { macro_rules! m { () => {} } };
+}
+"#,
+        );
+    }
+
+    #[test]
     fn unresolved_module_scope_macro() {
         check_diagnostics(
             r#"

@@ -884,6 +884,51 @@ fn main() {
 }
 
 #[test]
+fn infer_method_from_impl_generated_by_included_macro_in_child_module() {
+    // The `macro_rules!` defined by `include!` at the crate root are in the textual scope of
+    // the modules declared after it. This is how build scripts usually generate macros.
+    check_types(
+        r#"
+//- minicore: include
+//- /main.rs
+include!("out_dir/macros.rs");
+
+mod timer {
+    pub struct Tim3;
+    pub struct Qei<T>(T);
+    pub trait Instance {}
+    impl<T: Instance> Qei<T> {
+        pub fn count(&self) -> u32 { 0 }
+    }
+
+    macro_rules! impl_instance {
+        ($inst:ident) => { impl Instance for $inst {} };
+    }
+    foreach_timer! {
+        ($inst:ident) => { impl_instance!($inst); };
+    }
+}
+
+fn f(qei: timer::Qei<timer::Tim3>) {
+    let count = qei.count();
+    count;
+} //^^^^^ u32
+
+//- /out_dir/macros.rs
+macro_rules! foreach_timer {
+    ($($pat:tt => $code:tt;)*) => {
+        macro_rules! __foreach_timer_inner {
+            $(($pat) => $code;)*
+            ($_:tt) => {}
+        }
+        __foreach_timer_inner!((Tim3));
+    };
+}
+"#,
+    );
+}
+
+#[test]
 fn infer_builtin_macros_include_concat() {
     check_types(
         r#"
