@@ -19,10 +19,10 @@ rustc-literal-escaper.workspace = true
 tracing.workspace = true
 
 edition.workspace = true
-winnow = { version = "0.7.13", default-features = false }
 
 [dev-dependencies]
 expect-test = "1.5.1"
+proptest = "1.5"
 
 stdx.workspace = true
 

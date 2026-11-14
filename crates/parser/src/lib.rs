@@ -29,7 +29,6 @@ extern crate rustc_driver as _;
 extern crate rustc_lexer;
 
 mod event;
-mod frontmatter;
 mod grammar;
 mod input;
 mod lexed_str;
@@ -60,7 +59,7 @@ pub use crate::{
 ///
 /// See <https://doc.rust-lang.org/reference/whitespace.html>.
 pub fn is_rust_whitespace(c: char) -> bool {
-    frontmatter::is_whitespace(c)
+    rustc_lexer::is_whitespace(c)
 }
 
 /// Parse the whole of the input as a given syntactic construct.

@@ -1,4 +1,5 @@
-SHEBANG "#!/usr/bin/env bash\n"
+SHEBANG "#!/usr/bin/env bash"
+WHITESPACE "\n"
 COMMENT "// hello"
 WHITESPACE "\n"
 INNER_DOC_COMMENT "//! World"
